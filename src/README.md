@@ -8,7 +8,8 @@ NOT playtested in Brotato.
   leaves a one-line status (`88 ants - gen 5 - night - raid 1`) plus any toasts. `watch_cam.gd` is a slow self-directing camera that
   cuts between shots: a fight at the nest (always wins), a new strain, the farthest forager on its expedition, the traffic at the
   hole, a single ant, a digger underground, the queen's chamber. Any pan key, wheel, drag, jump key or click on an ant hands the camera
-  back for ~6 s (a click follows that ant). Leaving restores every layer and panel exactly as they were.
+  back for ~6 s (a click follows that ant). Leaving restores every layer and panel exactly as they were. The Lab never pauses the
+  colony while you watch: it waits (with a toast) until you leave watch mode.
 - **Ants stopped looking weird (the "dithering" fix).** Measured on the sim: foragers reversed direction on almost every hop (hops are
   1/18 s), which showed as constant squash-turns. Causes fixed: re-deciding at the edge of the danger zone in front of a raider (now
   they run for 10 hops), a coin-flip turn per hop during the area search (now short sweeps), stepping back and forth on top of prey (now

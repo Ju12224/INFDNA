@@ -48,6 +48,7 @@ var ug                 # underground_ui.gd: depth gauge, nest panel, room labels
 var watch              # watch_cam.gd: the self-directing camera of watch mode (V)
 var watch_mode := false
 var _watch_saved := {}
+var _shop_noted := false
 # view layers (HUD "Layers" panel and the P/C/F/T/H keys); see set_layer
 var layer_state := {"trails": true, "castes": true, "fights": true, "tasks": false, "health": false, "follow": false}
 
@@ -146,7 +147,13 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	day.update(sim.time, sim.rain)
 	if sim.shop_pending and not shop_open and not sim.collapsed:
-		open_shop()
+		if not watch_mode:
+			open_shop()
+		elif not _shop_noted:
+			_shop_noted = true        # watch mode never stops the colony for the Lab: it waits until you leave
+			sim.toasts.append({"text": "The Lab is open (press V to leave watch mode and shop)", "t": 5.0})
+	if not sim.shop_pending:
+		_shop_noted = false
 	# Fixed-budget stepping: simulate what the speed asks for, but never spend more than BUDGET_US
 	# per frame. A slow frame used to make the engine run extra ticks (each running more sim), so
 	# 4x snowballed into a stutter. Now the frame rate holds and the effective speed bends instead.
@@ -301,6 +308,8 @@ func set_watch(on: bool) -> void:
 		return
 	watch_mode = on
 	if on:
+		if shop_open:
+			close_shop()
 		_watch_saved = layer_state.duplicate()
 		for k in ["castes", "tasks", "health", "follow"]:
 			set_layer(k, false)
