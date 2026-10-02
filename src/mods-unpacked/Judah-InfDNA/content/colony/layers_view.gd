@@ -1,8 +1,9 @@
 extends Node2D
 # Optional view layers, drawn above the ants and raiders so a crowded fight can be read at a glance.
-#   fights - a ground ring under each raider (colour = class, pulses while it is fighting), a link from
-#            every ant in reach to the raider it is hitting, a mini health bar on each fighting or
-#            wounded ant, and edge arrows toward raiders that are off screen
+#   fights - a thin ground ring under each raider (colour = class, a soft pulse while it is fighting), a
+#            mini health bar on each wounded ant that is fighting or just got hit, and edge arrows
+#            toward raiders that are off screen. Deliberately light: nothing is drawn between the
+#            bodies, so the fight itself stays readable
 #   tasks  - a coloured halo on every ant for what it is doing right now (nurse/forage/dig/home/defend)
 #   health - a health bar over every ant
 # Sizes that must stay readable are measured in screen pixels (x camera zoom), so they hold when
@@ -110,7 +111,7 @@ func _rebuild_pairs() -> void:
 # [feet, body centre, bar anchor, depth scale, alpha] of an ant, matching ant_view's placement
 func _ant_pts(a) -> Array:
 	var C = sim.grid.CELL
-	var d = ant_view._depth(a.id, a.lane)
+	var d = ant_view._depth(a.id, ant_view.lane_of(a, a.id))
 	var pos = sim.ant_pos(a) + Vector2(0, d[0])
 	var n = Vector2(-sin(a.rot), cos(a.rot))
 	var feet = pos + n * C * 0.5
@@ -119,7 +120,7 @@ func _ant_pts(a) -> Array:
 
 func _raider_pts(e) -> Array:
 	var C = sim.grid.CELL
-	var d = ant_view._depth(-e.id, e.lane)
+	var d = ant_view._depth(-e.id, ant_view.lane_of(e, -e.id))
 	var h = EnemyDefs.HEIGHT[e.cls] * d[1]
 	var feet = sim.enemy_pos(e) + Vector2(0, C * 0.5 + d[0])
 	return [feet, feet - Vector2(0, h * 0.45), h, d[3]]
@@ -133,7 +134,6 @@ func _draw() -> void:
 	if show_fights:
 		for e in sim.enemies:
 			_draw_ring(e, z, vr)
-		_draw_links(z)
 	if show_tasks or show_health or show_fights:
 		_draw_ant_marks(z, vr)
 	if show_fights:
@@ -147,32 +147,18 @@ func _draw_ring(e, z: float, vr: Rect2) -> void:
 		return
 	var pts = _raider_pts(e)
 	var col: Color = CLASS_COLORS.get(e.cls, Color.white)
-	var fade = (0.3 if e.state == 2 else 1.0) * pts[3]
-	var pulse = 0.5 + 0.5 * sin(_t * 9.0 + e.id)
-	var rad = max(pts[2] * 0.45, 15.0 * z)
-	draw_set_transform(pts[0], 0.0, Vector2(1.0, 0.32))
-	if e.engaged and e.state != 2:
-		draw_circle(Vector2.ZERO, rad, Color(col.r, col.g, col.b, (0.1 + 0.12 * pulse) * fade))
-		draw_arc(Vector2.ZERO, rad * (1.0 + 0.3 * pulse), 0.0, TAU, 40, Color(col.r, col.g, col.b, (1.0 - pulse) * 0.7 * fade), 3.0 * z, true)
-	draw_arc(Vector2.ZERO, rad, 0.0, TAU, 40, Color(INK.r, INK.g, INK.b, 0.8 * fade), 8.0 * z, true)
-	draw_arc(Vector2.ZERO, rad, 0.0, TAU, 40, Color(col.r, col.g, col.b, 0.95 * fade), 4.0 * z, true)
+	var dead = e.state == 2
+	var quiet = not e.engaged and CLASS_RANK.get(e.cls, 1) < 3      # a small raider just wandering: faint ring only
+	var fade = (0.25 if dead else 1.0) * pts[3]
+	var pulse = 0.5 + 0.5 * sin(_t * 7.0 + e.id)
+	var rad = max(pts[2] * 0.42, 13.0 * z)
+	draw_set_transform(pts[0], 0.0, Vector2(1.0, 0.3))
+	if e.engaged and not dead:
+		draw_circle(Vector2.ZERO, rad, Color(col.r, col.g, col.b, (0.06 + 0.07 * pulse) * fade))
+		draw_arc(Vector2.ZERO, rad * (1.0 + 0.22 * pulse), 0.0, TAU, 36, Color(col.r, col.g, col.b, (1.0 - pulse) * 0.45 * fade), 2.0 * z, true)
+	draw_arc(Vector2.ZERO, rad, 0.0, TAU, 36, Color(INK.r, INK.g, INK.b, (0.28 if quiet else 0.4) * fade), 5.0 * z, true)
+	draw_arc(Vector2.ZERO, rad, 0.0, TAU, 36, Color(col.r, col.g, col.b, (0.5 if quiet else 0.85) * fade), 2.2 * z, true)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-
-
-func _draw_links(z: float) -> void:
-	var pulse = 0.65 + 0.35 * sin(_t * 12.0)
-	for p in _pairs:
-		var a = p[0]
-		var e = p[1]
-		if a.hp <= 0.0 or e.hp <= 0.0:
-			continue          # died since the pairs were built
-		var ap = _ant_pts(a)
-		var rp = _raider_pts(e)
-		var col: Color = CLASS_COLORS.get(e.cls, Color.white)
-		var al = ap[4] * rp[3]
-		draw_line(ap[1], rp[1], Color(INK.r, INK.g, INK.b, 0.55 * al), 5.0 * z, true)
-		draw_line(ap[1], rp[1], Color(col.r, col.g, col.b, pulse * al), 2.4 * z, true)
-		draw_circle(rp[1].linear_interpolate(ap[1], 0.12), 3.2 * z, Color(1, 1, 1, pulse * al))
 
 
 # Halos (tasks) and health bars, one pass over the ants that are on screen.
@@ -185,7 +171,7 @@ func _draw_ant_marks(z: float, vr: Rect2) -> void:
 			continue
 		var max_hp = a.ph["hp"]
 		var wounded = a.hp < max_hp * 0.999
-		var bar = show_health or (show_fights and (wounded or a.hurt > 0.0 or _fighting.has(a.id)))
+		var bar = show_health or (show_fights and a.hurt > 0.0) or (show_fights and wounded and a.hp < max_hp * 0.85 and _fighting.has(a.id))
 		if not show_tasks and not bar:
 			continue
 		var pts = _ant_pts(a)
@@ -197,8 +183,8 @@ func _draw_ant_marks(z: float, vr: Rect2) -> void:
 			draw_arc(pts[1], r, 0.0, TAU, 20, Color(col.r, col.g, col.b, 0.95 * pts[4]), 2.4 * z, true)
 		if bar:
 			var frac = clamp(a.hp / max_hp, 0.0, 1.0)
-			var w = max(30.0 * pts[3], 18.0 * z)
-			var h = max(4.0 * pts[3], 3.0 * z)
+			var w = max(24.0 * pts[3], 14.0 * z)
+			var h = max(3.4 * pts[3], 2.4 * z)
 			var o: Vector2 = pts[2] - Vector2(w * 0.5, 3.0 * z)
 			var bc = Color("#7ed957") if frac > 0.6 else (Color("#f2c14e") if frac > 0.3 else Color("#e8483b"))
 			draw_rect(Rect2(o - Vector2(z, z), Vector2(w + 2.0 * z, h + 2.0 * z)), Color(INK.r, INK.g, INK.b, 0.85 * pts[4]))

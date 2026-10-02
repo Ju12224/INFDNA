@@ -14,6 +14,7 @@ const UndergroundUI = preload("res://mods-unpacked/Judah-InfDNA/content/colony/u
 const Sfx = preload("res://mods-unpacked/Judah-InfDNA/content/colony/sfx.gd")
 const CameraRig = preload("res://mods-unpacked/Judah-InfDNA/content/colony/camera_rig.gd")
 const Hud = preload("res://mods-unpacked/Judah-InfDNA/content/colony/hud.gd")
+const WatchCam = preload("res://mods-unpacked/Judah-InfDNA/content/colony/watch_cam.gd")
 const SELECT_SCENE = "res://mods-unpacked/Judah-InfDNA/content/colony/queen_select.tscn"
 const TITLE_SCENE = "res://ui/menus/title_screen/title_screen.tscn"
 const MAX_STEP = 0.05
@@ -38,6 +39,10 @@ var _prune_timer := 10.0
 var _overlay: Node2D
 var shop_open := false
 var sfx
+var ug                 # underground_ui.gd: depth gauge, nest panel, room labels
+var watch              # watch_cam.gd: the self-directing camera of watch mode (V)
+var watch_mode := false
+var _watch_saved := {}
 # view layers (HUD "Layers" panel and the P/C/F/T/H keys); see set_layer
 var layer_state := {"trails": true, "castes": true, "fights": true, "tasks": false, "health": false, "follow": false}
 
@@ -104,9 +109,12 @@ func _ready() -> void:
 	hud = Hud.new()
 	hud.scene = self
 	add_child(hud)
-	var ug = UndergroundUI.new()      # depth gauge, nest panel (U), room labels, level navigation (PgUp / PgDn)
+	ug = UndergroundUI.new()      # depth gauge, nest panel (U), room labels, level navigation (PgUp / PgDn)
 	ug.scene = self
 	add_child(ug)
+	watch = WatchCam.new()
+	watch.scene = self
+	add_child(watch)
 	add_child(perf)           # last: its first apply() reaches every view and the HUD
 
 
@@ -136,7 +144,7 @@ func _process(delta: float) -> void:
 		cam.kick(sim.shake)
 		sim.shake = 0.0
 	if layer_state["follow"] and selected != null and sim.ants.has(selected):
-		var d = ant_view._depth(selected.id, selected.lane)
+		var d = ant_view._depth(selected.id, ant_view.lane_of(selected, selected.id))
 		cam.position = cam.position.linear_interpolate(sim.ant_pos(selected) + Vector2(0, d[0] - 30.0), clamp(delta * 5.0, 0.0, 1.0))
 	_overlay.update()
 	ant_view.selected = selected
@@ -164,12 +172,20 @@ func _draw_overlay() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if watch_mode:
+		_watch_input(event)
 	if event is InputEventMouseButton and event.pressed and event.button_index == BUTTON_LEFT:
 		selected = ant_view.pick(get_global_mouse_position(), 30.0)
+		if watch_mode and selected != null:
+			watch.follow(selected)
 	elif event is InputEventKey and event.pressed and not event.echo:
 		match event.scancode:
+			KEY_V:
+				set_watch(not watch_mode)
 			KEY_ESCAPE:
-				if hud.is_evolution_open():
+				if watch_mode:
+					set_watch(false)
+				elif hud.is_evolution_open():
 					hud.toggle_evolution()
 				elif shop_open:
 					close_shop()
@@ -223,6 +239,35 @@ func open_shop() -> void:
 func close_shop() -> void:
 	shop_open = false
 	hud.show_shop(false)
+
+
+# Watch mode (V): hide the HUD, switch the busy layers off and let the camera direct itself.
+func set_watch(on: bool) -> void:
+	if on == watch_mode:
+		return
+	watch_mode = on
+	if on:
+		_watch_saved = layer_state.duplicate()
+		for k in ["castes", "tasks", "health", "follow"]:
+			set_layer(k, false)
+		selected = null
+	else:
+		for k in _watch_saved:
+			set_layer(k, _watch_saved[k])
+	hud.set_watch(on)
+	ug.set_watch(on)
+	watch.set_active(on)
+
+
+func _watch_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		if event.button_index in [BUTTON_WHEEL_UP, BUTTON_WHEEL_DOWN, BUTTON_RIGHT, BUTTON_MIDDLE]:
+			watch.note_input(2.0 if event.button_index in [BUTTON_WHEEL_UP, BUTTON_WHEEL_DOWN] else 0.0)
+	elif event is InputEventMouseMotion and (event.button_mask & (BUTTON_MASK_RIGHT | BUTTON_MASK_MIDDLE)) != 0:
+		watch.note_input()
+	elif event is InputEventKey and event.pressed and not event.echo:
+		if event.scancode in [KEY_HOME, KEY_Q, KEY_PAGEUP, KEY_PAGEDOWN]:
+			watch.note_input(4.0)
 
 
 func toggle_layer(key: String) -> void:

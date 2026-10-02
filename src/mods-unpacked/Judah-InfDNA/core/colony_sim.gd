@@ -934,7 +934,7 @@ func _step_ant(a, dt: float) -> void:
 
 func _on_arrive(a) -> void:
 	if not grid.is_under(a.x, a.y):
-		a.lane = clamp(a.lane + rng.randf_range(-0.06, 0.06), 0.0, 1.0)
+		a.lane = clamp(a.lane + rng.randf_range(-0.02, 0.02), 0.0, 1.0)      # small steps: ants hop 18 cells a second now, and big ones made them shimmer
 		if a.task == Task.FORAGE and grid.pher_at(a.x) > 0.8:
 			a.lane = lerp(a.lane, 0.68 if a.carry > 0.0 else 0.32, 0.12)   # two-lane trail: laden ants on one side
 	# lost footing (terrain changed, or the ant ended up in open space): grab the
@@ -2123,7 +2123,7 @@ func _combat(dt: float) -> void:
 				dmg_in += hit
 				a.fitness += hit * 0.08
 				a.f_fight += hit * 0.08
-				a.lane = lerp(a.lane, clamp(e.lane + (a.id % 3 - 1) * 0.22, 0.0, 1.0), clamp(dt * 2.0, 0.0, 1.0))
+				a.lane = lerp(a.lane, clamp(e.lane + (a.id % 3 - 1) * 0.12, 0.0, 1.0), clamp(dt * 6.0, 0.0, 1.0))   # fighters line up with their raider quickly
 				if d <= r2 and d < td:
 					td = d
 					target = a

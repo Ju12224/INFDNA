@@ -31,8 +31,12 @@ var _gait_ph := {}  # walk-cycle phase (cycles) per ant, advanced by the distanc
 var _last_pos := {}
 var _leg_cache := {}
 var _face_k := {}   # smoothed facing (-1..1): ants turn around instead of snapping
+var _lane_d := {}   # the lane each unit is DRAWN in: smoothed, and pulled toward the nest hole / food pile it is at
+var _near_piles := []
 var _hid_k := {}    # 1 while a back-plane unit is behind front dirt (crossing under)
 const BACK_SCALE = 0.8
+const ENTRANCE_LANE = 0.62   # the nest mouth is drawn at this lane (world_view)
+const PILE_LANE = 0.5        # so are the food piles
 const CASTE_SCALE = [0.94, 1.0, 1.12]   # forager, digger, soldier
 const BACK_SHADE = 0.5
 
@@ -58,7 +62,7 @@ func _process(delta: float) -> void:
 			alive[a2.id] = true
 		for e2 in sim.enemies:
 			alive[-e2.id] = true
-		for dct in [_anim, _surf_k, _back_k, _hid_k, _air_k, _gait_ph, _last_pos, _face_k]:
+		for dct in [_anim, _surf_k, _back_k, _hid_k, _air_k, _gait_ph, _last_pos, _face_k, _lane_d]:
 			for kk in dct.keys():
 				if not alive.has(kk):
 					dct.erase(kk)
@@ -66,6 +70,12 @@ func _process(delta: float) -> void:
 	var k = clamp(delta * 14.0, 0.0, 1.0)
 	var vr0 = _view_rect()
 	var C1 = g.CELL
+	var kl = 1.0 - exp(-delta * 4.0)
+	_near_piles = []
+	for p in sim.piles:
+		var px0 = (p["x"] + 0.5) * C1
+		if px0 > vr0.position.x - 300.0 and px0 < vr0.end.x + 300.0:
+			_near_piles.append(p["x"])
 	for a in sim.ants:
 		# ants far off screen (long expeditions) need no animation state; it catches up in a few frames on return
 		var ax = (a.x + 0.5) * C1
@@ -75,11 +85,13 @@ func _process(delta: float) -> void:
 		var target = 1.0 if g.is_surface_cell(a.tx, a.ty) else 0.0
 		_surf_k[a.id] = lerp(_surf_k.get(a.id, target), target, k)
 		_track_plane(a.id, a, g, k)
+		var goal = _lane_goal(a.x, a.lane, a.carry > 0.0 or a.task == 1)
+		_lane_d[a.id] = lerp(_lane_d.get(a.id, goal), goal, kl)
 		var p0 = sim.ant_pos(a)
 		var moved = p0.distance_to(_last_pos.get(a.id, p0))
 		_last_pos[a.id] = p0
 		if moved > 0.01 and moved < 90.0:
-			var dsc = lerp(1.0, GroundView.persp(a.lane), _surf_k[a.id]) * lerp(1.0, BACK_SCALE, _back_k.get(a.id, 0.0)) * CASTE_SCALE[a.caste]
+			var dsc = lerp(1.0, GroundView.persp(lane_of(a, a.id)), _surf_k[a.id]) * lerp(1.0, BACK_SCALE, _back_k.get(a.id, 0.0)) * CASTE_SCALE[a.caste]
 			# one cycle covers about 4 stance strokes of the legs; capped so very fast ants do not strobe
 			_gait_ph[a.id] = _gait_ph.get(a.id, a.id * 0.37) + min(moved / (_leg_unit(a.genome) * dsc), 0.15)
 		# winged ants take off to cross open ground and land again at the pile or the nest
@@ -91,7 +103,29 @@ func _process(delta: float) -> void:
 		var target2 = 1.0 if g.is_surface_cell(e.tx, e.ty) else 0.0
 		_surf_k[key] = lerp(_surf_k.get(key, target2), target2, k)
 		_track_plane(key, e, g, k)
+		_lane_d[key] = lerp(_lane_d.get(key, e.lane), _lane_goal(e.x, e.lane, false), kl)
 	update()
+
+
+# The lane a unit is drawn in: smoothed over time (so the sim's lane jitter never shows), and pulled onto the
+# nest mouth's lane near an entrance and onto a pile's lane at the pile, so nobody reaches into the hole or the
+# food from a different depth.
+func lane_of(u, key: int) -> float:
+	return _lane_d.get(key, u.lane)
+
+
+func _lane_goal(x: int, lane: float, foraging: bool) -> float:
+	var t = lane
+	for en in sim.grid.entrances:
+		var d = abs(x - int(en.x))
+		if d < 30:
+			t = lerp(t, ENTRANCE_LANE, 1.0 - d / 30.0)
+	if foraging:
+		for px in _near_piles:
+			var d2 = abs(x - px)
+			if d2 < 10:
+				t = lerp(t, PILE_LANE, 1.0 - d2 / 10.0)
+	return t
 
 
 func _track_plane(key: int, u, g, k: float) -> void:
@@ -145,7 +179,7 @@ func _draw() -> void:
 		if px < vr.position.x or px > vr.end.x or py < vr.position.y or py > vr.end.y:
 			continue
 		var f = _surf_k.get(a.id, 0.0)
-		var k = (-1.0 - _back_k.get(a.id, 0.0) if f < 0.5 else a.lane)
+		var k = (-1.0 - _back_k.get(a.id, 0.0) if f < 0.5 else lane_of(a, a.id))
 		buckets[_bucket(k)].append([k, 0, a])
 	for e in sim.enemies:
 		var ex = (e.x + 0.5) * C0
@@ -153,7 +187,7 @@ func _draw() -> void:
 		if ex < vr.position.x or ex > vr.end.x or ey < vr.position.y or ey > vr.end.y:
 			continue
 		var f2 = _surf_k.get(-e.id, 0.0)
-		var k2 = (-1.0 - _back_k.get(-e.id, 0.0) if f2 < 0.5 else e.lane) + 0.001
+		var k2 = (-1.0 - _back_k.get(-e.id, 0.0) if f2 < 0.5 else lane_of(e, -e.id)) + 0.001
 		buckets[_bucket(k2)].append([k2, 1, e])
 	var items := []
 	for b in buckets:
@@ -170,7 +204,7 @@ func _draw() -> void:
 			ground.draw_slice(self, it[2])
 		elif enemy_view != null:
 			var e = it[2]
-			var d = _depth(-e.id, e.lane)
+			var d = _depth(-e.id, lane_of(e, -e.id))
 			var feet = sim.enemy_pos(e) + Vector2(0, sim.grid.CELL * 0.5 + d[0])
 			var fa = _surf_k.get(-e.id, 0.0) if e.def.get("fly", false) else 0.0
 			enemy_view.draw_enemy(self, e, feet, d[1], d[2], d[3], fa)
@@ -210,7 +244,7 @@ func _draw_shadows(items: Array) -> void:
 			continue
 		if it[1] == 0 and tiny:
 			continue
-		var d = _depth(key, u.lane)
+		var d = _depth(key, lane_of(u, key))
 		var pos: Vector2
 		var rx: float
 		var air := 0.0
@@ -245,7 +279,7 @@ func pick(world_pos: Vector2, radius: float = 30.0):
 	var bd = 1e18
 	var C = sim.grid.CELL
 	for a in sim.ants:
-		var d = _depth(a.id, a.lane)
+		var d = _depth(a.id, lane_of(a, a.id))
 		var n = Vector2(-sin(a.rot), cos(a.rot))
 		var mid = sim.ant_pos(a) + Vector2(0, d[0]) + n * C * 0.5 - n * 15.0 * d[1]
 		var q = mid.distance_squared_to(world_pos)
@@ -260,7 +294,7 @@ func pick(world_pos: Vector2, radius: float = 30.0):
 # soldier helm). Sized against camera zoom so it stays readable when zoomed out.
 func _draw_caste_badge(a) -> void:
 	var C = sim.grid.CELL
-	var d = _depth(a.id, a.lane)
+	var d = _depth(a.id, lane_of(a, a.id))
 	var pos = sim.ant_pos(a) + Vector2(0, d[0])
 	var z = cam.zoom.x if cam != null else 1.0
 	# badges fade out when zoomed out, where they would cover the colony
@@ -497,7 +531,7 @@ func _by_depth(a, b) -> bool:
 
 func _draw_ant(a) -> void:
 	var C = sim.grid.CELL
-	var d = _depth(a.id, a.lane)
+	var d = _depth(a.id, lane_of(a, a.id))
 	var raw = sim.ant_pos(a)
 	var pos = raw + Vector2(0, d[0])
 	var n = Vector2(-sin(a.rot), cos(a.rot))
@@ -540,7 +574,7 @@ func _draw_ant(a) -> void:
 	var fk = _face_k.get(a.id, float(_p_face))
 	fk = move_toward(fk, float(_p_face), _dt * 9.0)
 	_face_k[a.id] = fk
-	var fk_draw = fk if abs(fk) > 0.14 else (0.14 if fk >= 0.0 else -0.14)     # a quick squash-turn, never a vanished sprite
+	var fk_draw = fk if abs(fk) > 0.35 else (0.35 if fk >= 0.0 else -0.35)     # a quick squash-turn, never a vanished sprite
 	draw_set_transform(feet + _p_off, a.rot + _p_rot, Vector2(fk_draw * s * _p_sx * (1.0 + 0.12 * hurt), s * _p_sy * (1.0 + bob - 0.14 * hurt)))
 	var alpha = d[3]
 	var tint = Color(shade, shade, shade, alpha)

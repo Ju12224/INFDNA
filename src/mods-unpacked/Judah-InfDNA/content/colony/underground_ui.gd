@@ -88,6 +88,11 @@ func _process(delta: float) -> void:
 	_ui.update()
 
 
+# Watch mode hides the gauge, labels and panel.
+func set_watch(on: bool) -> void:
+	_ui.visible = not on
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if scene == null or not (event is InputEventKey and event.pressed and not event.echo):
 		return

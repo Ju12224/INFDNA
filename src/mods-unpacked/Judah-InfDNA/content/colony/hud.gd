@@ -62,6 +62,12 @@ var _layers_panel: PanelContainer
 var _layer_btns := {}
 var _task_legend: HBoxContainer
 var _mm: Control
+var _mm_panel: Control
+var _hint: Label
+var _watch_chip: Label
+var _watch_info: Label
+var _watch_t := 0.0
+var _watch_hidden := []      # nodes hidden in watch mode, with the visibility to restore
 var _quality_btn: Button
 var _mm_font: Font
 const MM_W = 640.0
@@ -336,6 +342,8 @@ func _build_bar() -> void:
 	hint.margin_left = 22
 	hint.margin_bottom = -96
 	hint.modulate = Color(1, 1, 1, 0.55)
+	hint.text = hint.text.replace("U nest   Esc menu", "U nest   V watch mode   Esc menu")
+	_hint = hint
 	_build_layers()
 	_build_minimap()
 
@@ -352,6 +360,7 @@ func _build_minimap() -> void:
 	pc.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	pc.margin_top = 12
 	root.add_child(pc)
+	_mm_panel = pc
 	_mm = Control.new()
 	_mm.rect_min_size = Vector2(MM_W, MM_H)
 	_mm.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -554,6 +563,23 @@ func _build_overlays() -> void:
 	_banner_label.align = Label.ALIGN_CENTER
 	_banner.visible = false
 
+	_watch_chip = Kit.label(root, "WATCH MODE   ·   V to exit   ·   move the camera to take over", _f_s)
+	_watch_chip.anchor_left = 0.5
+	_watch_chip.anchor_right = 0.5
+	_watch_chip.anchor_top = 1.0
+	_watch_chip.anchor_bottom = 1.0
+	_watch_chip.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_watch_chip.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_watch_chip.margin_bottom = -18
+	_watch_chip.visible = false
+	_watch_info = Kit.label(root, "", _f_m)
+	_watch_info.anchor_top = 1.0
+	_watch_info.anchor_bottom = 1.0
+	_watch_info.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_watch_info.margin_left = 24
+	_watch_info.margin_bottom = -18
+	_watch_info.visible = false
+
 	_toasts = VBoxContainer.new()
 	_toasts.anchor_left = 0.5
 	_toasts.anchor_right = 0.5
@@ -705,6 +731,9 @@ func _process(delta: float) -> void:
 	else:
 		_banner.visible = false
 		_banner_text = ""
+	if scene.watch_mode:
+		_watch_t += delta
+		_watch_chip.modulate.a = lerp(0.9, 0.28, smoothstep(5.0, 9.0, _watch_t))
 	# toasts
 	_sync_toasts(sim)
 	# queen bar hurts
@@ -726,6 +755,8 @@ func _process(delta: float) -> void:
 	if _refresh > 0.0:
 		return
 	_refresh = 0.2
+	if scene.watch_mode:
+		_refresh_watch_info(sim)
 	_refresh_stats(sim)
 	_refresh_lineages()
 	_refresh_inspector()
@@ -859,6 +890,10 @@ func _lineage_row(e, i: int) -> Control:
 func _refresh_inspector() -> void:
 	var a = scene.selected
 	var sim = scene.sim
+	if scene.watch_mode:
+		_inspect.visible = false
+		_insp_prev = null
+		return
 	if a == null or not sim.ants.has(a):
 		_inspect.visible = false
 		scene.selected = null
@@ -1265,6 +1300,35 @@ func _on_quality() -> void:
 func sync_quality() -> void:
 	if _quality_btn != null:
 		_quality_btn.text = scene.perf.label()
+
+
+# Watch mode: only the world, the banners and a one-line status stay. The rest is hidden and restored on exit.
+func set_watch(on: bool) -> void:
+	if on:
+		_watch_hidden = []
+		for n in [_left_col, _lineage_panel, _bar_panel, _mm_panel, _hint, _layers_panel, _inspect]:
+			if n != null:
+				_watch_hidden.append([n, n.visible])
+				n.visible = false
+		_watch_t = 0.0
+		_watch_chip.modulate.a = 0.9
+		_refresh_watch_info(scene.sim)
+	else:
+		for it in _watch_hidden:
+			it[0].visible = it[1]
+		_watch_hidden = []
+		_insp_prev = null
+	_watch_chip.visible = on
+	_watch_info.visible = on
+
+
+func _refresh_watch_info(sim) -> void:
+	var gen := 0
+	for a in sim.ants:
+		gen = int(max(gen, a.gen))
+	var tm = int(sim.time)
+	_watch_info.text = "%d ants   ·   gen %d   ·   %d:%02d   ·   %s" % [sim.ants.size(), gen, tm / 60, tm % 60,
+		("raid %d" % sim.raid_n) if sim.raid_n > 0 else "calm"]
 
 
 func _on_layers_panel(on: bool) -> void:
