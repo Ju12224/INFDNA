@@ -10,6 +10,7 @@ const NIGHT_TINT = Color(0.40, 0.48, 0.80)  # moonlit blue: dark, but a fight st
 const DUSK_TINT = Color(1.0, 0.80, 0.66)
 
 var force := -1.0        # >= 0 pins the phase (screenshots and tests)
+var locked := false      # the Night layer is off: it stays midday (rain still falls)
 var ph := START
 var elev := 0.3          # sun height: 1 at noon, -1 at midnight
 var night := 0.0         # 0 day .. 1 full night
@@ -24,7 +25,7 @@ func update(t: float, rain_k: float = 0.0) -> void:
 	rain = rain_k
 	var d = t / DAY_LEN + START
 	day_n = 1 + int(floor(d))
-	ph = force if force >= 0.0 else fposmod(d, 1.0)
+	ph = force if force >= 0.0 else (0.5 if locked else fposmod(d, 1.0))
 	elev = -cos(ph * TAU)
 	night = smoothstep(0.12, -0.28, elev)
 	var h = (elev - 0.02) / 0.22
@@ -50,4 +51,4 @@ func label() -> String:
 		return "night"
 	if elev < 0.2:
 		return "dawn" if ph < 0.5 else "dusk"
-	return "day"
+	return "sunny"

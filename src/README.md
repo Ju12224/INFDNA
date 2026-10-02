@@ -34,7 +34,7 @@ NOT playtested in Brotato.
   lines between bodies, and a small health bar only on a fighter that is hurt.
 - **Day and night (`day_cycle.gd`, `light_view.gd`).** A 7-minute day driven by the colony clock: warm sunrise and sunset, moonlit blue
   night (dark but readable), sun and moon arcs, stars, a glowing nest mouth and fireflies after dark, shadows fade with the sun, the
-  HUD shows Dawn/Day/Dusk/Night. One multiply-blend pass lights everything above the ground line, so the tunnels keep their own warm
+  HUD shows Dawn/Sunny/Dusk/Night (the Night layer, `K`, keeps it midday). One multiply-blend pass lights everything above the ground line, so the tunnels keep their own warm
   light and the cost is a few polygons (GLES2 ignores `draw_mesh`'s modulate for vertex-coloured meshes, so a per-mesh tint was not
   possible). Purely visual.
 - **Rain** (`weather_view.gd`, sim `_step_weather`): every few minutes it rains for 35-70 s. The light turns grey-blue, streaks fall to the

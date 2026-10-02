@@ -50,7 +50,7 @@ var watch_mode := false
 var _watch_saved := {}
 var _shop_noted := false
 # view layers (HUD "Layers" panel and the P/C/F/T/H keys); see set_layer
-var layer_state := {"trails": true, "castes": true, "fights": true, "tasks": false, "health": false, "follow": false}
+var layer_state := {"trails": true, "castes": true, "fights": true, "tasks": false, "health": false, "follow": false, "light": true}
 
 
 func _ready() -> void:
@@ -258,6 +258,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				toggle_layer("health")
 			KEY_X:
 				toggle_layer("follow")
+			KEY_K:
+				toggle_layer("light")
 			KEY_L:
 				hud.toggle_evolution()
 
@@ -348,6 +350,8 @@ func set_layer(key: String, on: bool) -> void:
 			ant_view.show_castes = on
 		"follow":
 			pass          # read in _process
+		"light":
+			day.locked = not on          # off = always midday
 		_:
 			layers_view.set_layer(key, on)
 	if hud != null:

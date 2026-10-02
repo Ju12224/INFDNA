@@ -352,7 +352,7 @@ func _build_bar() -> void:
 	_btn(bar, "Lab", "luck").connect("pressed", scene, "open_shop")
 	_btn(bar, "Menu", "exit").connect("pressed", scene, "go_to_menu")
 
-	var hint = Kit.label(root, "WASD / right-drag pan   Wheel zoom   Click an ant   Space pause   P C F T H layers   X follow   L lineage   U nest   N new strain   V watch   Esc menu", _f_s)
+	var hint = Kit.label(root, "WASD / right-drag pan   Wheel zoom   Click an ant   Space pause   P C F T H layers   X follow   K night   L lineage   U nest   N new strain   V watch   Esc menu", _f_s)
 	hint.anchor_top = 1.0
 	hint.anchor_bottom = 1.0
 	hint.grow_vertical = Control.GROW_DIRECTION_BEGIN
@@ -484,7 +484,8 @@ func _build_layers() -> void:
 			["fights", "Fights (F)", "attack", "Rings under raiders, links to the ants hitting them, health on fighters, arrows to off-screen raiders"],
 			["tasks", "Tasks (T)", "balanced", "Colour halo on every ant for what it is doing right now"],
 			["health", "Health (H)", "hp", "Health bar over every ant"],
-			["follow", "Follow (X)", "ant", "The camera follows the selected ant (click an ant first)"]]:
+			["follow", "Follow (X)", "ant", "The camera follows the selected ant (click an ant first)"],
+			["light", "Night (K)", "luck", "Day and night light. Off keeps it midday."]]:
 		var b = _btn(row, it[1], it[2], Color("#f2c14e"), 20)
 		b.toggle_mode = true
 		b.pressed = scene.layer_state[it[0]]
