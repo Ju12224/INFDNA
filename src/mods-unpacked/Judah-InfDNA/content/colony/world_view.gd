@@ -37,6 +37,9 @@ var ground
 var nest_decor
 var inner: Node2D
 var band: Node2D
+var snow_node: Node2D        # snow over the turf, faded in and out by how much has fallen
+var shade_node: Node2D       # ground shadows, over the snow
+var day                      # day_cycle.gd (optional)
 
 
 func _set_cam(c) -> void:
@@ -65,6 +68,12 @@ func _ready() -> void:
 	band = Node2D.new()
 	band.connect("draw", self, "_draw_band")
 	add_child(band)
+	snow_node = Node2D.new()
+	snow_node.connect("draw", self, "_draw_snow")
+	band.add_child(snow_node)
+	shade_node = Node2D.new()
+	shade_node.connect("draw", self, "_draw_shade")
+	band.add_child(shade_node)
 	for k in [TREE_TEX, ROCK_TEX, FRUIT_TEX, GLOW_TEX, MOTE_TEX, HUSK_TEX]:
 		if ResourceLoader.exists(k):
 			_tex[k] = load(k)
@@ -91,6 +100,12 @@ func _process(delta: float) -> void:
 			nest_decor.prepare(_view_cols(g), _t)
 	inner.update()
 	band.update()
+	shade_node.update()
+	var snow = day.snow if day != null else 0.0
+	snow_node.visible = snow > 0.01
+	if snow_node.visible:
+		snow_node.modulate = Color(1.0, 1.0, 1.0, snow)
+		snow_node.update()
 
 
 # Size of the original playfield (camera zoom limits); the world itself never ends.
@@ -128,8 +143,8 @@ static func _hash(x: float) -> float:
 func _draw_band() -> void:
 	var g = sim.grid
 	var C = g.CELL
-	# turf lanes, scenery shadows (cached meshes, see ground_view.gd)
-	ground.draw_ground(band)
+	# turf lanes (cached meshes, see ground_view.gd); the snow and the shadows are drawn by the nodes under this one
+	ground.draw_turf(band)
 	# the mouths: a hole in the top face with a rim of freshly dropped pellets
 	for i in g.entrances.size():
 		var en = g.entrances[i]
@@ -142,6 +157,14 @@ func _draw_band() -> void:
 		band.draw_circle(Vector2.ZERO, 15.5, Color("#1d120d"))
 		band.draw_circle(Vector2(0, 6), 9.5, Color("#0e0907"))
 		band.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+func _draw_snow() -> void:
+	ground.draw_snow(snow_node)
+
+
+func _draw_shade() -> void:
+	ground.draw_shade(shade_node)
 
 
 # How bare the ground is at column x: the mound (real spoil, see WorldGrid.deposit) has

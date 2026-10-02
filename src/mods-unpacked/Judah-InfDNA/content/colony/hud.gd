@@ -11,6 +11,7 @@ const Queens = preload("res://mods-unpacked/Judah-InfDNA/core/queens.gd")
 const LayersView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/layers_view.gd")
 const Sim = preload("res://mods-unpacked/Judah-InfDNA/core/colony_sim.gd")
 const RunLog = preload("res://mods-unpacked/Judah-InfDNA/core/run_log.gd")
+const Legacy = preload("res://mods-unpacked/Judah-InfDNA/core/legacy.gd")
 
 # task order in the sim: NURSE, FORAGE, DIG, HOME, DEFEND (shared with the Tasks layer so the legend matches)
 const TASK_COLORS = LayersView.TASK_COLORS
@@ -92,6 +93,9 @@ var _shop_owned_note: Label
 var _reroll_btn: Button
 var _reroll_icon: TextureRect
 var _collapse_root: Control
+var _legacy_box: VBoxContainer
+var _legacy_row: VBoxContainer
+var _legacy_label: Label
 var _collapse_label: Label
 var _collapse_stats: Label
 var _collapse_best: Label
@@ -821,6 +825,17 @@ func _build_collapse() -> void:
 	_collapse_stats.modulate = Color(1, 1, 1, 0.72)
 	_collapse_best = Kit.label(v, "", _f_m, Kit.GOLD)
 	_collapse_best.align = Label.ALIGN_CENTER
+	_legacy_box = VBoxContainer.new()
+	_legacy_box.add_constant_override("separation", 8)
+	v.add_child(_legacy_box)
+	var lt = Kit.label(_legacy_box, "Pass one trait down to your next queen", _f_s, Kit.GOLD)
+	lt.align = Label.ALIGN_CENTER
+	_legacy_row = VBoxContainer.new()
+	_legacy_row.add_constant_override("separation", 6)
+	_legacy_box.add_child(_legacy_row)
+	_legacy_label = Kit.label(_legacy_box, "", _f_s)
+	_legacy_label.align = Label.ALIGN_CENTER
+	_legacy_label.modulate = Color(1, 1, 1, 0.8)
 	var ch = HBoxContainer.new()
 	ch.alignment = BoxContainer.ALIGN_CENTER
 	ch.add_constant_override("separation", 14)
@@ -904,8 +919,9 @@ func _show_run_summary(sim) -> void:
 	var plan = ""
 	if not tr.empty():
 		plan = "\nLast dominant body plan: " + tr[0]["genome"].describe()
-	_collapse_stats.text = "Survived %s  ·  %d raids  ·  peak %d ants  ·  generation %d\nFarthest forager %d cells  ·  %d raiders slain  ·  %d food hauled%s" % [
-		RunLog.clock(sim.time), sim.raid_n, sim.peak_ants, sim.max_gen, sim.stat_far, sim.kills, int(sim.delivered_total), plan]
+	var winters = ("  ·  %d winter%s" % [sim.winters, "" if sim.winters == 1 else "s"]) if sim.winters > 0 else ""
+	_collapse_stats.text = "Survived %s  ·  %d raid%s%s  ·  peak %d ants  ·  generation %d\nFarthest forager %d cells  ·  %d raiders slain  ·  %d food hauled%s" % [
+		RunLog.clock(sim.time), sim.raid_n, "" if sim.raid_n == 1 else "s", winters, sim.peak_ants, sim.max_gen, sim.stat_far, sim.kills, int(sim.delivered_total), plan]
 	var qid = Engine.get_meta("infdna_queen") if Engine.has_meta("infdna_queen") else "well_rounded"
 	var rec = RunLog.record(str(qid), sim.time, sim.raid_n, sim.peak_ants)
 	if rec["new"]:
@@ -913,13 +929,40 @@ func _show_run_summary(sim) -> void:
 	else:
 		var b = rec["best"]
 		_collapse_best.text = "Best with this queen: %s  ·  %d raids" % [RunLog.clock(float(b["time"])), int(b["raids"])]
+	_offer_heirlooms(sim)
+
+
+# The champion strain's best traits, one of which the next queen's founders can be born with.
+func _offer_heirlooms(sim) -> void:
+	for c in _legacy_row.get_children():
+		c.queue_free()
+	var from = "%s, %s" % [sim.queen_def["name"], RunLog.clock(sim.time)]
+	var cands = Legacy.candidates(sim.champion, sim.founder_genome, from)
+	var cur = Legacy.saved()
+	var grp = ButtonGroup.new()
+	for h in cands:
+		var b = _btn(_legacy_row, h["label"], "", Kit.GOLD, 22)
+		b.toggle_mode = true
+		b.group = grp
+		b.rect_min_size = Vector2(520, 48)
+		b.pressed = false
+		b.connect("pressed", self, "_pick_heirloom", [h])
+	if cur.empty():
+		_legacy_label.text = "The next queen's founders will carry whatever you choose."
+	else:
+		_legacy_label.text = "Current heirloom: %s (keep it by choosing nothing)." % str(cur.get("label", "")).to_lower()
+
+
+func _pick_heirloom(h: Dictionary) -> void:
+	Legacy.save(h)
+	_legacy_label.text = "Chosen: %s. The next queen's founders will be born with it." % str(h["label"]).to_lower()
 
 
 func _refresh_stats(sim) -> void:
 	var tc = sim.task_counts()
 	var av = sim.average_traits()
 	_name.text = sim.queen_def["name"]
-	_sub.text = "Day %d   ·   Generation %d   ·   %s" % [sim.day, sim.max_gen, scene.day.label().capitalize()]
+	_sub.text = "Day %d   ·   %s   ·   Generation %d   ·   %s" % [sim.day, Sim.Seasons.NAMES[scene.day.season], sim.max_gen, scene.day.label().capitalize()]
 	_food_bar.set_values(sim.food, sim.food_cap)
 	var note := ""
 	if sim.rot_rate > 0.05:
@@ -1474,7 +1517,7 @@ func _refresh_watch_info(sim) -> void:
 	var gen := 0
 	for a in sim.ants:
 		gen = int(max(gen, a.gen))
-	_watch_info.text = "%d ants   ·   gen %d   ·   %s   ·   %s" % [sim.ants.size(), gen, scene.day.label(),
+	_watch_info.text = "%d ants   ·   gen %d   ·   %s %s   ·   %s" % [sim.ants.size(), gen, Sim.Seasons.NAMES[scene.day.season].to_lower(), scene.day.label(),
 		("raid %d" % sim.raid_n) if sim.raid_n > 0 else "calm"]
 
 

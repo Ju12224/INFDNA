@@ -20,6 +20,8 @@ const City = preload("res://mods-unpacked/Judah-InfDNA/core/city.gd")
 const NestPlanner = preload("res://mods-unpacked/Judah-InfDNA/core/nest_planner.gd")
 const Queens = preload("res://mods-unpacked/Judah-InfDNA/core/queens.gd")
 const WF = preload("res://mods-unpacked/Judah-InfDNA/core/world_features.gd")
+const Seasons = preload("res://mods-unpacked/Judah-InfDNA/core/seasons.gd")
+const Legacy = preload("res://mods-unpacked/Judah-InfDNA/core/legacy.gd")
 
 enum Task { NURSE, FORAGE, DIG, HOME, DEFEND }
 enum Focus { FORAGE, BALANCED, DIG, DEFEND }
@@ -332,6 +334,8 @@ const GOALS = [
 	{"id": "raid10", "name": "Survive 10 raids", "food": 80, "mut": 1},
 	{"id": "pop150", "name": "A metropolis: 150 ants", "food": 80, "mut": 1},
 	{"id": "raid15", "name": "Survive 15 raids", "food": 120, "mut": 1},
+	{"id": "winter1", "name": "Live through a winter", "food": 70, "mut": 1},
+	{"id": "winter3", "name": "Hardened: live through three winters", "food": 140, "mut": 1},
 ]
 var _n_foragers := 0
 var _n_defenders := 0
@@ -349,7 +353,14 @@ var _stim_dig := 0.0
 var _ph_cache := {}              # genome uid -> phenotype
 
 
-func _init(seed_value: int = 0, queen_id: String = "well_rounded") -> void:
+# Legacy (legacy.gd): the heirloom a past colony handed down, born into every founder ant; the champion is the body plan
+# that most outnumbered the rest, whose traits the run summary offers to pass on.
+var heirloom := {}
+var champion = null
+var _champ_n := 0
+
+
+func _init(seed_value: int = 0, queen_id: String = "well_rounded", heirloom_in: Dictionary = {}) -> void:
 	if seed_value == 0:
 		rng.randomize()
 		seed_base = int(rng.seed & 0x7fffffff)
@@ -368,6 +379,13 @@ func _init(seed_value: int = 0, queen_id: String = "well_rounded") -> void:
 	Queens.apply_body(queen_genome, queen_def["body"])
 	for k in queen_def["traits"].keys():
 		founder.traits[k] = clamp(founder.traits[k] + queen_def["traits"][k], 0.02, 1.0)
+	heirloom = heirloom_in
+	if not heirloom.empty():
+		if heirloom.get("kind", "") == "mods":
+			mods["hp"] = mods.get("hp", 0.0) + float(heirloom["value"])
+			mods["attack"] = mods.get("attack", 0.0) + float(heirloom["value"])
+		else:
+			Legacy.apply(heirloom, founder)
 	register_genome(queen_genome)
 	register_genome(founder)
 	founder_genome = founder
@@ -389,6 +407,8 @@ func _init(seed_value: int = 0, queen_id: String = "well_rounded") -> void:
 		grid.deposit(ex + (i % 2 * 2 - 1) * rng.randi_range(2, 5), grid.open_under * SPOIL_KEEP / 8.0, rng)
 	grid.rebuild_nav()
 	toasts.append({"text": "You direct the colony: R rally flag   E harvest a pile   Z recall   J surge   M breed   (cursor = target)   B beacon   G mutagen", "t": 14.0})
+	if not heirloom.empty():
+		toasts.append({"text": "Heirloom from %s: %s." % [heirloom.get("from", "a past colony"), str(heirloom.get("label", "")).to_lower()], "t": 12.0})
 
 
 func register_genome(g, gen: int = -1) -> void:
@@ -622,6 +642,49 @@ func step(dt: float) -> void:
 		collapse_reason = "The queen has fallen."
 
 
+# ---- Seasons (seasons.gd): the year shapes how much food appears, what the colony eats, how fast the queen lays and how fast ants
+# walk over open ground. Autumn is the glut, winter the lean time; living through a winter earns a reward.
+var season := 0
+var winters := 0                   # winters lived through
+var winter_low := 1e9              # the lowest the larder got this winter
+var _s_food := 1.0
+var _s_rich := 1.0
+var _s_fruit := 1.0
+var _s_upkeep := 1.0
+var _s_lay := 1.0
+var _s_walk := 1.0
+var _s_raid := 1.0
+var _s_warned := false
+
+
+func _step_seasons(_dt: float) -> void:
+	_s_food = Seasons.food_k(time)
+	_s_rich = Seasons.rich_k(time)
+	_s_fruit = Seasons.fruit_k(time)
+	_s_upkeep = Seasons.upkeep_k(time)
+	_s_lay = Seasons.lay_k(time)
+	_s_walk = Seasons.walk_k(time)
+	_s_raid = Seasons.raid_k(time)
+	var idx = Seasons.index(time)
+	if idx != season:
+		var was = season
+		season = idx
+		_s_warned = false
+		toasts.append({"text": Seasons.NOTES[idx], "t": 9.0})
+		banner = "%s begins" % Seasons.NAMES[idx]
+		banner_t = 3.5
+		if idx == 3:
+			winter_low = food
+		if idx == 0 and was == 3:
+			winters += 1
+			toasts.append({"text": "You lived through winter %d (it dipped to %d food)." % [winters, int(winter_low)], "t": 9.0})
+	if season == 3:
+		winter_low = min(winter_low, food)
+	elif season == 2 and not _s_warned and Seasons.to_next(time) <= 60.0:
+		_s_warned = true
+		toasts.append({"text": "Winter is one minute away. The larder is %d%% full." % int(100.0 * food / max(1.0, food_cap)), "t": 8.0})
+
+
 # Weather: now and then it rains. Rain washes the scent trails away (they lose strength ~4x faster while it pours), so
 # foragers fall back on route memory and the colony has to re-lay its roads. The views add streaks, splashes and grey light.
 var rain := 0.0
@@ -646,6 +709,7 @@ func _step_weather(dt: float) -> void:
 
 
 func _step_extras(dt: float) -> void:
+	_step_seasons(dt)
 	_step_weather(dt)
 	_step_director(dt)
 	_trail_t -= dt
@@ -660,7 +724,7 @@ func _step_extras(dt: float) -> void:
 			beacons.erase(b)
 	jackpot_t -= dt
 	if jackpot_t <= 0.0:
-		jackpot_t = rng.randf_range(140.0, 220.0)
+		jackpot_t = rng.randf_range(140.0, 220.0) / clamp(_s_food * 1.5, 0.25, 1.5)
 		_spawn_jackpot()
 	_goal_t -= dt
 	if _goal_t <= 0.0:
@@ -698,6 +762,10 @@ func _goal_met(id: String) -> bool:
 			return caste_counts()[2] >= 12
 		"jackpot":
 			return jackpot_hauled >= 100.0
+		"winter1":
+			return winters >= 1
+		"winter3":
+			return winters >= 3
 	return false
 
 
@@ -1220,7 +1288,7 @@ func _step_ant(a, dt: float) -> void:
 		a.t = 1.0
 	else:
 		var und = grid.is_under(a.x, a.y)
-		var sp = a.ph["speed"] * (a.ph["tunnel_mult"] if und else SURFACE_K)
+		var sp = a.ph["speed"] * (a.ph["tunnel_mult"] if und else SURFACE_K * _s_walk)
 		if surge_t > 0.0 and not und:
 			sp *= 1.45 + 0.3 * mod("surge_power")
 		if not und and a.task == Task.FORAGE:
@@ -1730,7 +1798,7 @@ func _random_home_cell() -> Vector2:
 
 # ------------------------------------------------------------------ queen, brood, food
 func _step_queen(dt: float) -> void:
-	var interval = [9.0, 5.0, 2.5][brood]
+	var interval = [9.0, 5.0, 2.5][brood] / _s_lay
 	var reserve = [30.0, 14.0, 5.0][brood] + min(ants.size(), 60) * [0.8, 0.4, 0.15][brood]   # v0.22: size term capped, big colonies kept laying too rarely
 	var surplus = food - reserve
 	if surplus > 150.0:
@@ -1899,6 +1967,7 @@ func _step_food(dt: float) -> void:
 	var upkeep := 0.0
 	for a in ants:
 		upkeep += a.ph["upkeep"]
+	upkeep *= _s_upkeep
 	food -= upkeep * dt
 	ledger["upkeep"] += min(upkeep * dt, max(0.0, food + upkeep * dt))
 	if food < 0.0:
@@ -1925,9 +1994,9 @@ func _step_food(dt: float) -> void:
 	for p in piles:
 		if p.get("kind", "") == "":
 			gem_piles += 1
-	if gem_piles < MAX_PILES + ants.size() / 60 and _pile_timer <= 0.0:
+	if gem_piles < int((MAX_PILES + ants.size() / 60) * clamp(_s_food, 0.35, 1.2)) and _pile_timer <= 0.0:
 		_spawn_pile()
-		_pile_timer = rng.randf_range(8.0, 20.0)
+		_pile_timer = rng.randf_range(8.0, 20.0) / max(0.05, _s_food)
 
 
 # Food ecology: new piles appear at least `lo` cells out, and `lo` grows with time and colony size (up to RANGE_MAX).
@@ -1964,7 +2033,7 @@ func _spawn_pile() -> void:
 				ok = false
 		if not ok:
 			continue
-		var amount = (rng.randf_range(20.0, 40.0) + d * 0.35) * (1.0 + mod("pile_rich"))
+		var amount = (rng.randf_range(20.0, 40.0) + d * 0.35) * (1.0 + mod("pile_rich")) * _s_rich
 		piles.append({"x": x, "amount": amount, "max": amount})
 		return
 
@@ -2070,6 +2139,9 @@ func _sample_evolution() -> void:
 	var top := 0
 	for u in by_uid.keys():
 		top = max(top, by_uid[u][1])
+		if by_uid[u][1] > _champ_n:
+			_champ_n = by_uid[u][1]
+			champion = by_uid[u][0]
 		# a fusion's first appearance is an evolutionary event: name it and its two parents
 		if by_uid[u][1] >= 2:
 			for fid in by_uid[u][0].fusions():
@@ -2132,7 +2204,7 @@ func ant_at(world_pos: Vector2, radius: float):
 # ================================================================== raids
 func _step_raids(dt: float) -> void:
 	banner_t -= dt
-	raid_timer -= dt * (1.0 + mod("raid_haste"))
+	raid_timer -= dt * (1.0 + mod("raid_haste")) * _s_raid
 	if raid_timer <= 0.0:
 		_launch_raid()
 		fate.on_raid(self)
@@ -3039,7 +3111,7 @@ func _step_economy(dt: float) -> void:
 	_sync_trees(dt)
 	_check_landmarks(dt)
 	for tr in trees:
-		tr["t"] -= dt * float(rule("fruit_boost", 1.0))
+		tr["t"] -= dt * float(rule("fruit_boost", 1.0)) * _s_fruit
 		if tr["t"] <= 0.0:
 			tr["t"] = rng.randf_range(22.0, 34.0)       # the giant fruit trees are the landscape's oases (a few feed a small colony; a big one must range)
 			_drop_fruit(tr["x"])

@@ -10,6 +10,7 @@ extends Reference
 
 const MK = preload("res://mods-unpacked/Judah-InfDNA/content/colony/mesh_kit.gd")
 const WF = preload("res://mods-unpacked/Judah-InfDNA/core/world_features.gd")
+const Seasons = preload("res://mods-unpacked/Judah-InfDNA/core/seasons.gd")
 
 const INK = Color("#15121a")
 const DEPTH = 128.0          # thickness of the walkable band, px
@@ -27,6 +28,13 @@ const GREENS = [Color("#4a7a2c"), Color("#659c38"), Color("#86bb4a"), Color("#a9
 const BLADES = [Color("#5d8f34"), Color("#86bb4a"), Color("#b3df6e")]
 const FLOWERS = [Color("#f5f0e6"), Color("#f7d046"), Color("#f08fb0"), Color("#9a7be0"), Color("#f08a3c")]
 const CAPS = [Color("#d4493a"), Color("#e08a3c"), Color("#a8734a"), Color("#9a6fb0")]
+const STRAW = Color("#b8ab5c")
+# autumn leaves: [dark, mid, light, high] for orange, red and gold trees
+const AUTUMN_SETS = [
+	[Color("#8a3f16"), Color("#c8661e"), Color("#e8892b"), Color("#f7c25a")],
+	[Color("#6e1d17"), Color("#a82f22"), Color("#cf4a2e"), Color("#ee8a5a")],
+	[Color("#8a6a10"), Color("#c79a1c"), Color("#e8c23a"), Color("#f7e07a")],
+]
 
 var sim
 var g
@@ -41,6 +49,9 @@ var _flist_key := -999999
 var _vis_f := []             # per slice: visible feature entries
 var _vis_shade := []
 var perf             # perf.gd (optional): scenery detail level
+var day              # day_cycle.gd (optional): the year, which tints the grass, turns the leaves and brings the snow
+var _sk := -1        # season stage the cached scenery was built for: when it changes, chunks and trees are rebuilt a few per frame
+var _P := {}         # the seasonal palette of the build in progress
 
 
 func _init(sim_) -> void:
@@ -49,6 +60,27 @@ func _init(sim_) -> void:
 	world_seed = sim_.seed_base
 	for s in SLICES + 1:
 		_vis_f.append([])
+
+
+# The look of the year for whatever is about to be built (read once per chunk or feature, so one build is consistent).
+func _season_palette() -> void:
+	var t = day.sea_t if day != null else 0.0
+	_P = {
+		"gb": Seasons.blend_color(t, [Color("#72b04f"), GRASS_BACK, Color("#93994a"), Color("#8a9877")]),
+		"gf": Seasons.blend_color(t, [Color("#aade5e"), GRASS_FRONT, Color("#bdb65a"), Color("#a8b79b")]),
+		"dry": Seasons.blend(t, [0.0, 0.12, 0.7, 0.85]),
+		"bloom": Seasons.bloom(t),
+		"shroom": Seasons.blend(t, [0.35, 0.3, 1.0, 0.0]),
+		"autumn": Seasons.autumn(t),
+		"leaf": Seasons.leaf(t),
+		"snow": Seasons.snow(t),
+		"blossom": 1.0 - smoothstep(0.05, 0.2, Seasons.phase(t)),
+	}
+
+
+# A green of the meadow as the season has left it: fresh in spring, straw in autumn and winter.
+func _sg(col: Color) -> Color:
+	return col.linear_interpolate(STRAW, float(_P.get("dry", 0.0)) * 0.75)
 
 
 static func lane_y(sy: float, lane: float) -> float:
@@ -93,6 +125,8 @@ static func _sy_at(sy: PoolRealArray, c0: int, px: float, C: float) -> float:
 # ---------------------------------------------------------------- per frame
 func prepare(cols: Array, t: float) -> void:
 	_t = t
+	if day != null:
+		_sk = day.stage
 	if not g.surf_dirty.empty():
 		for x in g.surf_dirty.keys():
 			var ci = int(floor(float(x) / CH))
@@ -109,9 +143,11 @@ func prepare(cols: Array, t: float) -> void:
 	_vis = []
 	for ci in range(c_lo, c_hi + 1):
 		var ch = _chunks.get(ci)
-		if ch == null or (_stale.has(ci) and t - ch["t"] > 0.6):
-			if budget > 0:
-				budget -= 1
+		var seasonal = ch != null and ch.get("sk", -1) != _sk
+		if ch == null or seasonal or (_stale.has(ci) and t - ch["t"] > 0.6):
+			var cost = 3 if seasonal else 1          # a change of season rebuilds one chunk per frame, so it never shows as a hitch
+			if budget >= cost:
+				budget -= cost
 				ch = _build_chunk(ci)
 				_chunks[ci] = ch
 				_stale.erase(ci)
@@ -138,12 +174,14 @@ func _prepare_features(cols: Array, chunk_budget: int) -> void:
 	var budget = 2
 	for f in _flist:
 		var e = _fcache.get(f["id"])
-		if e == null:
-			if budget <= 0:
+		if e == null or e.get("sk", -1) != _sk:
+			if budget > 0:
+				budget -= 1
+				e = _build_feature(f)
+				e["sk"] = _sk
+				_fcache[f["id"]] = e
+			elif e == null:
 				continue
-			budget -= 1
-			e = _build_feature(f)
-			_fcache[f["id"]] = e
 		if e["x1"] < px0 or e["x0"] > px1:
 			continue
 		_vis_f[e["slice"]].append(e)
@@ -156,19 +194,38 @@ func _prepare_features(cols: Array, chunk_budget: int) -> void:
 				_fcache.erase(id)
 
 
-# Band, ground shadows: drawn first (under every unit).
-func draw_ground(ci: CanvasItem) -> void:
+# The turf, drawn first (under every unit), then the snow over it (a node of its own, faded by how much has fallen), then the
+# shadows over both.
+func draw_turf(ci: CanvasItem) -> void:
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	for e in _vis:
 		var ch = e[1]
 		if ch["band"] != null:
 			ci.draw_mesh(ch["band"], null)
+
+
+func draw_shade(ci: CanvasItem) -> void:
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	for e in _vis:
 		var ch2 = e[1]
 		if ch2["shade"] != null:
 			ci.draw_mesh(ch2["shade"], null)
 	for fe in _vis_shade:
 		ci.draw_mesh(fe["shade"], null)
+
+
+func draw_snow(ci: CanvasItem) -> void:
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	var budget = 2
+	for e in _vis:
+		var ch = e[1]
+		if not ch.has("snow"):
+			if budget <= 0:
+				continue
+			budget -= 1
+			ch["snow"] = _build_snow(e[0], ch)
+		if ch["snow"] != null:
+			ci.draw_mesh(ch["snow"], null)
 
 
 # One lane slice of scenery. A little wind shear sways the tufts and flowers.
@@ -212,6 +269,7 @@ func visible_slices() -> Array:
 
 # ---------------------------------------------------------------- chunk build
 func _build_chunk(ci: int) -> Dictionary:
+	_season_palette()
 	var c0 = ci * CH
 	var sy := PoolRealArray()
 	var mf := PoolRealArray()
@@ -237,12 +295,12 @@ func _build_chunk(ci: int) -> Dictionary:
 	var oy := 0.0
 	for i in CH + 1:
 		oy += sy[i]
-	return {"band": band.build(), "shade": shade.build(), "sl": outs, "sy": sy, "oy": oy / (CH + 1), "t": _t}
+	return {"band": band.build(), "shade": shade.build(), "sl": outs, "sy": sy, "mf": mf, "oy": oy / (CH + 1), "t": _t, "sk": _sk}
 
 
 func _lane_col(lane: float, mfv: float, i: int, j: int, slope: float = 0.0) -> Color:
 	var t = clamp(lane, 0.0, 1.0)
-	var col = GRASS_BACK.linear_interpolate(GRASS_FRONT, t)
+	var col = _P["gb"].linear_interpolate(_P["gf"], t)
 	var n = sin((i) * 0.11 + j * 1.7) * 0.022 + (0.018 if j % 2 == 0 else -0.018)
 	col = col.lightened(n) if n > 0.0 else col.darkened(-n)
 	if mfv > 0.0:
@@ -255,6 +313,69 @@ func _lane_col(lane: float, mfv: float, i: int, j: int, slope: float = 0.0) -> C
 		m = m.lightened(row) if row > 0.0 else m.darkened(-row)
 		col = col.linear_interpolate(m, mfv)
 	return col
+
+
+# A chunk's snow: a white cover over the whole walkable band (not over the bare mound), soft drifts, and a thick lip along the front edge.
+# Built only once snow is on the ground; the node that draws it fades it in and out.
+func _build_snow(ci: int, ch: Dictionary):
+	var mk = MK.new()
+	var C = g.CELL
+	var c0 = ci * CH
+	var sy: PoolRealArray = ch["sy"]
+	var mf: PoolRealArray = ch["mf"]
+	var white = Color(0.975, 0.985, 1.0)
+	var cool = Color(0.8, 0.88, 0.96)
+	var shade_c = Color(0.62, 0.73, 0.86)
+	var rows = 5
+	for j in rows:
+		var la = -0.11 + 1.13 * float(j) / rows
+		var lb = -0.11 + 1.13 * float(j + 1) / rows
+		var ca = cool.linear_interpolate(white, clamp(la, 0.0, 1.0))
+		var cb = cool.linear_interpolate(white, clamp(lb, 0.0, 1.0))
+		for i in CH:
+			var m0 = 1.0 - clamp(mf[i] * 1.6, 0.0, 1.0)
+			var m1 = 1.0 - clamp(mf[i + 1] * 1.6, 0.0, 1.0)
+			if m0 <= 0.01 and m1 <= 0.01:
+				continue
+			var xa = (c0 + i) * C
+			var xb = xa + C
+			mk.quad_c(Vector2(xa, lane_y(sy[i], la)), Color(ca.r, ca.g, ca.b, 0.88 * m0), Vector2(xb, lane_y(sy[i + 1], la)), Color(ca.r, ca.g, ca.b, 0.88 * m1),
+				Vector2(xb, lane_y(sy[i + 1], lb)), Color(cb.r, cb.g, cb.b, 0.9 * m1), Vector2(xa, lane_y(sy[i], lb)), Color(cb.r, cb.g, cb.b, 0.9 * m0))
+	# soft drifts piled on the turf
+	for i in range(0, CH, 2):
+		var col = c0 + i
+		if mf[i] > 0.2 or MK.hash1(col * 2.9 + 7.0) < 0.3:
+			continue
+		var lane = MK.hash1(col * 6.3 + 1.0)
+		var px = (col + MK.hash1(col * 4.1)) * C
+		var p = Vector2(px, lane_y(_sy_at(sy, c0, px, C), lane))
+		var ps = persp(lane)
+		var rx = (14.0 + 24.0 * MK.hash1(col * 8.7 + 2.0)) * ps
+		var ry = rx * 0.26
+		mk.ellipse(p + Vector2(0, 1.5 * ps), rx * 1.08, ry * 1.1, Color(shade_c.r, shade_c.g, shade_c.b, 0.85), 12)
+		mk.ellipse(p, rx, ry, white, 12)
+		mk.ellipse(p + Vector2(rx * 0.2, -ry * 0.35), rx * 0.55, ry * 0.45, Color(1, 1, 1, 0.9), 9)
+	# the lip: a thick white edge with a cool shadow under it, broken where the mound is
+	var run := PoolVector2Array()
+	var run_lo := PoolVector2Array()
+	var wl := PoolRealArray()
+	var wl2 := PoolRealArray()
+	for i in CH + 1:
+		var bare = mf[i] > 0.3
+		if not bare:
+			run.append(Vector2((c0 + i) * C, sy[i] - 2.5))
+			run_lo.append(Vector2((c0 + i) * C, sy[i] + 3.0))
+			wl.append(8.0 + 3.0 * MK.hash1((c0 + i) * 1.9))
+			wl2.append(7.0)
+		if (bare or i == CH) and run.size() >= 2:
+			mk.ribbon(run_lo, wl2, shade_c)
+			mk.ribbon(run, wl, white)
+		if bare or i == CH:
+			run = PoolVector2Array()
+			run_lo = PoolVector2Array()
+			wl = PoolRealArray()
+			wl2 = PoolRealArray()
+	return mk.build()
 
 
 # Slope of the ground at column i of a chunk (px of height per px of width, + = falling to the right).
@@ -313,12 +434,14 @@ func _band(mk, c0: int, sy: PoolRealArray, mf: PoolRealArray) -> void:
 					mk.ellipse(p1, cr, cr * 0.7, Color("#8d5f38").linear_interpolate(Color("#b8834f"), h1), 9)
 					mk.ellipse(p1 + Vector2(-cr * 0.25, -cr * 0.22), cr * 0.5, cr * 0.3, Color(1.0, 0.9, 0.7, 0.35), 7)
 			elif mf[i] < 0.2:
-				mk.blade(p1, (h1 - 0.5) * 5.0, (3.0 + 5.0 * h1) * ps, 1.7 * ps + 0.4, BLADES[0], BLADES[int(h1 * 2.99)])
-		if mf[i] < 0.2 and MK.hash1(col2 * 2.37 + 4.0) > 0.86:
+				mk.blade(p1, (h1 - 0.5) * 5.0, (3.0 + 5.0 * h1) * ps, 1.7 * ps + 0.4, _sg(BLADES[0]), _sg(BLADES[int(h1 * 2.99)]))
+		if mf[i] < 0.2 and MK.hash1(col2 * 2.37 + 4.0) > 0.86 - 0.45 * float(_P["autumn"]):
 			var lane2 = MK.hash1(col2 * 8.1)
 			var p2 = Vector2(col2 * C, lane_y(sy[i], lane2))
 			var ps2 = persp(lane2)
 			var lc = Color("#8a6a3a") if MK.hash1(col2 * 3.3) > 0.5 else Color("#6e5530")
+			if float(_P["autumn"]) > 0.25 and MK.hash1(col2 * 5.9) > 0.35:
+				lc = AUTUMN_SETS[int(MK.hash1(col2 * 7.7) * 2.99)][1]          # fallen leaves
 			mk.ellipse(p2, 5.5 * ps2, 1.9 * ps2, hz(lc, lane2), 8, (MK.hash1(col2) - 0.5) * 0.9)
 
 
@@ -348,13 +471,19 @@ func _decor(sl: Array, shade, band, c0: int, sy: PoolRealArray, mf: PoolRealArra
 		if r < 0.36:
 			_tuft(mkr, p, ps, sd, lane)
 		elif r < 0.50:
-			_flowers(mkr, p, ps, sd, lane)
+			if MK.hash1(col * 4.3 + 1.0) < float(_P["bloom"]):
+				_flowers(mkr, p, ps, sd, lane)
+			else:
+				_tuft(mkr, p, ps, sd, lane)
 		elif r < 0.58:
 			_clover(band, p, ps, sd, lane)
 		elif r < 0.68:
 			_pebbles(mkr, shade, p, ps, sd, lane)
 		elif r < 0.76:
-			_mushroom(mkr, shade, p, ps, sd, lane)
+			if MK.hash1(col * 6.1 + 2.0) < float(_P["shroom"]):
+				_mushroom(mkr, shade, p, ps, sd, lane)
+			else:
+				_tuft(mkr, p, ps, sd, lane)
 		elif r < 0.87:
 			_bush(mkr, shade, p, ps, sd, lane)
 		else:
@@ -376,7 +505,7 @@ func _tuft(mk, p: Vector2, ps: float, sd: float, lane: float, big: float = 1.0) 
 		var h1 = MK.hash1(sd + i * 1.7)
 		var h2 = MK.hash1(sd + i * 3.1 + 5.0)
 		mk.blade(p + Vector2((h1 - 0.5) * 18.0 * ps * big, 0), (h2 - 0.5) * 16.0 * ps, (13.0 + 16.0 * h2) * ps * big,
-			3.4 * ps, hz(GREENS[int(h1 * 1.99)], lane), hz(GREENS[2 + int(h2 * 1.99)], lane))
+			3.4 * ps, hz(_sg(GREENS[int(h1 * 1.99)]), lane), hz(_sg(GREENS[2 + int(h2 * 1.99)]), lane))
 
 
 func _tall(mk, p: Vector2, ps: float, sd: float, lane: float) -> void:
@@ -384,7 +513,7 @@ func _tall(mk, p: Vector2, ps: float, sd: float, lane: float) -> void:
 		var h1 = MK.hash1(sd + i * 1.3)
 		var h2 = MK.hash1(sd + i * 2.9 + 4.0)
 		mk.blade(p + Vector2((h1 - 0.5) * 30.0 * ps, 0), (h2 - 0.5) * 26.0 * ps, (28.0 + 48.0 * h2) * ps, 3.8 * ps,
-			Color("#3a6620"), GREENS[2 + int(h1 * 1.99)])
+			_sg(Color("#3a6620")), _sg(GREENS[2 + int(h1 * 1.99)]))
 
 
 func _flowers(mk, p: Vector2, ps: float, sd: float, lane: float) -> void:
@@ -396,7 +525,7 @@ func _flowers(mk, p: Vector2, ps: float, sd: float, lane: float) -> void:
 		var bx = (h1 - 0.5) * 22.0 * ps
 		var ln = (16.0 + 18.0 * h2) * ps
 		var lean = (h2 - 0.5) * 8.0 * ps
-		mk.blade(p + Vector2(bx, 0), lean, ln, 1.8 * ps + 0.4, hz(Color("#46742a"), lane), hz(Color("#6aa23c"), lane))
+		mk.blade(p + Vector2(bx, 0), lean, ln, 1.8 * ps + 0.4, hz(_sg(Color("#46742a")), lane), hz(_sg(Color("#6aa23c")), lane))
 		var head = p + Vector2(bx + lean, -ln)
 		for k in 5:
 			var a = TAU * k / 5.0 + sd
@@ -409,7 +538,7 @@ func _clover(mk, p: Vector2, ps: float, sd: float, lane: float) -> void:
 	for i in 7:
 		var h1 = MK.hash1(sd + i * 1.9)
 		var h2 = MK.hash1(sd + i * 3.7 + 2.0)
-		mk.ellipse(p + Vector2((h1 - 0.5) * 30.0 * ps, (h2 - 0.5) * 5.0 * ps), 4.4 * ps, 1.8 * ps, hz(Color("#4f8f33") if h1 > 0.5 else Color("#5fa03a"), lane), 8, (h2 - 0.5) * 0.6)
+		mk.ellipse(p + Vector2((h1 - 0.5) * 30.0 * ps, (h2 - 0.5) * 5.0 * ps), 4.4 * ps, 1.8 * ps, hz(_sg(Color("#4f8f33") if h1 > 0.5 else Color("#5fa03a")), lane), 8, (h2 - 0.5) * 0.6)
 	for k in 2:
 		mk.ellipse(p + Vector2((MK.hash1(sd + k * 8.0) - 0.5) * 24.0 * ps, -1.5 * ps), 1.6 * ps, 1.0 * ps, hz(Color("#f5f0e6"), lane), 6)
 
@@ -450,6 +579,12 @@ func _bush(mk, sh, p: Vector2, ps: float, sd: float, lane: float) -> void:
 	var dark = hz(Color("#35632a"), lane)
 	var mid = hz(Color("#4b8a36"), lane)
 	var lite = hz(Color("#72b04a"), lane)
+	var aut = float(_P["autumn"]) * (0.0 if MK.hash1(sd + 12.0) > 0.7 else 1.0)
+	if aut > 0.0:
+		var bs = AUTUMN_SETS[int(MK.hash1(sd + 11.0) * 2.99)]
+		dark = hz(dark.linear_interpolate(bs[0], aut), lane)
+		mid = hz(mid.linear_interpolate(bs[1], aut), lane)
+		lite = hz(lite.linear_interpolate(bs[2], aut), lane)
 	for i in n:
 		var u = float(i) / (n - 1)
 		var q = p + Vector2((u - 0.5) * sz * 2.2 + (MK.hash1(sd + i) - 0.5) * 6.0 * ps, -sz * (0.5 + 0.3 * sin(i * 1.3 + sd)))
@@ -461,9 +596,13 @@ func _bush(mk, sh, p: Vector2, ps: float, sd: float, lane: float) -> void:
 	for i in n / 2 + 1:
 		var q3 = p + Vector2((float(i) / max(1, n / 2) - 0.5) * sz * 1.6 + sz * 0.14, -sz * 0.85 - sz * 0.3 * sin(i * 2.1 + sd))
 		mk.blob(q3, sz * 0.3, sz * 0.26, sd + i * 2.3, 0.1, lite, 8)
-	if MK.hash1(sd + 5.0) > 0.6:
+	if MK.hash1(sd + 5.0) > 0.6 and float(_P["snow"]) < 0.5:
 		for i in 5:
 			mk.ellipse(p + Vector2((MK.hash1(sd + i * 3.0) - 0.5) * sz * 1.8, -sz * (0.5 + 0.5 * MK.hash1(sd + i * 7.0))), 2.2 * ps, 2.2 * ps, Color("#d9413a"), 6)
+	if float(_P["snow"]) > 0.5:
+		for i in n / 2 + 1:
+			var q4 = p + Vector2((float(i) / max(1, n / 2) - 0.5) * sz * 1.6 + sz * 0.14, -sz * 1.0 - sz * 0.3 * sin(i * 2.1 + sd))
+			mk.blob(q4, sz * 0.36, sz * 0.2, sd + i * 3.1, 0.12, Color(0.97, 0.985, 1.0), 9)
 	sh.shadow(p + Vector2(-sz * 0.5, 2.0), sz * 1.7, sz * 0.3, Color(0.06, 0.1, 0.04, 0.2), 3)
 
 
@@ -472,11 +611,12 @@ func _fern(mk, p: Vector2, ps: float, sd: float, lane: float) -> void:
 		var h1 = MK.hash1(sd + i * 1.7)
 		var sgn = -1.0 if i % 2 == 0 else 1.0
 		mk.blade(p + Vector2(sgn * 2.0 * ps, 0), sgn * (16.0 + 18.0 * h1) * ps, (26.0 + 22.0 * h1) * ps, 4.4 * ps,
-			hz(Color("#3f7a2a"), lane), hz(Color("#7cbc4c"), lane))
+			hz(_sg(Color("#3f7a2a")), lane), hz(_sg(Color("#7cbc4c")), lane))
 
 
 # ---------------------------------------------------------------- landmarks
 func _build_feature(f: Dictionary) -> Dictionary:
+	_season_palette()
 	match f["kind"]:
 		"tree":
 			return _tree(f)
@@ -550,6 +690,9 @@ func _tree(f: Dictionary) -> Dictionary:
 		mk.ribbon(bp, bw, bark_m, bark_d)
 		mk.ribbon(bp, PoolRealArray([bw[0] * 0.3, bw[1] * 0.3, bw[2] * 0.3, bw[3] * 0.3, bw[4] * 0.3, bw[5] * 0.3, bw[6] * 0.3]), Color(bark_h.r, bark_h.g, bark_h.b, 0.4))
 		ends.append(bp[6])
+		if float(_P["snow"]) > 0.3:
+			for j in [1, 2, 3, 4, 5]:
+				mk.ellipse(bp[j] + Vector2(0, -bw[j] * 0.55), bw[j] * 0.85 + 3.0, bw[j] * 0.34 + 1.6, Color(0.96, 0.98, 1.0), 8)
 		for q in 2:
 			var sp = bp[3 + q]
 			var sa = ang + (0.7 if q == 0 else -0.8) * dir
@@ -623,9 +766,20 @@ func _tree(f: Dictionary) -> Dictionary:
 	var g_m = hz(Color("#3a7a2e"), lane)
 	var g_l = hz(Color("#5aa043"), lane)
 	var g_h = hz(Color("#9bd563"), lane)
+	var leafk = float(_P["leaf"])
+	var snowk = float(_P["snow"])
+	var aut = float(_P["autumn"]) * (0.0 if MK.hash1(sd + 57.0) > 0.82 else 1.0)       # a few trees stay green all autumn
+	if aut > 0.0:
+		var A = AUTUMN_SETS[int(MK.hash1(sd + 55.0) * 2.99)]
+		g_d = hz(Color("#27501f").linear_interpolate(A[0], aut), lane)
+		g_m = hz(Color("#3a7a2e").linear_interpolate(A[1], aut), lane)
+		g_l = hz(Color("#5aa043").linear_interpolate(A[2], aut), lane)
+		g_h = hz(Color("#9bd563").linear_interpolate(A[3], aut), lane)
 	var lobes := []
 	var N = 34
 	for i in N:
+		if leafk < 0.999 and MK.hash1(sd + i * 9.3) > leafk:
+			continue          # leaves not out yet, or already down
 		var ang2 = i * 2.39996 + sd
 		var rr = sqrt((i + 0.5) / N)
 		var jx = (MK.hash1(sd + i * 1.3) - 0.5) * 0.25
@@ -634,9 +788,10 @@ func _tree(f: Dictionary) -> Dictionary:
 		var rad = h * (0.062 + 0.05 * MK.hash1(sd + i * 3.9)) * (1.15 - 0.4 * rr)
 		lobes.append([pos, rad])
 	for e in ends:
-		lobes.append([e, h * 0.058])
+		if leafk >= 0.999 or MK.hash1(sd + e.x * 0.1) <= leafk:
+			lobes.append([e, h * 0.058])
 	lobes.sort_custom(self, "_lobe_y")
-	var shadow_ell = Color(g_d.r * 0.6, g_d.g * 0.6, g_d.b * 0.6, 0.4)
+	var shadow_ell = Color(g_d.r * 0.6, g_d.g * 0.6, g_d.b * 0.6, 0.4 * leafk)
 	mk.ellipse(cc + Vector2(0, Ry * 0.95), Rx * 0.85, Ry * 0.38, shadow_ell, 16)
 	var k2 = 0
 	for L in lobes:
@@ -660,17 +815,31 @@ func _tree(f: Dictionary) -> Dictionary:
 		k2 += 1
 	# the scalloped edge: small clusters hanging off the crown
 	for i in 12:
+		if leafk < 0.999 and MK.hash1(sd + i * 4.7) > leafk:
+			continue
 		var ea = TAU * i / 12.0 + sd
 		var ep = cc + Vector2(cos(ea) * Rx * 1.02, sin(ea) * Ry * 0.98)
 		var er = h * (0.03 + 0.025 * MK.hash1(sd + i * 8.3))
 		mk.blob_ink(ep, er, er * 0.9, sd + i * 5.0, 0.06, g_m, 3.0, 16, g_l)
-	if MK.hash1(sd + 8.0) > 0.4:
+	if MK.hash1(sd + 8.0) > 0.4 and leafk > 0.9 and snowk < 0.3:
 		for i in 11:
 			var a2 = PI * (0.05 + 0.9 * MK.hash1(sd + i * 4.4))
 			var rr2 = 0.45 + 0.55 * MK.hash1(sd + i * 6.6)
 			var fcol = Color("#d9413a") if MK.hash1(sd + 9.0) > 0.5 else Color("#f0a233")
 			mk.ellipse_ink(cc + Vector2(cos(a2) * Rx * rr2, sin(a2) * Ry * rr2 * 0.8), 7.0 * sc + 2.5, 7.0 * sc + 2.5, fcol, 2.2, 9)
-	sh.shadow(b + Vector2(-w * 1.8, 5.0), w * 2.8 + h * 0.12, w * 0.34, Color(0.06, 0.1, 0.04, 0.18), 3)
+	# spring blossom, thinning out as the season goes on
+	var blo = float(_P["blossom"]) * (1.0 if MK.hash1(sd + 61.0) > 0.35 else 0.0)
+	if blo > 0.05 and leafk > 0.1:
+		for L in lobes:
+			if MK.hash1(sd + L[0].x * 0.13) > blo:
+				continue
+			for q in 3:
+				var bq = L[0] + Vector2((MK.hash1(L[0].x + q) - 0.5) * L[1] * 1.2, (MK.hash1(L[0].y + q * 3.0) - 0.5) * L[1])
+				mk.ellipse(bq, 3.0 * sc + 1.2, 2.6 * sc + 1.0, Color("#fbd1de") if q % 2 == 0 else Color("#ffffff"), 6)
+	if snowk > 0.3:
+		mk.ellipse(b + Vector2(-w * 0.15, 2.0), w * 1.35, w * 0.2, Color(0.62, 0.73, 0.86), 12)
+		mk.ellipse(b + Vector2(-w * 0.15, 0.0), w * 1.3, w * 0.17, Color(0.97, 0.985, 1.0), 12)
+	sh.shadow(b + Vector2(-w * 1.8, 5.0), w * 2.8 + h * 0.12, w * 0.34, Color(0.06, 0.1, 0.04, 0.18 * (0.4 + 0.6 * leafk)), 3)
 	var ext = Rx * 1.25 + w * 1.3
 	return {"mesh": mk.build(), "shade": sh.build(), "slice": slice_of(lane), "x0": min(b.x, cc.x) - ext, "x1": max(b.x, cc.x) + ext, "sway": 1.0, "by": b.y}
 
@@ -704,8 +873,12 @@ func _boulder(f: Dictionary) -> Dictionary:
 			cp.append(Vector2(cx + sin(u * 4.0 + k) * rx * 0.08, b.y - ry * (1.5 - 0.9 * u)))
 			cw.append(3.0 * sc + 1.0)
 		mk.ribbon(cp, cw, Color(0.1, 0.08, 0.07, 0.55))
-	if MK.hash1(sd + 6.0) > 0.4:
+	if MK.hash1(sd + 6.0) > 0.4 and float(_P["snow"]) < 0.5:
 		mk.blob(b + Vector2(-rx * 0.3, -ry * 1.6), rx * 0.45, ry * 0.2, sd + 3.0, 0.2, hz(Color("#5b8f3a"), lane), 9)
+	if float(_P["snow"]) > 0.5:
+		mk.blob(b + Vector2(rx * 0.02, -ry * 1.62), rx * 0.8, ry * 0.36, sd + 7.0, 0.14, Color(0.62, 0.73, 0.86), 12)
+		mk.blob(b + Vector2(rx * 0.04, -ry * 1.68), rx * 0.76, ry * 0.3, sd + 8.0, 0.14, Color(0.97, 0.985, 1.0), 12)
+		mk.ellipse(b + Vector2(0, 1.0), rx * 1.25, ry * 0.18, Color(0.97, 0.985, 1.0), 12)
 	for k in 3:
 		var q = b + Vector2((MK.hash1(sd + k * 9.0) - 0.5) * rx * 2.6, 0)
 		var pr = rx * (0.06 + 0.07 * MK.hash1(sd + k * 3.0))
@@ -757,6 +930,11 @@ func _cliff(f: Dictionary) -> Dictionary:
 			mk.ribbon(cp, cw, Color(0.08, 0.06, 0.05, 0.4))
 		if MK.hash1(sd + i * 2.9) > 0.6 and tops[i].y < bots[i].y - 30.0:
 			mk.quad(tops[i] + Vector2(0, 2), tops[i + 1] + Vector2(0, 2), tops[i + 1] + Vector2(0, 11), tops[i] + Vector2(0, 11), hz(Color("#5b8f3a"), 0.1))
+	if float(_P["snow"]) > 0.5:
+		for i in n:
+			var d0 = 9.0 + 9.0 * MK.hash1(sd + i * 3.3)
+			var d1 = 9.0 + 9.0 * MK.hash1(sd + (i + 1) * 3.3)
+			mk.quad(tops[i], tops[i + 1], tops[i + 1] + Vector2(0, d1), tops[i] + Vector2(0, d0), Color(0.96, 0.98, 1.0))
 	mk.ribbon(tops, wk, INK)
 	if f.get("cave", false):
 		var cxm = x0 + W * f["cave_at"]

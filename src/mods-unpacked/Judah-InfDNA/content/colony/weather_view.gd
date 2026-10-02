@@ -19,7 +19,7 @@ static func _h(a: float, b: float = 0.0) -> float:
 
 func _process(delta: float) -> void:
 	_t += delta
-	if day != null and (day.rain > 0.02 or day.wet > 0.04):
+	if day != null and (day.rain > 0.02 or day.wet > 0.04 or day.snow > 0.05):
 		update()
 
 
@@ -61,6 +61,26 @@ func _puddles(tl: Vector2, vp: Vector2, z: float) -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
+# Snowflakes: slow, swaying, soft; they settle out of sight at the ground.
+func _snowfall(r: float, tl: Vector2, vp: Vector2, z: float) -> void:
+	var lite = perf != null and perf.backdrop < 2
+	var n = int((70 if lite else 190) * r)
+	var C = sim.grid.CELL
+	for k in n:
+		var hx = _h(k * 1.71, 3.0)
+		var hy = _h(k * 2.33, 4.0)
+		var y = fposmod(hy + _t * (0.15 + 0.13 * hx), 1.0)
+		var x = fposmod(hx * 1.37 + sin(_t * 0.7 + k * 1.3) * 0.015 + _t * 0.012 * (hx - 0.5), 1.0)
+		var p = tl + Vector2(x * vp.x, y * vp.y) * z
+		if ground != null and p.y > ground.smooth_px(int(floor(p.x / C))) - 2.0:
+			continue
+		var sz = (1.3 + 2.0 * hy) * max(1.0, z * 0.8)
+		var a = (0.45 + 0.45 * hx) * clamp(r * 1.6, 0.3, 1.0)
+		if sz > 2.4:
+			draw_circle(p, sz * 2.0, Color(1, 1, 1, a * 0.16))
+		draw_circle(p, sz, Color(1, 1, 1, a))
+
+
 func _ellipse(c: Vector2, rx: float, ry: float, col: Color) -> void:
 	var pts := PoolVector2Array()
 	for k in 18:
@@ -74,6 +94,12 @@ func _draw() -> void:
 		return
 	var vp0 = get_viewport_rect().size
 	var c0 = cam.get_camera_screen_center()
+	if day.snowing:
+		# winter: whatever falls is snow, and there are flurries even on a calm day
+		var sr = max(day.rain, 0.22 * day.snow)
+		if sr >= 0.02:
+			_snowfall(sr, c0 - vp0 * cam.zoom.x * 0.5, vp0, cam.zoom.x)
+		return
 	if day.wet > 0.04:
 		_puddles(c0 - vp0 * cam.zoom.x * 0.5, vp0, cam.zoom.x)
 	if day.rain < 0.02:

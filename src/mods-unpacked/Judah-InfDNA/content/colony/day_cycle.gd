@@ -4,6 +4,8 @@ extends Reference
 # own warm light, so only the open air changes.
 #   phase: 0 = midnight, 0.25 = sunrise, 0.5 = noon, 0.75 = sunset
 
+const Seasons = preload("res://mods-unpacked/Judah-InfDNA/core/seasons.gd")
+
 const DAY_LEN = 420.0                       # sim seconds per day
 const START = 0.30                          # a run begins shortly after sunrise
 const NIGHT_TINT = Color(0.40, 0.48, 0.80)  # moonlit blue: dark, but a fight stays easy to read
@@ -19,12 +21,30 @@ var tint := Color.white  # multiply surface colours by this
 var day_n := 1
 var rain := 0.0          # 0..1, from the sim's weather
 var wet := 0.0           # 0..1, how wet the ground still is
+# the year (seasons.gd), as the views want it
+var season_force := -1.0 # >= 0 pins the year phase (screenshots and tests)
+var sea_t := 0.0         # the colony clock the seasons are read from
+var season := 0
+var snow := 0.0          # snow lying on the ground
+var leaf := 1.0          # how much leaf the trees carry
+var autumn := 0.0        # how far the leaves have turned
+var bloom := 1.0         # flowers in the meadow
+var stage := 0           # changes every ~75 s of the year: cached scenery is rebuilt when it does
+var snowing := false     # precipitation falls as snow
 const RAIN_TINT = Color(0.68, 0.76, 0.88)
 
 
 func update(t: float, rain_k: float = 0.0, wet_k: float = 0.0) -> void:
 	rain = rain_k
 	wet = wet_k
+	sea_t = season_force * Seasons.YEAR_LEN if season_force >= 0.0 else t
+	season = Seasons.index(sea_t)
+	snow = Seasons.snow(sea_t)
+	leaf = Seasons.leaf(sea_t)
+	autumn = Seasons.autumn(sea_t)
+	bloom = Seasons.bloom(sea_t)
+	stage = Seasons.stage(sea_t)
+	snowing = snow > 0.3
 	var d = t / DAY_LEN + START
 	day_n = 1 + int(floor(d))
 	ph = force if force >= 0.0 else (0.5 if locked else fposmod(d, 1.0))
@@ -36,7 +56,8 @@ func update(t: float, rain_k: float = 0.0, wet_k: float = 0.0) -> void:
 	var w = warm * 0.65
 	w *= 1.0 - 0.6 * rain
 	var wet = Color.white.linear_interpolate(RAIN_TINT, rain)
-	tint = Color(c.r * (1.0 - w + w * DUSK_TINT.r) * wet.r, c.g * (1.0 - w + w * DUSK_TINT.g) * wet.g, c.b * (1.0 - w + w * DUSK_TINT.b) * wet.b, 1.0)
+	var sg = Seasons.grade(sea_t)
+	tint = Color(c.r * (1.0 - w + w * DUSK_TINT.r) * wet.r * sg.r, c.g * (1.0 - w + w * DUSK_TINT.g) * wet.g * sg.g, c.b * (1.0 - w + w * DUSK_TINT.b) * wet.b * sg.b, 1.0)
 
 
 # Colour multiplier for something that is `k` of the way outside (1 = on the surface, 0 = underground).
@@ -48,7 +69,7 @@ func tint_at(k: float) -> Color:
 
 func label() -> String:
 	if rain > 0.35:
-		return "rain"
+		return "snow" if snowing else "rain"
 	if elev < -0.28:
 		return "night"
 	if elev < 0.2:

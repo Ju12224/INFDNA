@@ -141,6 +141,54 @@ func _idle(_delta):
 		sim.blessed_left = 0
 		sim.will = 50.0
 		sim.cmd_cd.clear()
+	elif frames == 127:
+		# seasons: the year changes what the colony gets and eats, and the views follow it
+		var Se = sim.Seasons
+		var L = Se.SEASON_LEN
+		_check(Se.index(0.0) == 0 and Se.index(L * 1.5) == 1 and Se.index(L * 2.5) == 2 and Se.index(L * 3.5) == 3 and Se.index(L * 4.5) == 0, "seasons follow each other")
+		_check(Se.snow(L * 3.5) > 0.99 and Se.snow(L * 1.5) == 0.0 and Se.leaf(L * 3.5) == 0.0 and Se.leaf(L * 1.5) == 1.0, "snow and bare trees in winter, leaves in summer")
+		_check(Se.food_k(L * 2.5) > 1.2 and Se.food_k(L * 3.5) < 0.6 and Se.upkeep_k(L * 3.5) > 1.1, "autumn is a glut, winter is lean")
+		var w_keep = sim.winters
+		sim.food = max(sim.food, 300.0)
+		sim.time = L * 3.0 - 2.0
+		for i in 60:
+			sim.step(0.1)
+		_check(sim.season == 3 and sim._s_upkeep > 1.0 and sim._s_food < 1.0, "the sim notices winter: ants eat more, less food appears")
+		s.day.update(sim.time, 0.0, 0.0)
+		_check(s.day.season == 3 and s.day.snow > 0.0 and s.day.stage >= 12, "the day cycle carries the winter to the views")
+		sim.time = Se.YEAR_LEN - 2.0
+		for i in 80:
+			sim.step(0.1)
+		_check(sim.season == 0 and sim.winters == w_keep + 1, "living through a winter is counted")
+		for i in 25:
+			sim.step(0.1)
+		_check(sim.goals_done.has("winter1"), "the winter goal is reached")
+	elif frames == 128:
+		# legacy: choices from the champion strain, born into the next colony's founders
+		var Lg = sim.Legacy
+		var champ = sim.founder_genome.copy()
+		champ.morph["acid"] = 1
+		champ.organs["sonic"] = 1
+		var cands = Lg.candidates(champ, sim.founder_genome, "test")
+		_check(cands.size() >= 2 and cands[0]["kind"] == "organ", "the champion's organs head the heirloom choices")
+		var plain = Lg.candidates(sim.founder_genome, sim.founder_genome, "test")
+		_check(plain.size() == 1 and plain[0]["kind"] == "mods", "a plain strain still leaves veteran stock")
+		var SimC = load("res://mods-unpacked/Judah-InfDNA/core/colony_sim.gd")
+		var heir = {"kind": "morph", "key": "acid", "value": 1, "label": "Born with acid glands", "from": "test"}
+		var s2 = SimC.new(5, "well_rounded", heir)
+		_check(int(s2.founder_genome.m("acid")) == 1 and int(sim.founder_genome.m("acid")) == 0, "the heirloom is born into the next colony's founders")
+		var s3 = SimC.new(5, "well_rounded", {"kind": "mods", "key": "", "value": 0.06, "label": "x", "from": "t"})
+		_check(abs(s3.mod("hp") - 0.06) < 0.001 and abs(s3.mod("attack") - 0.06) < 0.001, "veteran stock raises hp and attack")
+		Lg.save(heir)
+		_check(Lg.active().get("key", "") == "acid", "the heirloom is saved")
+		Lg.set_use(false)
+		_check(Lg.active().empty() and not Lg.saved().empty(), "switching it off keeps it but starts plain")
+		Lg.clear()
+		_check(Lg.saved().empty(), "clearing forgets it")
+		sim.champion = champ
+		s.hud._offer_heirlooms(sim)
+		_check(s.hud._legacy_row.get_child_count() >= 2, "the run summary offers heirloom choices")
+		Lg.clear()
 	elif frames == 130:
 		# watch mode (V): HUD hidden, busy layers off, camera directed; leaving restores everything
 		sim.strain_events.append({"uid": sim.ants[0].genome.uid, "text": "test strain", "t": sim.time})

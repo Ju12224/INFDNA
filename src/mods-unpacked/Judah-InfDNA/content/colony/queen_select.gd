@@ -6,6 +6,7 @@ const Kit = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ui_kit.gd")
 const KBtn = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ui_button.gd")
 const Queens = preload("res://mods-unpacked/Judah-InfDNA/core/queens.gd")
 const RunLog = preload("res://mods-unpacked/Judah-InfDNA/core/run_log.gd")
+const Legacy = preload("res://mods-unpacked/Judah-InfDNA/core/legacy.gd")
 const Baker = preload("res://mods-unpacked/Judah-InfDNA/content/colony/sprite_baker.gd")
 const COLONY_SCENE = "res://mods-unpacked/Judah-InfDNA/content/colony/colony.tscn"
 const TITLE_SCENE = "res://ui/menus/title_screen/title_screen.tscn"
@@ -50,6 +51,9 @@ var _mote_tex := {}
 var _t := 0.0
 var _leaving := false
 var _detail: PanelContainer
+var _heir_row: HBoxContainer
+var _heir_lbl: Label
+var _heir_btn: Button
 
 
 func _ready() -> void:
@@ -168,6 +172,19 @@ func _ready() -> void:
 	_chips.add_constant_override("vseparation", 8)
 	_chips.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	rv.add_child(_chips)
+	# the heirloom a past colony handed down (legacy.gd): shown here, switch it off to start plain
+	_heir_row = HBoxContainer.new()
+	_heir_row.add_constant_override("separation", 10)
+	rv.add_child(_heir_row)
+	Kit.icon_rect(_heir_row, "luck", 30)
+	_heir_lbl = Kit.label(_heir_row, "", _f_s, Kit.GOLD)
+	_heir_lbl.autowrap = true
+	_heir_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_heir_btn = _btn(_heir_row, "On", "")
+	_heir_btn.toggle_mode = true
+	_heir_btn.rect_min_size = Vector2(90, 44)
+	_heir_btn.connect("toggled", self, "_on_heir_toggled")
+	_refresh_heirloom()
 	var br = HBoxContainer.new()
 	br.add_constant_override("separation", 12)
 	rv.add_child(br)
@@ -189,6 +206,21 @@ func _ready() -> void:
 	hint.modulate = Color(1, 1, 1, 0.55)
 	_select(_sel, false)
 	call_deferred("_intro")
+
+
+func _refresh_heirloom() -> void:
+	var h = Legacy.saved()
+	_heir_row.visible = not h.empty()
+	if h.empty():
+		return
+	_heir_lbl.text = "Heirloom (%s): %s" % [h.get("from", "a past colony"), str(h.get("label", "")).to_lower()]
+	_heir_btn.set_pressed_no_signal(Legacy.is_on())
+	_heir_btn.text = "On" if Legacy.is_on() else "Off"
+
+
+func _on_heir_toggled(on: bool) -> void:
+	Legacy.set_use(on)
+	_heir_btn.text = "On" if on else "Off"
 
 
 func _intro() -> void:

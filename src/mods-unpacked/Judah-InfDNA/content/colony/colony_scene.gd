@@ -18,6 +18,8 @@ const PredatorView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/pr
 const DirectorView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/director_view.gd")
 const WeatherView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/weather_view.gd")
 const LightView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/light_view.gd")
+const SeasonView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/season_view.gd")
+const Legacy = preload("res://mods-unpacked/Judah-InfDNA/core/legacy.gd")
 const DayCycle = preload("res://mods-unpacked/Judah-InfDNA/content/colony/day_cycle.gd")
 const WatchCam = preload("res://mods-unpacked/Judah-InfDNA/content/colony/watch_cam.gd")
 const SELECT_SCENE = "res://mods-unpacked/Judah-InfDNA/content/colony/queen_select.tscn"
@@ -59,7 +61,7 @@ var layer_state := {"trails": true, "castes": true, "fights": true, "tasks": fal
 func _ready() -> void:
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	var qid = Engine.get_meta("infdna_queen") if Engine.has_meta("infdna_queen") else "well_rounded"
-	sim = Sim.new(0, qid)
+	sim = Sim.new(0, qid, Legacy.active())
 	perf = Perf.new()
 	perf.scene = self
 	day = DayCycle.new()
@@ -74,6 +76,8 @@ func _ready() -> void:
 	world_view.sky.perf = perf
 	world_view.ground.perf = perf
 	world_view.sky.day = day
+	world_view.day = day
+	world_view.ground.day = day
 
 	_overlay = Node2D.new()     # food, trails, eggs, queen: above the dirt
 	_overlay.connect("draw", self, "_draw_overlay")
@@ -112,6 +116,13 @@ func _ready() -> void:
 	weather.day = day
 	weather.perf = perf
 	_weather = weather
+	var sview = SeasonView.new()       # blossom petals and falling leaves (before the light pass, so night tints them)
+	sview.sim = sim
+	sview.cam = cam
+	sview.ground = world_view.ground
+	sview.day = day
+	sview.perf = perf
+	add_child(sview)
 	var light = LightView.new()        # the colour of the surface light, multiplied over sky, ground and units
 	light.sim = sim
 	light.cam = cam
