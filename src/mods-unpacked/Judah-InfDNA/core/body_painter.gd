@@ -337,11 +337,27 @@ func _leg(grp: int, p: Vector2, hx: float, ry: float, L: float, t: float, i: int
 	if role == 1 and form == 3:
 		_raptorial(grp, hip, L, lw, side, col)
 		return
-	var foot = Vector2(hip.x + te * L * 1.0 + cos(ph) * stride, -max(0.0, sin(ph)) * L * 0.18)
+	# v0.23 gait: a planted STANCE (the foot slides back under the body at constant speed, so it does not skate
+	# when ant_view advances the cycle by distance walked) and a lifted SWING back to the front; the knee is
+	# solved from the real femur and tibia lengths, so the leg never stretches.
+	var cyc = fposmod(gait + (0.5 if (j + side) % 2 == 1 else 0.0) + i * 0.04, 1.0)
+	var half = L * 0.46
+	var fx: float
+	var flift := 0.0
+	if cyc < 0.5:
+		fx = lerp(half, -half, cyc / 0.5)
+	else:
+		var u = (cyc - 0.5) / 0.5
+		fx = lerp(-half, half, u * u * (3.0 - 2.0 * u))
+		flift = sin(u * PI) * L * 0.3
+	var foot = Vector2(hip.x + te * L * 1.0 + fx, -flift)
 	if side == 0:
 		foot += Vector2(6.0, -4.0)
-	# femur reaches out and slightly up, tibia drops to the ground: knees read clearly
-	var knee = Vector2(hip.x + te * L * 0.52 + cos(ph) * stride * 0.35, hip.y - L * 0.1 - max(0.0, sin(ph)) * L * 0.08)
+	var reach = L * 1.15
+	var fv = foot - hip
+	if fv.length() > reach * 0.97:
+		foot = hip + fv.normalized() * reach * 0.97
+	var knee = _two_bone(hip, foot, L * 0.55, L * 0.6)
 	var fem_a = 4.4 * lw
 	var fem_b = 3.4 * lw
 	var tib_a = 3.0 * lw
@@ -389,6 +405,19 @@ func _leg(grp: int, p: Vector2, hx: float, ry: float, L: float, t: float, i: int
 			var sp0 = knee.linear_interpolate(foot, 0.45 + q * 0.25)
 			var sn = Vector2(td.y, -td.x) * (1.0 if td.x < 0.0 else -1.0)
 			_add(grp, 2, {"t": "line", "pts": PoolVector2Array([sp0, sp0 + sn * 4.0 + td * 3.5]), "w": 1.5, "c": col.darkened(0.45)})
+
+
+# Knee of a two-segment leg: the joint sits above the line from hip to foot (femur l1, tibia l2).
+func _two_bone(h: Vector2, f: Vector2, l1: float, l2: float) -> Vector2:
+	var v = f - h
+	var d = max(0.001, v.length())
+	var dir = v / d
+	var a = (d * d + l1 * l1 - l2 * l2) / (2.0 * d)
+	var hh = sqrt(max(0.0, l1 * l1 - a * a))
+	var perp = Vector2(-dir.y, dir.x)
+	if perp.y > 0.0:
+		perp = -perp
+	return h + dir * a + perp * hh
 
 
 # Mantis-style grabbing foreleg: held up and folded, spined, never touches the ground.

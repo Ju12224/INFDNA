@@ -12,6 +12,7 @@ const LIFE = {"puff": 1.0, "text": 1.2, "spark": 0.45, "heal": 1.3, "ring": 0.7,
 	"wave": 0.6, "arc": 0.28, "beam": 0.22, "web": 1.4, "corpse": 0.9}
 
 var sim
+var perf             # perf.gd (optional): caps the effects drawn per frame
 var _dust := []
 var _stars := []
 var _plus
@@ -113,7 +114,12 @@ func _sprite(tex, p: Vector2, rot: float, size: float, col: Color) -> void:
 
 
 func _draw() -> void:
+	var cap = perf.fx if perf != null else 400
+	var nfx := 0
 	for f in sim.fx:
+		nfx += 1
+		if nfx > cap:
+			break
 		var k = clamp(f["t"] / LIFE.get(f["kind"], 1.2), 0.0, 1.0)
 		var c: Color = f["color"]
 		var pos: Vector2 = f["pos"]

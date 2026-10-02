@@ -19,12 +19,12 @@ const CLASS_COLORS = {"small": Color("#ffb347"), "burrower": Color("#ff7a4a"), "
 	"elite": Color("#e05cff"), "boss": Color("#ff2e63"), "prey": Color("#9fe3a8")}
 const CLASS_RANK = {"prey": 0, "small": 1, "burrower": 2, "brute": 3, "elite": 4, "boss": 5}
 const MAX_LINKS = 8          # links drawn per raider; a swarm on a boss is one blob anyway
-const PAIR_EVERY = 0.08      # who-hits-whom is rebuilt this often, not every frame
 const ARROW_BUCKET = 90.0    # off-screen raiders closer than this (screen px) share one arrow
 
 var sim
 var cam
 var ant_view
+var pair_every := 0.08       # who-hits-whom is rebuilt this often, not every frame (perf.gd slows it on weak machines)
 var show_fights := true
 var show_tasks := false
 var show_health := false
@@ -60,7 +60,7 @@ func _process(delta: float) -> void:
 	if show_fights:
 		_pair_t -= delta
 		if _pair_t <= 0.0:
-			_pair_t = PAIR_EVERY
+			_pair_t = pair_every
 			_rebuild_pairs()
 	update()
 

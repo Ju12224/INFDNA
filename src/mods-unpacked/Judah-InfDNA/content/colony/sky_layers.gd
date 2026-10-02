@@ -12,6 +12,7 @@ const MK = preload("res://mods-unpacked/Judah-InfDNA/content/colony/mesh_kit.gd"
 
 var cam
 var grid
+var perf             # perf.gd (optional): backdrop detail level
 var anchor := Vector2()      # world point where every layer lines up (colony entrance)
 var _t := 0.0
 var _cache := {}             # "layer:chunk" -> ArrayMesh
@@ -66,19 +67,28 @@ func _xf(f: float) -> Array:
 func _draw() -> void:
 	if cam == null:
 		return
-	_budget = 10 if _cache.empty() else 3
+	_budget = 14 if _cache.empty() else 8
 	var v = _view()
+	var bd = perf.backdrop if perf != null else 3
+	var first = [5, 3, 1, 0][bd]            # lower quality drops the far layers first
 	_sky(v)
-	_sun(v)
-	_cloud_layer(v, 0.05, _wisps, 0.55, 900.0, 640.0, 1.6, 4.0)
-	_cloud_layer(v, 0.10, _clouds, 0.95, 640.0, 560.0, 1.0, 9.0)
+	if bd >= 2:
+		_sun(v, bd >= 3)
+	if bd >= 3:
+		_cloud_layer(v, 0.05, _wisps, 0.55, 900.0, 640.0, 1.6, 4.0)
+	if bd >= 2:
+		_cloud_layer(v, 0.10, _clouds, 0.95, 640.0, 560.0, 1.0, 9.0)
 	for i in LAYERS.size():
+		if i < first:
+			continue
 		_layer(v, i)
-		if i == 2:
+		if i == 2 and bd >= 3:
 			_birds(v)
-		if i == 3:
+		if i == 3 and bd >= 2:
 			_cloud_layer(v, 0.26, _clouds, 0.8, 760.0, 250.0, 0.55, 14.0)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	if bd >= 3:
+		_pollen(v)
 	_bedrock(v)
 
 
@@ -99,13 +109,13 @@ func _sky(v: Rect2) -> void:
 		draw_rect(Rect2(x0, prev_y, x1 - x0, v.end.y - prev_y + 10), prev_c)
 
 
-func _sun(v: Rect2) -> void:
+func _sun(v: Rect2, rays: bool = true) -> void:
 	var xf = _xf(0.03)
 	draw_set_transform(xf[1], 0.0, Vector2(xf[0], xf[0]))
 	var p = anchor + Vector2(560, -640)
 	var pulse = 1.0 + 0.02 * sin(_t * 0.8)
 	# slow rays
-	for k in 9:
+	for k in (9 if rays else 0):
 		var a = _t * 0.02 + TAU * k / 9.0
 		var d = Vector2(cos(a), sin(a))
 		var n = Vector2(-d.y, d.x)
@@ -144,7 +154,9 @@ func _layer(v: Rect2, i: int) -> void:
 	var off: Vector2 = xf[1]
 	var p0 = (v.position.x - off.x) / s - 60.0
 	var p1 = (v.end.x - off.x) / s + 60.0
-	var tr = Transform2D(Vector2(s, 0), Vector2(0, s), off)
+	# the layer transform goes through draw_set_transform with an identity mesh transform: a scaled transform
+	# passed to draw_mesh itself got the far chunks clipped away at large zoom-outs
+	draw_set_transform(off, 0.0, Vector2(s, s))
 	for ci in range(int(floor(p0 / CW)), int(floor(p1 / CW)) + 1):
 		var key = "%d:%d" % [i, ci]
 		var m = _cache.get(key)
@@ -155,7 +167,11 @@ func _layer(v: Rect2, i: int) -> void:
 			m = _build(i, ci)
 			_cache[key] = m
 		if m is Mesh:
-			draw_mesh(m, null, null, tr)
+			draw_mesh(m, null)
+	# ambient ants marching along the farmland and hedge ridges (the idea comes from the v0.22 sky)
+	if (i == 3 or i == 6) and s > 0.38 and (perf == null or perf.backdrop >= 2):
+		_bg_ants(i, s, p0, p1)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if _cache.size() > 160:
 		_cache.clear()
 
@@ -176,16 +192,21 @@ func _build(i: int, ci: int):
 		var x = x0 + k * step
 		pts.append(Vector2(x, _ridge_y(i, x)))
 	var base_c = col.linear_interpolate(HAZE, hz * 0.25)
-	var zone = 60.0 + float(L["amp"]) * 0.45       # facet lighting only reaches this far below the ridge
-	for k in n:
-		# facets: slopes facing the sun (up and to the right) read lighter, the others darker
-		var sl = (pts[k + 1].y - pts[k].y) / step
+	var zone = 60.0 + float(L["amp"]) * 0.45       # lighting only reaches this far below the ridge
+	# lighting per ridge VERTEX (smooth from one to the next, so the slopes read as planes, not stripes):
+	# slopes facing the sun (up and to the right) lighter, the others darker
+	var vc := PoolColorArray()
+	for k in n + 1:
+		var a0 = pts[max(k - 1, 0)]
+		var b0 = pts[min(k + 1, n)]
+		var sl = (b0.y - a0.y) / max(1.0, b0.x - a0.x)
 		var shade = clamp(sl * 0.9, -0.5, 0.5) if kind == "peaks" or kind == "ridge" else 0.0
-		var ct = col.lightened(shade * 0.28) if shade > 0.0 else col.darkened(-shade * 0.28)
-		ct = ct.linear_interpolate(HAZE, hz * 0.25)
+		var cv = col.lightened(shade * 0.3) if shade > 0.0 else col.darkened(-shade * 0.3)
+		vc.append(cv.linear_interpolate(HAZE, hz * 0.25))
+	for k in n:
 		var za = Vector2(pts[k].x, pts[k].y + zone)
 		var zb = Vector2(pts[k + 1].x, pts[k + 1].y + zone)
-		mk.quad_c(pts[k], ct, pts[k + 1], ct, zb, base_c, za, base_c)
+		mk.quad_c(pts[k], vc[k], pts[k + 1], vc[k + 1], zb, base_c, za, base_c)
 		mk.quad_c(za, base_c, zb, base_c, Vector2(pts[k + 1].x, bot), c_bot, Vector2(pts[k].x, bot), c_bot)
 	var line = col.lightened(0.16).linear_interpolate(HAZE, hz * 0.3)
 	var wk := PoolRealArray()
@@ -207,6 +228,68 @@ func _build(i: int, ci: int):
 		"hedge":
 			_hedge(mk, i, x0, col)
 	return mk.build()
+
+
+# Columns of tiny ants marching along a layer's ridge, some carrying a leaf. Deterministic in x and time,
+# so nothing is stored; they fade at the ends of their stretch instead of popping.
+func _bg_ants(i: int, s: float, p0: float, p1: float) -> void:
+	var L = LAYERS[i]
+	var f: float = L["f"]
+	var detail = s > 0.62
+	var size = 3.2 + f * 3.4
+	var span = 340.0 if detail else 520.0
+	var gap = size * 7.0
+	var ink = Color(L["col"]).darkened(0.6)
+	for ci in range(int(floor(p0 / span)) - 1, int(ceil(p1 / span)) + 1):
+		var hh = _hh(ci * 57.31, f * 5.1)
+		if hh < 0.3:
+			continue
+		var dir = 1.0 if hh > 0.65 else -1.0
+		var n = 3 + int(hh * 4.0)
+		var speed = 10.0 + hh * 14.0
+		for k in n:
+			var u = fmod(_t * speed * dir + (k * gap + hh * 90.0) * dir, span)
+			if u < 0.0:
+				u += span
+			var edge = clamp(min(u, span - u) / 40.0, 0.0, 1.0)
+			var rx = ci * span + u
+			var ry = _ridge_y(i, rx) + 2.0
+			var ang = atan2(_ridge_y(i, rx + 6.0) - _ridge_y(i, rx - 6.0), 12.0)
+			var fw = Vector2(cos(ang), sin(ang)) * dir
+			var up = Vector2(sin(ang), -cos(ang))
+			var foot = Vector2(rx, ry)
+			var ac = Color(ink.r, ink.g, ink.b, 0.92 * edge)
+			var mid = foot + up * size
+			draw_circle(mid - fw * size * 1.7, size * 0.95, ac)
+			draw_circle(mid, size * 0.62, ac)
+			draw_circle(mid + fw * size * 1.35, size * 0.62, ac)
+			if detail:
+				var legs := PoolVector2Array()
+				for lg in 3:
+					var sw = sin(_t * 13.0 + k * 1.3 + lg * 2.1) * size * 0.4
+					legs.append(mid + fw * (lg - 1) * size * 0.45)
+					legs.append(foot + fw * ((lg - 1) * size * 0.9 + sw))
+				draw_multiline(legs, ac, max(1.0, size * 0.22), true)
+				var hp = mid + fw * size * 1.35
+				draw_line(hp, hp + fw * size + up * size * 0.8, ac, max(1.0, size * 0.18), true)
+				if (k + ci) % 2 == 0:
+					draw_circle(mid + up * size * 1.7 - fw * size * 0.2, size * 0.95, Color(0.42, 0.75, 0.29, 0.9 * edge))
+
+
+# A few motes of pollen and seed fluff in the foreground air.
+func _pollen(v: Rect2) -> void:
+	var xf = _xf(0.9)
+	var s: float = xf[0]
+	var off: Vector2 = xf[1]
+	draw_set_transform(off, 0.0, Vector2(s, s))
+	var p0 = (v.position.x - off.x) / s
+	var w = (v.end.x - v.position.x) / s
+	if w > 0.0:
+		for k in 18:
+			var px = p0 + fmod(k * 211.3 + _t * (10.0 + (k % 5) * 4.0), w)
+			var py = anchor.y - 40.0 - fmod(k * 97.1, 160.0) + sin(_t * 0.9 + k) * 14.0
+			draw_circle(Vector2(px, py), 1.6 + (k % 3) * 0.6, Color(1.0, 1.0, 0.8, 0.55))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _snow(mk, pts: PoolVector2Array, step: float, i: int, x0: float) -> void:
@@ -377,8 +460,9 @@ func _cloud_layer(v: Rect2, f: float, meshes: Array, alpha: float, span: float, 
 			continue
 		var sc = size * (0.7 + 0.8 * fmod(hh * 7.3, 1.0))
 		var pos = Vector2(i * span + _t * speed + hh * span * 0.4, anchor.y - high - hh * 260.0 * size)
-		var tr = Transform2D(Vector2(s * sc, 0), Vector2(0, s * sc), off + pos * s)     # layer-space position, own size
-		draw_mesh(meshes[int(hh * 97.0) % meshes.size()], null, null, tr, Color(1, 1, 1, alpha))
+		draw_set_transform(off + pos * s, 0.0, Vector2(s * sc, s * sc))     # layer-space position, own size
+		draw_mesh(meshes[int(hh * 97.0) % meshes.size()], null, null, Transform2D(), Color(1, 1, 1, alpha))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _birds(v: Rect2) -> void:

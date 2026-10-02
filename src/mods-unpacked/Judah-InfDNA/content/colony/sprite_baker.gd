@@ -5,7 +5,7 @@ extends Node
 const Painter = preload("res://mods-unpacked/Judah-InfDNA/core/body_painter.gd")
 const SIZE = Vector2(170, 136)
 const FEET = Vector2(85, 126)
-const BATCH = 6          # one body plan (6 frames) per frame; 16 viewport readbacks at once hitched at high speed
+var batch := 6           # viewport bakes per frame (one body plan = 6 frames); 16 readbacks at once hitched at high speed; perf.gd lowers it
 const FRAMES = 6         # walk-cycle frames per body plan (v0.23: 4 -> 6, smoother steps)
 const BAKE = 1.6         # bake resolution over the draw size: crisp when zoomed in
 
@@ -47,7 +47,7 @@ func _bake_batch() -> void:
 	_busy = true
 	var jobs := []
 	var vps := []
-	while jobs.size() < BATCH and not _queue.empty():
+	while jobs.size() < batch and not _queue.empty():
 		jobs.append(_queue.pop_front())
 	for job in jobs:
 		var m = job[1] * BAKE

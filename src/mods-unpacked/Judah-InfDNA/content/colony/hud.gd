@@ -62,6 +62,7 @@ var _layers_panel: PanelContainer
 var _layer_btns := {}
 var _task_legend: HBoxContainer
 var _mm: Control
+var _quality_btn: Button
 var _mm_font: Font
 const MM_W = 640.0
 const MM_H = 44.0
@@ -328,7 +329,7 @@ func _build_bar() -> void:
 	_btn(bar, "Lab", "luck").connect("pressed", scene, "open_shop")
 	_btn(bar, "Menu", "exit").connect("pressed", scene, "go_to_menu")
 
-	var hint = Kit.label(root, "WASD / right-drag pan   Wheel zoom   Click an ant   Space pause   P trails   C badges   F fights   T tasks   H health   X follow   L lineage   Esc menu", _f_s)
+	var hint = Kit.label(root, "WASD / right-drag pan   Wheel zoom   Click an ant   Space pause   P trails   C badges   F fights   T tasks   H health   X follow   L lineage   U nest   Esc menu", _f_s)
 	hint.anchor_top = 1.0
 	hint.anchor_bottom = 1.0
 	hint.grow_vertical = Control.GROW_DIRECTION_BEGIN
@@ -381,6 +382,15 @@ func _draw_minimap() -> void:
 		var x = MM_W * 0.5 + (tr["x"] - ex) * sc
 		_mm.draw_rect(Rect2(x - 1.5, cy - 9.0, 3.0, 13.0), Color("#3f7a34"))
 		_mm.draw_circle(Vector2(x, cy - 10.0), 3.4, Color("#5fa046"))
+	for lm in sim.landmarks:
+		var xl = MM_W * 0.5 + (lm["x"] - ex) * sc
+		if not lm["found"]:
+			_mm.draw_circle(Vector2(xl, cy - 5.0), 1.6, Color(1, 1, 1, 0.22))     # something is out there
+		elif lm["kind"] == "cave":
+			_mm.draw_circle(Vector2(xl, cy + 2.0), 4.2, Kit.INK)
+			_mm.draw_circle(Vector2(xl, cy + 2.0), 3.0, Color("#b07a4a"))
+		elif lm["kind"] == "vista":
+			_mm.draw_colored_polygon(PoolVector2Array([Vector2(xl - 4.0, cy + 4.0), Vector2(xl + 4.0, cy + 4.0), Vector2(xl, cy - 5.0)]), Color("#cfd6da"))
 	for p in sim.piles:
 		var x2 = MM_W * 0.5 + (p["x"] - ex) * sc
 		var k = p.get("kind", "")
@@ -407,6 +417,7 @@ func _draw_minimap() -> void:
 		var x6 = MM_W * 0.5 + (cx - ex - half) * sc
 		_mm.draw_rect(Rect2(x6, 1.0, max(3.0, half * 2.0 * sc), MM_H - 2.0), Color(1, 1, 1, 0.9), false, 1.5)
 	_mm.draw_string(_mm_font, Vector2(6.0, 14.0), "farthest ant: %d cells" % far, Color(1, 1, 1, 0.85))
+	_mm.draw_string(_mm_font, Vector2(MM_W - 96.0, 14.0), "%d fps  Q%d" % [Engine.get_frames_per_second(), scene.perf.tier], Color(1, 1, 1, 0.7))
 
 
 func _on_mm_input(ev: InputEvent) -> void:
@@ -454,6 +465,9 @@ func _build_layers() -> void:
 		b.hint_tooltip = it[3]
 		b.connect("toggled", self, "_on_layer_toggled", [it[0]])
 		_layer_btns[it[0]] = b
+	_quality_btn = _btn(row, scene.perf.label(), "luck", Color("#7ed957"), 20)
+	_quality_btn.hint_tooltip = "The optimizer. Auto lowers detail when the frame rate dips and restores it when smooth. Click to cycle Auto / High / Medium / Low."
+	_quality_btn.connect("pressed", self, "_on_quality")
 	_task_legend = HBoxContainer.new()
 	_task_legend.add_constant_override("separation", 14)
 	_task_legend.alignment = BoxContainer.ALIGN_CENTER
@@ -1242,6 +1256,15 @@ func sync_speed(s: float) -> void:
 		return
 	for i in _speed_btns.size():
 		_speed_btns[i].pressed = i == idx
+
+
+func _on_quality() -> void:
+	scene.perf.cycle_mode()
+
+
+func sync_quality() -> void:
+	if _quality_btn != null:
+		_quality_btn.text = scene.perf.label()
 
 
 func _on_layers_panel(on: bool) -> void:

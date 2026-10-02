@@ -278,11 +278,16 @@ var jackpot_t := 150.0
 var jackpot_hauled := 0.0
 const GOALS = [
 	{"id": "pop50", "name": "A real colony: 50 ants", "food": 25, "mut": 0},
-	{"id": "far_haul", "name": "Far haul: food from 250+ cells out", "food": 35, "mut": 1},
+	{"id": "far_haul", "name": "Far haul: food from 400+ cells out", "food": 35, "mut": 1},
+	{"id": "explore3", "name": "Explorer: discover 3 landmarks", "food": 40, "mut": 1},
 	{"id": "raid5", "name": "Survive 5 raids", "food": 40, "mut": 1},
+	{"id": "cave", "name": "Cave diver: find a cave hoard", "food": 60, "mut": 1},
 	{"id": "pop100", "name": "A city: 100 ants", "food": 50, "mut": 0},
 	{"id": "soldiers12", "name": "A standing guard: 12 soldiers", "food": 30, "mut": 0},
 	{"id": "jackpot", "name": "Jackpot: haul 100 food from a windfall", "food": 60, "mut": 1},
+	{"id": "gen10", "name": "Deep roots: a tenth generation", "food": 60, "mut": 0},
+	{"id": "epic_haul", "name": "Epic haul: food from 800+ cells out", "food": 90, "mut": 1},
+	{"id": "explore8", "name": "Cartographer: discover 8 landmarks", "food": 90, "mut": 1},
 	{"id": "raid10", "name": "Survive 10 raids", "food": 80, "mut": 1},
 	{"id": "pop150", "name": "A metropolis: 150 ants", "food": 80, "mut": 1},
 	{"id": "raid15", "name": "Survive 15 raids", "food": 120, "mut": 1},
@@ -567,7 +572,17 @@ func _goal_met(id: String) -> bool:
 		"pop150":
 			return ants.size() >= 150
 		"far_haul":
-			return stat_deliv[2] + stat_deliv[3] > 0.0
+			return stat_deliv[3] > 0.0
+		"explore3":
+			return discovered >= 3
+		"explore8":
+			return discovered >= 8
+		"cave":
+			return caves_found >= 1
+		"gen10":
+			return max_gen >= 10
+		"epic_haul":
+			return stat_far >= 800
 		"raid5":
 			return raids_repelled >= 5
 		"raid10":
@@ -2602,6 +2617,7 @@ func _step_economy(dt: float) -> void:
 	food += farm_rate * dt
 	ledger["farm"] += farm_rate * dt
 	_sync_trees(dt)
+	_check_landmarks(dt)
 	for tr in trees:
 		tr["t"] -= dt * float(rule("fruit_boost", 1.0))
 		if tr["t"] <= 0.0:
@@ -2612,6 +2628,11 @@ func _step_economy(dt: float) -> void:
 # The giant trees of the landscape (world_features.gd) are the fruit sources, everywhere out to RANGE_MAX.
 var _tree_ids := {}
 var _tree_sync := 0.0
+# v0.23 exploration: landmarks out in the world (giant trees, caves, cliff vistas) that ants discover by walking up to them
+var landmarks: Array = []        # [{"id", "kind", "x", "found"}]
+var discovered := 0
+var caves_found := 0
+var _lm_t := 0.0
 
 
 func _sync_trees(dt: float, force: bool = false) -> void:
@@ -2621,10 +2642,82 @@ func _sync_trees(dt: float, force: bool = false) -> void:
 	_tree_sync = 5.0
 	var ex = int(grid.entrance.x)
 	for f in WF.in_range(seed_base, ex - RANGE_MAX, ex + RANGE_MAX, ex):
-		if f["kind"] != "tree" or abs(f["x"] - ex) > RANGE_MAX - 30 or _tree_ids.has(f["id"]):
+		if abs(f["x"] - ex) > RANGE_MAX - 30 or _tree_ids.has(f["id"]):
 			continue
-		_tree_ids[f["id"]] = true
-		trees.append({"x": f["x"], "lane": f["lane"], "t": rng.randf_range(5.0, 25.0), "id": f["id"]})
+		match f["kind"]:
+			"tree":
+				_tree_ids[f["id"]] = true
+				trees.append({"x": f["x"], "lane": f["lane"], "t": rng.randf_range(5.0, 25.0), "id": f["id"]})
+				landmarks.append({"id": f["id"], "kind": "tree", "x": f["x"], "found": false})
+			"cliff":
+				_tree_ids[f["id"]] = true
+				var cx = f["x"]
+				var kind = "vista"
+				if f.get("cave", false):
+					kind = "cave"
+					cx = f["x"] + int((f["cave_at"] - 0.5) * f["w"] / grid.CELL)
+				landmarks.append({"id": f["id"], "kind": kind, "x": cx, "found": false})
+
+
+# An ant that walks up to a landmark discovers it: a reward, a toast, and a ring on the world.
+func _check_landmarks(dt: float) -> void:
+	_lm_t -= dt
+	if _lm_t > 0.0 or landmarks.empty() or ants.empty():
+		return
+	_lm_t = 0.7
+	for lm in landmarks:
+		if lm["found"]:
+			continue
+		for a in ants:
+			if abs(a.x - lm["x"]) <= 16 and not grid.is_under(a.x, a.y):
+				_discover(lm)
+				break
+
+
+func _discover(lm: Dictionary) -> void:
+	lm["found"] = true
+	discovered += 1
+	var ex = int(grid.entrance.x)
+	var d = abs(lm["x"] - ex)
+	var side = "west" if lm["x"] < ex else "east"
+	var pos = grid.center(lm["x"], grid.surf_y(lm["x"]) - 8)
+	fx.append({"kind": "ring", "pos": pos, "t": 0.0, "color": Color("#ffd86b")})
+	fx.append({"kind": "text", "pos": pos + Vector2(0, -34), "t": 0.0, "text": "DISCOVERED", "color": Color("#ffd86b")})
+	match lm["kind"]:
+		"tree":
+			var gain = 15.0 + d * 0.04
+			food += gain
+			ledger["other_in"] += gain
+			for i in 3:
+				_drop_fruit(lm["x"])
+			toasts.append({"text": "A giant fruit tree, %d cells %s! Its fruit is yours (+%d food)." % [d, side, int(gain)], "t": 7.0})
+		"cave":
+			caves_found += 1
+			var amount = 110.0 + d * 0.5
+			piles.append({"x": lm["x"], "amount": amount, "max": amount, "kind": "jackpot"})
+			var extra = ""
+			if mutagen < 3:
+				mutagen += 1
+				extra = " +1 mutagen."
+			var txt = "A cave %d cells %s: a hoard of about %d food!%s" % [d, side, int(amount), extra]
+			if time > 200.0 and rng.randf() < 0.5:
+				_spawn_enemy("spider", 1 if lm["x"] > ex else -1)
+				var e = enemies[enemies.size() - 1]
+				e.x = lm["x"] + 3
+				e.tx = e.x
+				e.y = grid.surf_y(e.x) - 1
+				e.ty = e.y
+				e.t = 0.0
+				e.lane = 0.5
+				txt += " Something stirred in the dark and follows your scouts home."
+			toasts.append({"text": txt, "t": 9.0})
+		_:
+			food += 10.0
+			ledger["other_in"] += 10.0
+			toasts.append({"text": "A cliff vista, %d cells %s: the scouts report the land beyond (+10 food)." % [d, side], "t": 6.0})
+	banner = "Discovered: %s" % {"tree": "a giant fruit tree", "cave": "a cave hoard", "vista": "a cliff vista"}.get(lm["kind"], "a landmark")
+	banner_t = 3.0
+	_sfx("repelled")
 
 
 func _drop_fruit(x: int) -> void:

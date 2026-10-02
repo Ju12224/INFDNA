@@ -1,4 +1,35 @@
-# InfDNA (Brotato mod) - v0.23.0
+# InfDNA (Brotato mod) - v0.24.0
+
+## v0.24.0 - optimizer, real walking, better trees, a layered nest, exploration
+Compile-checked, rendered headless under Xvfb (software GL), fuzzed (raids with the new creatures, optimizer tier changes,
+nest panel, deep-underground camera, world-spanning jumps: no script errors), balance-probed; NOT playtested in Brotato.
+- **The optimizer (`perf.gd`, Quality button in the Layers panel, fps readout on the minimap).** Auto watches the real frame time:
+  under ~42 fps for 1.5 s it drops a tier, and after 25 smooth seconds it tries a step back up (and backs off for two minutes if the
+  step up did not hold). Tiers drop the costliest detail first: far backdrop layers, clouds, birds, sun rays, pollen; unit shadows
+  (full -> one ellipse -> none); half then none of the ground clutter; pose animation and dust; combat effects per frame; the sim's
+  per-frame time budget; sprite-bake batch size; and a cheaper terrain shader (2 noise octaves, no rear-wall cracks). Click it to lock
+  High / Medium / Low. Measured headless, 102 ants: ground band 12 ms -> 0.06 ms, backdrop 2.7 ms -> 0.8 ms, draw script total
+  4.9 ms (High) -> 3.0 ms (Minimal). Also: ants off screen skip their animation state, badges are not computed once faded out,
+  and ants that are tiny on screen skip pose animation and shadows.
+- **Ant walking rebuilt.** The legs barely moved (about 1.4 px of swing while the ant covered 100 px/s), so the feet skated. Now each
+  foot has a planted stance and a lifted swing, the knee is solved from the real femur and tibia lengths, the stride is bigger,
+  and the walk cycle advances by the distance actually walked (so feet stay planted at any speed). Ants turn around with a quick
+  squash instead of snapping, and the trunk, gaster and head each move on their own beat.
+- **Trees redrawn:** flared trunk in five shaded bands with bark grooves, knots and moss, thick branches with twigs, a wide
+  canopy of ~40 round shaded leaf clusters with leaf flecks, a scalloped edge and fruit. The backdrop no longer loses its far
+  chunks when zoomed far out (a scaled `draw_mesh` transform got clipped; layers now use `draw_set_transform`).
+- **Layered nest (`nest_decor.gd` + shader):** between the rear wall and the front dirt, so it shows only inside open tunnels: hanging
+  roots, dirt drips, pebbles, crumbs, glowing fungus, and light shafts falling down each entrance. The rear wall and the deeper crack
+  layer now slide about twice as much against the foreground when you pan, deep tunnels get a warm light pool, the back-plane tunnels
+  are deeper, and the blocky soil speckle is finer.
+- **From your v0.22 files:** `underground_ui.gd` (depth gauge, nest panel `U`, room labels, `PgUp`/`PgDn` between nest levels, `Q` queen,
+  `Home` surface, deep vignette) and, in the sky, ants marching along the farmland and hedge ridges plus drifting pollen.
+- **Exploration:** giant trees, caves and cliff vistas are landmarks. An ant that walks up to one discovers it: trees pay food and
+  fruit, caves hold a food hoard plus mutagen (and about half the time a spider that follows your scouts home), vistas pay a little.
+  They show on the minimap (faint dots until found). New goals: Explorer (3 landmarks), Cave diver, Deep roots (generation 10),
+  Epic haul (800+ cells), Cartographer (8 landmarks); "Far haul" is now 400+ cells.
+- Not checked in the real game: HUD placement of the new minimap, Quality button and underground gauge together, real-GPU frame rate,
+  whether the tier thresholds suit your machine.
 
 ## v0.23.0 - a living world: deep ground, giant trees, creatures, far expeditions, bolder evolution
 Compile-checked, rendered headless under Xvfb (software GL), balance-probed on 4-6 seeds and fuzzed for 8 sim-minutes (raids with the

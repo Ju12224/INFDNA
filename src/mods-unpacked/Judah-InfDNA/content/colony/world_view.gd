@@ -7,6 +7,7 @@ extends Node2D
 
 const INK = Color("#15121a")
 const GroundView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ground_view.gd")
+const NestDecor = preload("res://mods-unpacked/Judah-InfDNA/content/colony/nest_decor.gd")
 const DEPTH = GroundView.DEPTH   # thickness of the ground's top face (2.5D surface band, many lanes)
 const TREE_TEX = "res://entities/units/neutral/tree.png"
 const ROCK_TEX = "res://entities/units/neutral/rock.png"
@@ -34,6 +35,7 @@ var _tex := {}
 var sky
 var terrain
 var ground
+var nest_decor
 var inner: Node2D
 var band: Node2D
 
@@ -49,6 +51,7 @@ func _set_cam(c) -> void:
 func _ready() -> void:
 	var g = sim.grid
 	ground = GroundView.new(sim)
+	nest_decor = NestDecor.new(sim)
 	sky = SkyLayers.new()
 	sky.grid = g
 	sky.anchor = Vector2(g.entrance.x * g.CELL, g.surf_y(int(g.entrance.x)) * g.CELL)
@@ -85,6 +88,8 @@ func _process(delta: float) -> void:
 		g.surf_y(int((c.x - vp.x * z) / g.CELL))
 		g.surf_y(int((c.x + vp.x * z) / g.CELL))
 		ground.prepare(_view_cols(g), _t)
+		if ground.perf == null or ground.perf.scenery > 0:
+			nest_decor.prepare(_view_cols(g), _t)
 	inner.update()
 	band.update()
 
@@ -149,6 +154,8 @@ func _mound_f(g, x: int) -> float:
 
 # Room contents live between the back wall and the front dirt.
 func _draw_inner() -> void:
+	if ground.perf == null or ground.perf.scenery > 0:
+		nest_decor.draw(inner)
 	# warm light pooled in each lived-in room (drawn under the front dirt, so it only
 	# shows through the open cells)
 	var gt = _tex.get(GLOW_TEX)

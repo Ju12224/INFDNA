@@ -8,6 +8,8 @@ const WorldView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/world
 const AntView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ant_view.gd")
 const EnemyView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/enemy_view.gd")
 const LayersView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/layers_view.gd")
+const Perf = preload("res://mods-unpacked/Judah-InfDNA/content/colony/perf.gd")
+const UndergroundUI = preload("res://mods-unpacked/Judah-InfDNA/content/colony/underground_ui.gd")
 const Sfx = preload("res://mods-unpacked/Judah-InfDNA/content/colony/sfx.gd")
 const CameraRig = preload("res://mods-unpacked/Judah-InfDNA/content/colony/camera_rig.gd")
 const Hud = preload("res://mods-unpacked/Judah-InfDNA/content/colony/hud.gd")
@@ -15,7 +17,7 @@ const SELECT_SCENE = "res://mods-unpacked/Judah-InfDNA/content/colony/queen_sele
 const TITLE_SCENE = "res://ui/menus/title_screen/title_screen.tscn"
 const MAX_STEP = 0.05
 const FAST_STEP = 0.1          # sim step above 4x (movement carries its remainder, so the step size is safe)
-const BUDGET_US = 9000         # sim time allowed per rendered frame: the frame rate holds, the speed bends
+# sim time allowed per rendered frame: the frame rate holds, the speed bends (perf.budget, lowered by the optimizer)
 const SPEEDS = [0.0, 1.0, 2.0, 4.0, 10.0]
 
 var sim
@@ -24,6 +26,7 @@ var world_view
 var ant_view
 var enemy_view
 var layers_view
+var perf               # the optimizer (perf.gd): adaptive quality
 var cam
 var hud
 var selected = null
@@ -42,6 +45,8 @@ func _ready() -> void:
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	var qid = Engine.get_meta("infdna_queen") if Engine.has_meta("infdna_queen") else "well_rounded"
 	sim = Sim.new(0, qid)
+	perf = Perf.new()
+	perf.scene = self
 	baker = Baker.new()
 	add_child(baker)
 
@@ -49,6 +54,8 @@ func _ready() -> void:
 	world_view.sim = sim
 	world_view.baker = baker
 	add_child(world_view)
+	world_view.sky.perf = perf
+	world_view.ground.perf = perf
 
 	_overlay = Node2D.new()     # food, trails, eggs, queen: above the dirt
 	_overlay.connect("draw", self, "_draw_overlay")
@@ -57,10 +64,12 @@ func _ready() -> void:
 	ant_view = AntView.new()
 	ant_view.sim = sim
 	ant_view.baker = baker
+	ant_view.perf = perf
 	add_child(ant_view)
 
 	enemy_view = EnemyView.new()
 	enemy_view.sim = sim
+	enemy_view.perf = perf
 	add_child(enemy_view)
 	ant_view.enemy_view = enemy_view
 
@@ -87,6 +96,10 @@ func _ready() -> void:
 	hud = Hud.new()
 	hud.scene = self
 	add_child(hud)
+	var ug = UndergroundUI.new()      # depth gauge, nest panel (U), room labels, level navigation (PgUp / PgDn)
+	ug.scene = self
+	add_child(ug)
+	add_child(perf)           # last: its first apply() reaches every view and the HUD
 
 
 func _process(delta: float) -> void:
@@ -107,7 +120,7 @@ func _process(delta: float) -> void:
 			sim.step(dt)
 			_debt -= dt
 			done += dt
-			if OS.get_ticks_usec() - t0 > BUDGET_US:
+			if OS.get_ticks_usec() - t0 > perf.budget:
 				break
 		_debt = min(_debt, 0.25)     # give up on a backlog instead of chasing it
 	eff_speed = lerp(eff_speed, done / max(delta, 0.001), 0.1) if speed > 0.0 else 0.0

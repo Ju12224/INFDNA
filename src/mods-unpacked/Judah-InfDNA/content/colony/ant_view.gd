@@ -18,6 +18,7 @@ var sim
 var baker
 var enemy_view
 var ground
+var perf             # perf.gd (optional): shadow and animation detail
 var cam
 var show_castes := true
 var selected = null
@@ -26,7 +27,10 @@ var _t := 0.0
 var _surf_k := {}   # smoothed surface factor per unit (0 underground, 1 surface)
 var _back_k := {}   # smoothed tunnel-plane factor (0 front plane, 1 back plane)
 var _air_k := {}    # smoothed flight factor of winged ants (0 on the ground, 1 airborne)
-var _gait_ph := {}  # walk-cycle phase per ant, advanced by its real ground speed so the legs never skate
+var _gait_ph := {}  # walk-cycle phase (cycles) per ant, advanced by the distance it really walked so the feet stay planted
+var _last_pos := {}
+var _leg_cache := {}
+var _face_k := {}   # smoothed facing (-1..1): ants turn around instead of snapping
 var _hid_k := {}    # 1 while a back-plane unit is behind front dirt (crossing under)
 const BACK_SCALE = 0.8
 const CASTE_SCALE = [0.94, 1.0, 1.12]   # forager, digger, soldier
@@ -54,19 +58,30 @@ func _process(delta: float) -> void:
 			alive[a2.id] = true
 		for e2 in sim.enemies:
 			alive[-e2.id] = true
-		for dct in [_anim, _surf_k, _back_k, _hid_k, _air_k, _gait_ph]:
+		for dct in [_anim, _surf_k, _back_k, _hid_k, _air_k, _gait_ph, _last_pos, _face_k]:
 			for kk in dct.keys():
 				if not alive.has(kk):
 					dct.erase(kk)
 	var g = sim.grid
 	var k = clamp(delta * 14.0, 0.0, 1.0)
+	var vr0 = _view_rect()
+	var C1 = g.CELL
 	for a in sim.ants:
+		# ants far off screen (long expeditions) need no animation state; it catches up in a few frames on return
+		var ax = (a.x + 0.5) * C1
+		var ay = (a.y + 0.5) * C1
+		if ax < vr0.position.x - 200.0 or ax > vr0.end.x + 200.0 or ay < vr0.position.y - 200.0 or ay > vr0.end.y + 200.0:
+			continue
 		var target = 1.0 if g.is_surface_cell(a.tx, a.ty) else 0.0
 		_surf_k[a.id] = lerp(_surf_k.get(a.id, target), target, k)
 		_track_plane(a.id, a, g, k)
-		if a.tx != a.x or a.ty != a.y:
-			var gm = lerp(a.ph.get("tunnel_mult", 1.0), Sim.SURFACE_K, _surf_k[a.id])
-			_gait_ph[a.id] = _gait_ph.get(a.id, a.id * 0.37) + delta * a.ph["speed"] * 1.3 * gm
+		var p0 = sim.ant_pos(a)
+		var moved = p0.distance_to(_last_pos.get(a.id, p0))
+		_last_pos[a.id] = p0
+		if moved > 0.01 and moved < 90.0:
+			var dsc = lerp(1.0, GroundView.persp(a.lane), _surf_k[a.id]) * lerp(1.0, BACK_SCALE, _back_k.get(a.id, 0.0)) * CASTE_SCALE[a.caste]
+			# one cycle covers about 4 stance strokes of the legs; capped so very fast ants do not strobe
+			_gait_ph[a.id] = _gait_ph.get(a.id, a.id * 0.37) + min(moved / (_leg_unit(a.genome) * dsc), 0.15)
 		# winged ants take off to cross open ground and land again at the pile or the nest
 		var fly = 1.0 if (a.ph.get("wings", 0) == 1 and target > 0.5 and (a.tx != a.x or a.ty != a.y) and a.curl_t <= 0.0) else 0.0
 		if fly > 0.0 or _air_k.has(a.id):
@@ -161,8 +176,9 @@ func _draw() -> void:
 			enemy_view.draw_enemy(self, e, feet, d[1], d[2], d[3], fa)
 	_draw_corpses(vr)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	var badges_visible = cam == null or cam.zoom.x < 1.08      # they fade out beyond this zoom (see _draw_caste_badge)
 	for it in items:
-		if it[1] == 0 and show_castes:
+		if it[1] == 0 and show_castes and (badges_visible or it[2] == selected):
 			_draw_caste_badge(it[2])
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
@@ -179,7 +195,11 @@ func _slope(wx: float) -> float:
 # Soft shadows for everything standing on the surface, all drawn before any unit so a shadow never
 # covers another ant. The sun is up and to the right, so shadows lean left; they tilt with the slope.
 func _draw_shadows(items: Array) -> void:
+	var q = perf.shadows if perf != null else 2
+	if q == 0:
+		return
 	var C = sim.grid.CELL
+	var tiny = cam != null and cam.zoom.x > 2.0
 	for it in items:
 		if it[1] == 2:
 			continue
@@ -187,6 +207,8 @@ func _draw_shadows(items: Array) -> void:
 		var key = u.id if it[1] == 0 else -u.id
 		var sk = _surf_k.get(key, 0.0)
 		if sk < 0.35:
+			continue
+		if it[1] == 0 and tiny:
 			continue
 		var d = _depth(key, u.lane)
 		var pos: Vector2
@@ -201,6 +223,10 @@ func _draw_shadows(items: Array) -> void:
 			rx = EnemyDefs.HEIGHT[u.cls] * 0.36 * d[1]
 			air = sk if u.def.get("fly", false) else 0.0
 		var a = sk * d[3] * (1.0 - 0.5 * air)
+		if q == 1:
+			draw_set_transform(pos + Vector2(-rx * 0.3 - air * 14.0, 0), 0.0, Vector2(1.0, 0.3))
+			draw_circle(Vector2.ZERO, rx, Color(0.05, 0.1, 0.03, 0.2 * a))
+			continue
 		draw_set_transform(pos + Vector2(-rx * 0.3 - air * 14.0, 0), _slope(pos.x), Vector2(1.0, 0.3))
 		draw_circle(Vector2.ZERO, rx * 1.15 * (1.0 + 0.2 * air), Color(0.05, 0.1, 0.03, 0.09 * a))
 		draw_circle(Vector2.ZERO, rx * 0.85, Color(0.05, 0.1, 0.03, 0.12 * a))
@@ -389,6 +415,29 @@ func _apply_pose(a, raw: Vector2, moving: bool) -> void:
 		_p_rot += a.facing * 0.07                               # leaning into the load
 
 
+# World px of ground covered by one walk cycle at scale 1, from this body plan's leg length (matches the
+# painter's stride: half-stride = 0.46 L, a cycle is four stance strokes).
+func _leg_unit(g) -> float:
+	var u = _leg_cache.get(g.uid)
+	if u != null:
+		return u
+	var sum := 0.0
+	var n := 0
+	var total := 25.0
+	for sg in g.segments:
+		total += 2.4 * float(sg["r"])
+		if sg["limb"] == "leg" and sg["n"] > 0:
+			sum += float(sg["len"])
+			n += 1
+	var L = (sum / n if n > 0 else 55.0) * (1.3 if g.form("leg") == 4 else 1.0)
+	var k0 = min(1.0, 310.0 / (total + 120.0)) * 0.55
+	u = clamp(1.84 * L * k0 * ANT_SCALE, 5.0, 40.0)
+	if _leg_cache.size() > 500:
+		_leg_cache.clear()
+	_leg_cache[g.uid] = u
+	return u
+
+
 # Beating wings of an airborne alate, in sprite pixels (the ant's own folded wings stay under them).
 func _draw_flap(air: float, al: float, id: int) -> void:
 	var root = Vector2(6.0, -46.0)
@@ -457,7 +506,15 @@ func _draw_ant(a) -> void:
 	if air > 0.01:
 		feet += Vector2(0, -air * (30.0 + 5.0 * sin(_t * 3.0 + a.id)) * d[1])      # hover; the shadow stays on the ground
 	var moving = a.tx != a.x or a.ty != a.y
-	_apply_pose(a, raw, moving)
+	var detail = perf.ants if perf != null else 2
+	if detail == 0 or (cam != null and cam.zoom.x > 1.7):
+		_p_off = Vector2.ZERO          # too small to see, or the machine is struggling: skip the pose animation
+		_p_rot = 0.0
+		_p_sx = 1.0
+		_p_sy = 1.0
+		_p_face = a.facing
+	else:
+		_apply_pose(a, raw, moving)
 	if air > 0.01:
 		_p_rot -= air * 0.14 * a.facing                                              # nose up, wings beating
 	var bob = sin(_t * 16.0 + a.id) * (0.09 if a.carry > 0.0 else 0.06) if moving else 0.0   # laden ants strain
@@ -469,10 +526,10 @@ func _draw_ant(a) -> void:
 		var pr = 26.0 + sin(_t * 6.0) * 2.5
 		draw_circle(feet - n * 10.0, pr, Color(1, 1, 1, 0.18))
 		draw_arc(feet - n * 10.0, pr, _t * 1.5, _t * 1.5 + TAU * 0.8, 28, Color.white, 3.0, true)
-	var frame = int(_gait_ph.get(a.id, 0.0)) % baker.FRAMES if moving else 0
+	var frame = int(fposmod(_gait_ph.get(a.id, 0.0), 1.0) * baker.FRAMES) % baker.FRAMES if moving else 0
 	var tex = baker.get_texture(a.genome, 1.0, frame)
 	var sk = _surf_k.get(a.id, 0.0)
-	if moving and sk > 0.5:
+	if moving and sk > 0.5 and detail >= 2:
 		# little dust kicked up behind a running ant
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		var back = Vector2(cos(a.rot), sin(a.rot)) * a.facing
@@ -480,7 +537,11 @@ func _draw_ant(a) -> void:
 			var dph = fmod(_t * 3.5 + a.id * 0.37 + j * 0.5, 1.0)
 			var dp = feet - back * (8.0 + dph * 16.0) + Vector2(0, -1.0 - dph * 5.0)
 			draw_circle(dp, (2.0 + dph * 3.0) * d[1], Color(0.62, 0.52, 0.38, (1.0 - dph) * 0.22 * sk))
-	draw_set_transform(feet + _p_off, a.rot + _p_rot, Vector2(_p_face * s * _p_sx * (1.0 + 0.12 * hurt), s * _p_sy * (1.0 + bob - 0.14 * hurt)))
+	var fk = _face_k.get(a.id, float(_p_face))
+	fk = move_toward(fk, float(_p_face), _dt * 9.0)
+	_face_k[a.id] = fk
+	var fk_draw = fk if abs(fk) > 0.14 else (0.14 if fk >= 0.0 else -0.14)     # a quick squash-turn, never a vanished sprite
+	draw_set_transform(feet + _p_off, a.rot + _p_rot, Vector2(fk_draw * s * _p_sx * (1.0 + 0.12 * hurt), s * _p_sy * (1.0 + bob - 0.14 * hurt)))
 	var alpha = d[3]
 	var tint = Color(shade, shade, shade, alpha)
 	if hurt > 0.0:

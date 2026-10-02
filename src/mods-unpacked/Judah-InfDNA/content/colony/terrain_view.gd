@@ -75,8 +75,8 @@ void fragment() {
 	vec3 col = strata(dd);
 	col *= 0.84 + 0.3 * fbm(wc * 0.33);
 	col = mix(col, col * 1.13, smoothstep(0.7, 0.8, vnoise(wc * 0.9 + 13.0)));
-	float g1 = hash(floor(wc * 2.0));
-	if (g1 > 0.94) { col *= 0.78; } else if (g1 < 0.045) { col *= 1.16; }
+	float g1 = hash(floor(wc * 3.0));
+	if (g1 > 0.95) { col *= 0.86; } else if (g1 < 0.04) { col *= 1.1; }
 	// roots hanging through the humus
 	if (dd < 17.0) {
 		float rn = vnoise(vec2(wc.x * 0.75, wc.y * 0.17));
@@ -146,8 +146,8 @@ void fragment() {
 	// tunnels of the back plane, seen through the dirt: dark ghosted channels
 	float bo = 1.0 - smoothstep(0.32, 0.62, ax.r);
 	if (m.g > 0.5 && bo > 0.0) {
-		col = mix(col, col * 0.36 + vec3(0.015, 0.01, 0.008), bo * 0.88);
-		col = mix(col, ink.rgb, (1.0 - smoothstep(0.03, 0.08, abs(ax.r - 0.5))) * 0.5);
+		col = mix(col, col * 0.27 + vec3(0.012, 0.008, 0.006), bo * 0.92);
+		col = mix(col, ink.rgb, (1.0 - smoothstep(0.03, 0.08, abs(ax.r - 0.5))) * 0.4);
 	}
 	// bevel: tunnel floors catch light, ceilings fall into shade
 	vec2 ps = TEXTURE_PIXEL_SIZE;
@@ -179,7 +179,7 @@ void fragment() {
 		vec4 ax = texture(aux_tex, UV);
 		float d = wc.y - base_y(UV);
 		float off = wave_off(UV);
-		vec2 pw = wc + cam * 0.14;
+		vec2 pw = wc + cam * 0.24;
 		vec3 wall = strata(layer_depth(d, off)) * 0.44;
 		wall *= 0.8 + 0.34 * fbm(pw * 0.27);
 		// pores and old burrows in the rear wall
@@ -204,7 +204,7 @@ void fragment() {
 		col *= 1.0 - 0.5 * smoothstep(0.35, 0.8, sh) * (1.0 - e);
 		col *= 1.0 - 0.32 * smoothstep(20.0, 190.0, d);
 		// depth layers in the rear wall: cracks open onto a deeper, slower-parallax layer
-		vec2 pw2 = wc + cam * 0.3;
+		vec2 pw2 = wc + cam * 0.5;
 		float rid = abs(fbm(pw2 * 0.09) - 0.5);
 		float crack = (1.0 - smoothstep(0.015, 0.05, rid)) * (1.0 - e);
 		vec3 deep2 = strata(layer_depth(d, off)) * 0.16 + vec3(0.0, 0.004, 0.012);
@@ -222,7 +222,9 @@ void fragment() {
 			col = mix(col, pr2 > 0.16 ? col * 0.5 : peb, 0.9);
 		}
 		// open air is lit in the middle of a tunnel and falls off toward the walls
-		col *= 0.82 + 0.32 * (1.0 - smoothstep(0.0, 0.42, s));
+		col *= 0.8 + 0.36 * (1.0 - smoothstep(0.0, 0.42, s));
+		// a warm pool of light down the middle of the tunnel: it reads as a rounded tube, not a flat cut-out
+		col = mix(col, col * 1.35 + vec3(0.05, 0.03, 0.008), (1.0 - smoothstep(0.0, 0.3, s)) * 0.45 * (1.0 - smoothstep(30.0, 150.0, d)));
 		// a back-plane tunnel runs right behind this wall: it reads a shade darker
 		col *= 1.0 - 0.28 * (1.0 - smoothstep(0.32, 0.62, ax.r)) * (1.0 - e);
 		// a hole through the rear wall into the back plane
@@ -248,6 +250,18 @@ var _back: Node2D
 var _front: Node2D
 var _chunks := {}     # k -> {"tex", "stex", "back", "front"}
 var _layout := -1
+
+
+# perf.gd: quality 1 swaps in a cheaper shader (two noise octaves instead of four, no rear-wall cracks).
+func set_quality(q: int) -> void:
+	if _front_sh == null:
+		return
+	if q >= 1:
+		_front_sh.code = FRONT_SHADER.replace("i < 4", "i < 2")
+		_back_sh.code = BACK_SHADER.replace("i < 4", "i < 2").replace("float crack = (1.0 - smoothstep(0.015, 0.05, rid)) * (1.0 - e);", "float crack = 0.0;")
+	else:
+		_front_sh.code = FRONT_SHADER
+		_back_sh.code = BACK_SHADER
 
 
 func _ready() -> void:
