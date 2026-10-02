@@ -18,11 +18,13 @@ var warm := 0.0          # 0..1 around sunrise and sunset
 var tint := Color.white  # multiply surface colours by this
 var day_n := 1
 var rain := 0.0          # 0..1, from the sim's weather
+var wet := 0.0           # 0..1, how wet the ground still is
 const RAIN_TINT = Color(0.68, 0.76, 0.88)
 
 
-func update(t: float, rain_k: float = 0.0) -> void:
+func update(t: float, rain_k: float = 0.0, wet_k: float = 0.0) -> void:
 	rain = rain_k
+	wet = wet_k
 	var d = t / DAY_LEN + START
 	day_n = 1 + int(floor(d))
 	ph = force if force >= 0.0 else (0.5 if locked else fposmod(d, 1.0))

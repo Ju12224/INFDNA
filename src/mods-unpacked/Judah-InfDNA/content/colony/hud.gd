@@ -310,8 +310,8 @@ func _build_lineage() -> void:
 	_lineage_panel.add_stylebox_override("panel", Kit.panel(Color(0.3, 0.28, 0.38), 0.94, 8.0))
 	_lineage_panel.anchor_left = 1.0
 	_lineage_panel.anchor_right = 1.0
-	_lineage_panel.margin_left = -470
-	_lineage_panel.margin_right = -20
+	_lineage_panel.margin_left = -500
+	_lineage_panel.margin_right = -50
 	_lineage_panel.margin_top = 18
 	root.add_child(_lineage_panel)
 	var lv = VBoxContainer.new()
@@ -538,8 +538,8 @@ func _build_director() -> void:
 	_dir_panel.add_stylebox_override("panel", Kit.panel(Color(0.34, 0.26, 0.3), 0.95, 6.0))
 	_dir_panel.anchor_left = 1.0
 	_dir_panel.anchor_right = 1.0
-	_dir_panel.margin_left = -440
-	_dir_panel.margin_right = -24
+	_dir_panel.margin_left = -466
+	_dir_panel.margin_right = -50
 	_dir_panel.margin_top = 420
 	root.add_child(_dir_panel)
 	var v = VBoxContainer.new()
@@ -621,7 +621,7 @@ func _build_inspector() -> void:
 	_inspect.anchor_bottom = 1.0
 	_inspect.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_inspect.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	_inspect.margin_right = -20
+	_inspect.margin_right = -50
 	_inspect.margin_bottom = -104
 	_inspect.visible = false
 	root.add_child(_inspect)

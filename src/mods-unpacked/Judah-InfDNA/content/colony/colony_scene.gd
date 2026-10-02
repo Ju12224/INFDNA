@@ -117,6 +117,7 @@ func _ready() -> void:
 	light.cam = cam
 	light.ground = world_view.ground
 	light.day = day
+	light.perf = perf
 	add_child(light)
 	add_child(weather)
 
@@ -160,7 +161,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	day.update(sim.time, sim.rain)
+	day.update(sim.time, sim.rain, sim.wet)
 	if sim.shop_pending and not shop_open and not sim.collapsed:
 		if not watch_mode:
 			open_shop()

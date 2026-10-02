@@ -186,7 +186,14 @@ func draw_slice(ci: CanvasItem, s: int) -> void:
 		var sw = amp * sin(_t * 1.15 + e[0] * 1.7 + s * 0.45)
 		ci.draw_mesh(m, null, null, Transform2D(Vector2(1, 0), Vector2(sw, 1), Vector2(-sw * e[1]["oy"], 0)))
 	for fe in _vis_f[s]:
-		ci.draw_mesh(fe["mesh"], null)
+		if fe.get("sway", 0.0) > 0.0:
+			# a tree bends in the wind: the base stays put and the crown sways (a shear about the foot), more in rain
+			var gust = 1.0 + 1.6 * sim.rain
+			var ph = fe["x0"] * 0.0137
+			var sw2 = 0.0065 * gust * (sin(_t * 0.85 + ph) + 0.4 * sin(_t * 1.9 + ph * 1.7))
+			ci.draw_mesh(fe["mesh"], null, null, Transform2D(Vector2(1, 0), Vector2(sw2, 1), Vector2(-sw2 * fe["by"], 0)))
+		else:
+			ci.draw_mesh(fe["mesh"], null)
 
 
 func visible_slices() -> Array:
@@ -233,14 +240,26 @@ func _build_chunk(ci: int) -> Dictionary:
 	return {"band": band.build(), "shade": shade.build(), "sl": outs, "sy": sy, "oy": oy / (CH + 1), "t": _t}
 
 
-func _lane_col(lane: float, mfv: float, i: int, j: int) -> Color:
+func _lane_col(lane: float, mfv: float, i: int, j: int, slope: float = 0.0) -> Color:
 	var t = clamp(lane, 0.0, 1.0)
 	var col = GRASS_BACK.linear_interpolate(GRASS_FRONT, t)
 	var n = sin((i) * 0.11 + j * 1.7) * 0.022 + (0.018 if j % 2 == 0 else -0.018)
 	col = col.lightened(n) if n > 0.0 else col.darkened(-n)
 	if mfv > 0.0:
-		col = col.linear_interpolate(MOUND_BACK.linear_interpolate(MOUND_FRONT, t), mfv)
+		var m = MOUND_BACK.linear_interpolate(MOUND_FRONT, t)
+		# the heap is lit from the upper right: faces that look right are warm and bright, those that look left fall into shade;
+		# soil strata show as faint rows, and the foot of the heap is darker where it meets the turf
+		var lit = clamp(slope * 1.3, -1.0, 1.0)
+		m = m.lightened(0.16 * lit) if lit > 0.0 else m.darkened(-0.2 * lit)
+		var row = 0.035 if j % 2 == 0 else -0.035
+		m = m.lightened(row) if row > 0.0 else m.darkened(-row)
+		col = col.linear_interpolate(m, mfv)
 	return col
+
+
+# Slope of the ground at column i of a chunk (px of height per px of width, + = falling to the right).
+func _slope_at(sy: PoolRealArray, i: int) -> float:
+	return (sy[min(i + 1, sy.size() - 1)] - sy[max(i - 1, 0)]) / (2.0 * g.CELL)
 
 
 func _band(mk, c0: int, sy: PoolRealArray, mf: PoolRealArray) -> void:
@@ -251,10 +270,12 @@ func _band(mk, c0: int, sy: PoolRealArray, mf: PoolRealArray) -> void:
 		for i in CH:
 			var xa = (c0 + i) * C
 			var xb = xa + C
-			mk.quad_c(Vector2(xa, lane_y(sy[i], la)), _lane_col(la, mf[i], c0 + i, j),
-				Vector2(xb, lane_y(sy[i + 1], la)), _lane_col(la, mf[i + 1], c0 + i + 1, j),
-				Vector2(xb, lane_y(sy[i + 1], lb)), _lane_col(lb, mf[i + 1], c0 + i + 1, j),
-				Vector2(xa, lane_y(sy[i], lb)), _lane_col(lb, mf[i], c0 + i, j))
+			var s0 = _slope_at(sy, i)
+			var s1 = _slope_at(sy, i + 1)
+			mk.quad_c(Vector2(xa, lane_y(sy[i], la)), _lane_col(la, mf[i], c0 + i, j, s0),
+				Vector2(xb, lane_y(sy[i + 1], la)), _lane_col(la, mf[i + 1], c0 + i + 1, j, s1),
+				Vector2(xb, lane_y(sy[i + 1], lb)), _lane_col(lb, mf[i + 1], c0 + i + 1, j, s1),
+				Vector2(xa, lane_y(sy[i], lb)), _lane_col(lb, mf[i], c0 + i, j, s0))
 	# lighter and darker patches of turf, flat on the ground
 	for i in range(0, CH, 3):
 		var col = c0 + i
@@ -285,6 +306,12 @@ func _band(mk, c0: int, sy: PoolRealArray, mf: PoolRealArray) -> void:
 			var ps = persp(lane1)
 			if mf[i] > 0.3:
 				mk.ellipse(p1, (1.3 + 1.7 * h1) * ps, (1.0 + 1.2 * h1) * ps, Color("#6b4426") if h1 > 0.55 else Color("#c9935c"), 6)
+				if k == 0 and MK.hash1(col2 * 4.9 + 3.0) > 0.9:
+					# a clod of packed earth with a dark rim and a lit top
+					var cr = (4.0 + 4.0 * h1) * ps
+					mk.ellipse(p1 + Vector2(0, 1.0 * ps), cr * 1.15, cr * 0.78, Color(0.2, 0.11, 0.06, 0.8), 9)
+					mk.ellipse(p1, cr, cr * 0.7, Color("#8d5f38").linear_interpolate(Color("#b8834f"), h1), 9)
+					mk.ellipse(p1 + Vector2(-cr * 0.25, -cr * 0.22), cr * 0.5, cr * 0.3, Color(1.0, 0.9, 0.7, 0.35), 7)
 			elif mf[i] < 0.2:
 				mk.blade(p1, (h1 - 0.5) * 5.0, (3.0 + 5.0 * h1) * ps, 1.7 * ps + 0.4, BLADES[0], BLADES[int(h1 * 2.99)])
 		if mf[i] < 0.2 and MK.hash1(col2 * 2.37 + 4.0) > 0.86:
@@ -474,8 +501,8 @@ func _tree(f: Dictionary) -> Dictionary:
 	var bark = hz(Color("#6a4b32"), lane)
 	var bark_d = bark.darkened(0.42)
 	var bark_m = bark.darkened(0.18)
-	var bark_l = bark.lightened(0.24)
-	var bark_h = bark.lightened(0.42)
+	var bark_l = hz(Color("#8c6139"), lane)
+	var bark_h = hz(Color("#b98650"), lane)
 	var n = 22
 	var top_y = h * 0.6
 	var lean = (MK.hash1(sd + 3.0) - 0.5) * w * 1.6
@@ -568,12 +595,26 @@ func _tree(f: Dictionary) -> Dictionary:
 		var u = (MK.hash1(sd + k * 6.3) - 0.5) * 0.7
 		var kp = pts[ti] + Vector2(wid[ti] * u, 0)
 		if k % 4 == 0:
-			mk.ellipse_ink(kp, wid[ti] * 0.06 + 4.0, wid[ti] * 0.09 + 6.0, bark_d, 2.0, 9)
+			var kr = wid[ti] * 0.05 + 3.5
+			mk.ellipse_ink(kp, kr, kr * 1.45, bark_d, 2.0, 14)
+			mk.ellipse(kp + Vector2(kr * 0.12, kr * 0.2), kr * 0.72, kr * 1.15, Color(0.05, 0.03, 0.02, 0.85), 12)
+			mk.ellipse(kp + Vector2(0, kr * 1.25), kr * 0.8, kr * 0.22, Color(bark_h.r, bark_h.g, bark_h.b, 0.55), 8)
 		else:
 			var rr := PoolVector2Array([kp + Vector2(-wid[ti] * 0.1, 2), kp + Vector2(0, -1.5), kp + Vector2(wid[ti] * 0.1, 2)])
 			mk.ribbon(rr, PoolRealArray([2.5, 3.2, 2.5]), Color(0.1, 0.07, 0.05, 0.4))
-	mk.blob(b + Vector2(-w * 0.28, -w * 0.5), w * 0.22, w * 0.4, sd + 6.0, 0.18, hz(Color("#5b8f3a"), lane), 10)
-	mk.blob(b + Vector2(-w * 0.12, -w * 1.1), w * 0.12, w * 0.2, sd + 7.0, 0.2, hz(Color("#6aa23c"), lane), 8)
+	for k in 6:
+		var mt = 0.01 + 0.12 * MK.hash1(sd + 30.0 + k)
+		var mi = int(mt * n)
+		var mu = -0.4 + 0.5 * MK.hash1(sd + 40.0 + k)                   # across the lower trunk, inside its edges
+		var mp = pts[mi] + Vector2(wid[mi] * mu, 0)
+		var mr = wid[mi] * (0.05 + 0.05 * MK.hash1(sd + 50.0 + k))
+		var mdark = hz(Color("#4a7a33"), lane)
+		var mlite = hz(Color("#86bf55"), lane)
+		mk.blob(mp, mr * 1.5, mr * 0.7, sd + 60.0 + k, 0.22, mdark, 14)
+		mk.blob(mp + Vector2(mr * 0.15, -mr * 0.18), mr * 1.0, mr * 0.42, sd + 70.0 + k, 0.2, mlite, 12)
+		for q in 3:
+			var tq = mp + Vector2((q - 1.0) * mr * 0.7, -mr * (0.35 + 0.15 * MK.hash1(sd + k * 3.0 + q)))
+			mk.ellipse(tq, mr * 0.28, mr * 0.2, mlite.lightened(0.15), 6)
 	# crown: a wide canopy of many round leaf clusters, dark under, light on top (sun upper right)
 	var cc = pts[n] + Vector2(lean * 0.2, -h * 0.17)
 	var Rx = h * 0.36
@@ -599,16 +640,16 @@ func _tree(f: Dictionary) -> Dictionary:
 	mk.ellipse(cc + Vector2(0, Ry * 0.95), Rx * 0.85, Ry * 0.38, shadow_ell, 16)
 	var k2 = 0
 	for L in lobes:
-		mk.blob_ink(L[0] + Vector2(-h * 0.012, h * 0.016), L[1] * 1.1, L[1] * 0.98, sd + k2, 0.05, g_d, 4.5, 16)
+		mk.blob_ink(L[0] + Vector2(-h * 0.012, h * 0.016), L[1] * 1.1, L[1] * 0.98, sd + k2, 0.05, g_d, 4.5, 26)
 		k2 += 1
 	k2 = 0
 	for L in lobes:
-		mk.blob(L[0], L[1] * 0.97, L[1] * 0.86, sd + k2 * 1.3, 0.06, g_m, 16, g_l.linear_interpolate(g_m, 0.4))
+		mk.blob(L[0], L[1] * 0.97, L[1] * 0.86, sd + k2 * 1.3, 0.06, g_m, 26, g_l.linear_interpolate(g_m, 0.4))
 		k2 += 1
 	k2 = 0
 	for L in lobes:
 		var lp = L[0] + Vector2(L[1] * 0.2, -L[1] * 0.22)
-		mk.blob(lp, L[1] * 0.62, L[1] * 0.5, sd + k2 * 2.1, 0.08, g_l, 12, g_h.linear_interpolate(g_l, 0.35))
+		mk.blob(lp, L[1] * 0.62, L[1] * 0.5, sd + k2 * 2.1, 0.08, g_l, 18, g_h.linear_interpolate(g_l, 0.35))
 		# leaf flecks: bright on the sunny side, dark on the other
 		for q in 5:
 			var fa = TAU * q / 5.0 + k2
@@ -622,7 +663,7 @@ func _tree(f: Dictionary) -> Dictionary:
 		var ea = TAU * i / 12.0 + sd
 		var ep = cc + Vector2(cos(ea) * Rx * 1.02, sin(ea) * Ry * 0.98)
 		var er = h * (0.03 + 0.025 * MK.hash1(sd + i * 8.3))
-		mk.blob_ink(ep, er, er * 0.9, sd + i * 5.0, 0.06, g_m, 3.0, 10, g_l)
+		mk.blob_ink(ep, er, er * 0.9, sd + i * 5.0, 0.06, g_m, 3.0, 16, g_l)
 	if MK.hash1(sd + 8.0) > 0.4:
 		for i in 11:
 			var a2 = PI * (0.05 + 0.9 * MK.hash1(sd + i * 4.4))
@@ -631,7 +672,7 @@ func _tree(f: Dictionary) -> Dictionary:
 			mk.ellipse_ink(cc + Vector2(cos(a2) * Rx * rr2, sin(a2) * Ry * rr2 * 0.8), 7.0 * sc + 2.5, 7.0 * sc + 2.5, fcol, 2.2, 9)
 	sh.shadow(b + Vector2(-w * 1.8, 5.0), w * 2.8 + h * 0.12, w * 0.34, Color(0.06, 0.1, 0.04, 0.18), 3)
 	var ext = Rx * 1.25 + w * 1.3
-	return {"mesh": mk.build(), "shade": sh.build(), "slice": slice_of(lane), "x0": min(b.x, cc.x) - ext, "x1": max(b.x, cc.x) + ext}
+	return {"mesh": mk.build(), "shade": sh.build(), "slice": slice_of(lane), "x0": min(b.x, cc.x) - ext, "x1": max(b.x, cc.x) + ext, "sway": 1.0, "by": b.y}
 
 
 func _lobe_y(a, b) -> bool:

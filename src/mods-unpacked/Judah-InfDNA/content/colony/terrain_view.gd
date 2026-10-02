@@ -40,8 +40,17 @@ float fbm(vec2 p) {
 	for (int i = 0; i < 4; i++) { v += a * vnoise(p); p = p * 2.03 + 11.0; a *= 0.5; }
 	return v;
 }
-float wave_off(vec2 uv) { return texture(surf_tex, vec2(uv.x, 0.5)).b * 16.0 - 8.0; }
-float base_y(vec2 uv) { return texture(surf_tex, vec2(uv.x, 0.5)).g * 255.0; }
+// the per-column strip is read with a hand-made linear blend between the two nearest columns: on its own the
+// sampler can step from column to column, which showed as a staircase in the soil layers up close
+vec4 surf_at(float ux) {
+	float px = ux * tsize.x - 0.5;
+	float i0 = floor(px);
+	float f = px - i0;
+	float inv = 1.0 / tsize.x;
+	return mix(texture(surf_tex, vec2((i0 + 0.5) * inv, 0.5)), texture(surf_tex, vec2((i0 + 1.5) * inv, 0.5)), f);
+}
+float wave_off(vec2 uv) { return surf_at(uv.x).b * 16.0 - 8.0; }
+float base_y(vec2 uv) { return surf_at(uv.x).g * 255.0; }
 float layer_depth(float d, float off) { return d + off; }
 vec3 strata(float dd) {
 	vec3 c = vec3(0.36, 0.23, 0.14);                                  // humus
@@ -75,33 +84,43 @@ void fragment() {
 	vec3 col = strata(dd);
 	col *= 0.84 + 0.3 * fbm(wc * 0.33);
 	col = mix(col, col * 1.13, smoothstep(0.7, 0.8, vnoise(wc * 0.9 + 13.0)));
-	float g1 = hash(floor(wc * 3.0));
-	if (g1 > 0.95) { col *= 0.86; } else if (g1 < 0.04) { col *= 1.1; }
+	vec2 gp = wc * 3.0;
+	vec2 gid = floor(gp);
+	vec2 gf = fract(gp) - 0.5 - (vec2(hash(gid + 2.3), hash(gid + 5.9)) - 0.5) * 0.5;
+	float grain = 1.0 - smoothstep(0.12, 0.3, length(gf));
+	float g1 = hash(gid);
+	if (g1 > 0.93) { col *= 1.0 - 0.17 * grain; } else if (g1 < 0.05) { col *= 1.0 + 0.11 * grain; }
 	// roots hanging through the humus
 	if (dd < 17.0) {
 		float rn = vnoise(vec2(wc.x * 0.75, wc.y * 0.17));
 		float root = (1.0 - smoothstep(0.012, 0.03, abs(rn - 0.5))) * (1.0 - smoothstep(5.0, 17.0, dd));
 		col = mix(col, vec3(0.23, 0.14, 0.09), root * 0.9);
 	}
-	// pebbles: sparse in soil, dense in the gravel band, big in bedrock
+	// pebbles: sparse in soil, dense in the gravel band, big in bedrock. Each kind sits on its own fixed grid and fades out
+	// pebble by pebble (a grid whose scale changes with depth gets sheared into thin streaks where two kinds meet)
 	float sandy = smoothstep(30.0, 33.0, dd) * (1.0 - smoothstep(55.0, 58.0, dd));
 	float rocky = smoothstep(156.0, 160.0, dd);
-	float gs = mix(0.5, 1.0, sandy) * mix(1.0, 0.55, rocky);
-	vec2 sc = wc * gs;
-	vec2 cid = floor(sc);
-	vec2 f = fract(sc) - 0.5 - (vec2(hash(cid + 3.1), hash(cid + 7.7)) - 0.5) * 0.3;
-	float thr = mix(mix(0.972, 0.9, sandy), 0.93, rocky);
-	float rad = mix(0.33, 0.26, sandy);
-	float r = length(f * vec2(1.0, 1.25));
-	if (hash(cid + 1.3) > thr && r < rad) {
-		vec3 stone = mix(vec3(0.58, 0.55, 0.53), vec3(0.76, 0.66, 0.52), hash(cid + 9.1));
-		stone = r < rad - 0.08 ? mix(stone, stone * 1.28, step(f.y, -0.06) * step(f.x, 0.05)) : ink.rgb;
-		col = stone;
+	float soily = (1.0 - sandy) * (1.0 - rocky);
+	for (int pk = 0; pk < 3; pk++) {
+		float wgt = pk == 0 ? soily : (pk == 1 ? sandy : rocky);
+		if (wgt <= 0.001) { continue; }
+		float gs = pk == 0 ? 0.5 : (pk == 1 ? 1.0 : 0.275);
+		float thr = pk == 0 ? 0.972 : (pk == 1 ? 0.9 : 0.93);
+		float rad = pk == 1 ? 0.26 : 0.33;
+		vec2 sc = wc * gs + float(pk) * 17.3;
+		vec2 cid = floor(sc);
+		vec2 f = fract(sc) - 0.5 - (vec2(hash(cid + 3.1), hash(cid + 7.7)) - 0.5) * 0.3;
+		float r = length(f * vec2(1.0, 1.25));
+		if (hash(cid + 1.3) > thr && hash(cid + 5.5) < wgt && r < rad) {
+			vec3 stone = mix(vec3(0.58, 0.55, 0.53), vec3(0.76, 0.66, 0.52), hash(cid + 9.1));
+			stone = r < rad - 0.08 ? mix(stone, stone * 1.28, step(f.y, -0.06) * step(f.x, 0.05)) : ink.rgb;
+			col = stone;
+		}
 	}
 	// stones and fossils: real obstacles, drawn from the sim's own map
 	float st = smoothstep(0.42, 0.58, ax.g);
 	if (st > 0.0) {
-		vec3 stone = mix(vec3(0.5, 0.49, 0.5), vec3(0.66, 0.62, 0.58), hash(floor(wc * 0.35)));
+		vec3 stone = mix(vec3(0.5, 0.49, 0.5), vec3(0.66, 0.62, 0.58), vnoise(wc * 0.3 + 4.0));
 		stone *= 0.9 + 0.2 * vnoise(wc * 1.3);
 		vec2 sg = vec2(texture(aux_tex, UV + vec2(TEXTURE_PIXEL_SIZE.x, 0.0)).g - texture(aux_tex, UV - vec2(TEXTURE_PIXEL_SIZE.x, 0.0)).g,
 			texture(aux_tex, UV + vec2(0.0, TEXTURE_PIXEL_SIZE.y)).g - texture(aux_tex, UV - vec2(0.0, TEXTURE_PIXEL_SIZE.y)).g);
@@ -228,7 +247,7 @@ void fragment() {
 		// a back-plane tunnel runs right behind this wall: it reads a shade darker
 		col *= 1.0 - 0.28 * (1.0 - smoothstep(0.32, 0.62, ax.r)) * (1.0 - e);
 		// a hole through the rear wall into the back plane
-		float hole = smoothstep(0.35, 0.75, ax.b);
+		float hole = smoothstep(0.35, 0.75, ax.b + 0.34 * (vnoise(wc * 1.3 + 9.0) - 0.5));
 		if (hole > 0.0) {
 			vec2 hg = vec2(texture(aux_tex, UV + vec2(ps.x, 0.0)).b - texture(aux_tex, UV - vec2(ps.x, 0.0)).b,
 				texture(aux_tex, UV + vec2(0.0, ps.y)).b - texture(aux_tex, UV - vec2(0.0, ps.y)).b);

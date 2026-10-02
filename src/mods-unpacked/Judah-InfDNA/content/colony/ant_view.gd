@@ -304,8 +304,9 @@ func _draw_caste_badge(a) -> void:
 		return
 	if a == selected:
 		fade = 1.0
-	var r = clamp(5.5 * z, 4.5, 11.0) * (0.85 + 0.15 * d[1]) * _pop(a.age)
-	var top = pos + Vector2(0, C * 0.5 - 30.0 * d[1] - r * 0.6)
+	# about the same size on screen at any zoom (a world-sized disc became a huge blob when zoomed in), and sitting just above the head
+	var r = clamp(6.0 * z, 2.0, 9.0) * (0.85 + 0.15 * d[1]) * _pop(a.age)
+	var top = pos + Vector2(0, C * 0.5 - 27.0 * d[1] - r - 2.0)
 	var col: Color = CASTE_COLORS[a.caste]
 	if sim.fx_caste_pulse(a):
 		col = col.lightened(0.35)

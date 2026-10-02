@@ -625,6 +625,7 @@ func step(dt: float) -> void:
 # Weather: now and then it rains. Rain washes the scent trails away (they lose strength ~4x faster while it pours), so
 # foragers fall back on route memory and the colony has to re-lay its roads. The views add streaks, splashes and grey light.
 var rain := 0.0
+var wet := 0.0                     # the ground stays wet (puddles) for a while after rain
 var _rain_goal := 0.0
 var _rain_timer := 170.0
 
@@ -641,6 +642,7 @@ func _step_weather(dt: float) -> void:
 			_rain_timer = rng.randf_range(35.0, 70.0)
 			toasts.append({"text": "Rain! The scent trails are washing away.", "t": 5.0})
 	rain = move_toward(rain, _rain_goal, dt / 6.0)
+	wet = clamp(wet + (dt / 22.0 if rain > 0.3 else -dt / 100.0), 0.0, 1.0)
 
 
 func _step_extras(dt: float) -> void:
@@ -1797,7 +1799,7 @@ func _lay_egg() -> void:
 			broods.append(c)
 	var ht = hatch_time / (1.0 + 0.15 * min(3, broods.size()))
 	var ep = _egg_pos(broods)
-	eggs.append({"t": ht, "genome": g, "gen": gen, "pos": Vector2(ep.x, ep.y), "z": int(ep.z), "caste": caste})
+	eggs.append({"t": ht, "t0": ht, "genome": g, "gen": gen, "pos": Vector2(ep.x, ep.y), "z": int(ep.z), "caste": caste})
 
 
 # The queen raises the caste the colony needs most right now.
@@ -2592,7 +2594,7 @@ func _ant_falls(a) -> void:
 			if c["purpose"] == "brood":
 				broods.append(c)
 		var ep = _egg_pos(broods)
-		eggs.append({"t": 5.0, "genome": a.genome, "gen": a.gen + 1, "pos": Vector2(ep.x, ep.y), "z": int(ep.z), "caste": a.caste})
+		eggs.append({"t": 5.0, "t0": 5.0, "genome": a.genome, "gen": a.gen + 1, "pos": Vector2(ep.x, ep.y), "z": int(ep.z), "caste": a.caste})
 		fx.append({"kind": "text", "pos": ant_pos(a) + Vector2(0, -24), "t": 0.0, "text": "RETURNS", "color": Color("#d8e8a0")})
 	elif a.ph.get("split", 0.0) > 0.0 and rng.randf() < a.ph["split"]:
 		# planarian split: the torn body regrows as a fresh egg of the same plan
@@ -2601,7 +2603,7 @@ func _ant_falls(a) -> void:
 			if c["purpose"] == "brood":
 				broods2.append(c)
 		var ep2 = _egg_pos(broods2)
-		eggs.append({"t": 6.0, "genome": a.genome, "gen": a.gen + 1, "pos": Vector2(ep2.x, ep2.y), "z": int(ep2.z), "caste": a.caste})
+		eggs.append({"t": 6.0, "t0": 6.0, "genome": a.genome, "gen": a.gen + 1, "pos": Vector2(ep2.x, ep2.y), "z": int(ep2.z), "caste": a.caste})
 		fx.append({"kind": "text", "pos": ant_pos(a) + Vector2(0, -24), "t": 0.0, "text": "SPLITS", "color": Color("#ffb3c8")})
 	kill(a, "combat")
 

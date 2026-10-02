@@ -12,7 +12,6 @@ const DEPTH = GroundView.DEPTH   # thickness of the ground's top face (2.5D surf
 const TREE_TEX = "res://entities/units/neutral/tree.png"
 const ROCK_TEX = "res://entities/units/neutral/rock.png"
 const FRUIT_TEX = "res://items/consumables/fruit/fruit.png"
-const GARDEN_TEX = "res://items/all/garden/garden_ingame.png"
 const GLOW_TEX = "res://particles/sprites/particle_28.png"     # soft radial light
 const MOTE_TEX = "res://particles/sprites/particle_11.png"     # small round mote
 const HUSK_TEX = "res://particles/sprites/particle_13.png"     # oval husk for the midden
@@ -66,7 +65,7 @@ func _ready() -> void:
 	band = Node2D.new()
 	band.connect("draw", self, "_draw_band")
 	add_child(band)
-	for k in [TREE_TEX, ROCK_TEX, FRUIT_TEX, GARDEN_TEX, GLOW_TEX, MOTE_TEX, HUSK_TEX]:
+	for k in [TREE_TEX, ROCK_TEX, FRUIT_TEX, GLOW_TEX, MOTE_TEX, HUSK_TEX]:
 		if ResourceLoader.exists(k):
 			_tex[k] = load(k)
 	for kv in [["bar_bg", "res://ui/hud/ui_lifebar_bg.png"], ["bar_fill", "res://ui/hud/ui_lifebar_fill.png"], ["bar_frame", "res://ui/hud/ui_lifebar_frame.png"]]:
@@ -246,34 +245,132 @@ func _draw_back_rooms(ci: CanvasItem) -> void:
 			_draw_egg(ci, e, BACK_MOD)
 
 
+# The brood goes through its stages in the nursery: an egg, then a wriggling grub, then a silk cocoon that darkens and twitches
+# until the ant breaks out. (The sim only counts down to the hatch; the stage is how far along that countdown is.)
 func _draw_egg(ci: CanvasItem, e: Dictionary, mod: Color) -> void:
 	var C = sim.grid.CELL
 	var ep = e["pos"] * C + Vector2(C * 0.5, C * 0.5)
-	var near = clamp(1.0 - e["t"] / 3.0, 0.0, 1.0)
-	var wob = sin(_t * 3.0 + ep.x) * 0.8
-	var tilt = sin(_t * (14.0 + near * 14.0) + ep.x) * 0.32 * near
-	ci.draw_set_transform(ep, tilt, Vector2(1.0 + 0.06 * near, 0.72))
-	ci.draw_circle(Vector2(0, -6 + wob), 9.0, INK)
-	ci.draw_circle(Vector2(0, -6 + wob), 6.0, Color("#f7f1e3").linear_interpolate(Color("#fff4cf"), near) * mod)
-	ci.draw_circle(Vector2(-2, -8 + wob), 2.0, Color.white * mod)
-	if near > 0.5:
-		ci.draw_line(Vector2(-3, -9 + wob), Vector2(0, -6 + wob), INK, 1.5)
-		ci.draw_line(Vector2(0, -6 + wob), Vector2(3, -8 + wob), INK, 1.5)
+	var prog = clamp(1.0 - e["t"] / max(e.get("t0", 14.0), 0.1), 0.0, 1.0)
+	var ph = ep.x * 0.37
+	# a small shadow on the floor under it
+	ci.draw_set_transform(ep, 0.0, Vector2(1.0, 0.3))
+	ci.draw_circle(Vector2(0, 0), 9.0, Color(0.05, 0.03, 0.02, 0.28))
+	if prog < 0.34:
+		var wob = sin(_t * 3.0 + ph) * 0.6
+		ci.draw_set_transform(ep, 0.0, Vector2(1.0, 0.78))
+		ci.draw_circle(Vector2(0, -6 + wob), 9.0, INK)
+		ci.draw_circle(Vector2(0, -6 + wob), 6.2, Color("#f7f1e3") * mod)
+		ci.draw_circle(Vector2(-2, -8 + wob), 2.0, Color.white * mod)
+	elif prog < 0.76:
+		# the grub: a pale curled body that wriggles, head to the right
+		var k = (prog - 0.34) / 0.42
+		var grow = 0.8 + 0.5 * k
+		ci.draw_set_transform(ep, 0.0, Vector2(grow, grow))
+		var pts := []
+		for i in 7:
+			var u = float(i) / 6.0
+			var a = lerp(PI * 0.95, PI * 0.1, u)
+			var wig = sin(_t * 3.6 + ph + u * 4.2) * (1.0 + 2.0 * u)
+			pts.append(Vector2(cos(a) * 9.5, -sin(a) * 6.5 - 5.0 + wig * 0.5))
+		for i in 7:
+			var r = 3.2 + 2.0 * sin(PI * (float(i) + 0.5) / 7.0)
+			ci.draw_circle(pts[i], r + 1.7, INK)
+		for i in 7:
+			var r2 = 3.2 + 2.0 * sin(PI * (float(i) + 0.5) / 7.0)
+			var shade = 0.0 if i % 2 == 0 else 0.05
+			ci.draw_circle(pts[i], r2, Color("#f4ecd2").darkened(shade) * mod)
+		ci.draw_circle(pts[6] + Vector2(1.5, -0.5), 2.7, Color("#d8b98a") * mod)       # the head
+		ci.draw_circle(pts[6] + Vector2(2.4, 0.2), 0.8, INK)
+		ci.draw_circle(pts[1] + Vector2(-1.2, -2.0), 1.6, Color(1, 1, 1, 0.55))
+	else:
+		# the pupa in its cocoon: ivory silk, the folded ant showing faintly through, darkening and twitching as it nears hatching
+		var k2 = (prog - 0.76) / 0.24
+		var twitch = clamp((k2 - 0.75) / 0.25, 0.0, 1.0)
+		var tilt = sin(_t * 22.0 + ph) * 0.16 * twitch
+		ci.draw_set_transform(ep + Vector2(0, -6), tilt, Vector2(1.0, 1.0))
+		var silk = Color("#f1e7cc").linear_interpolate(Color("#c9a77a"), k2 * 0.85)
+		_oval(ci, Vector2.ZERO, 11.5, 6.8, INK)
+		_oval(ci, Vector2.ZERO, 9.6, 5.1, silk * mod)
+		var fold = Color(0.35, 0.22, 0.12, 0.2 + 0.4 * k2)
+		for q in 3:
+			ci.draw_line(Vector2(-4.0 + q * 3.4, -3.0), Vector2(-3.0 + q * 3.4, 3.2), fold, 1.2)
+		ci.draw_circle(Vector2(6.0, -0.4), 2.2, Color(0.3, 0.2, 0.12, 0.25 + 0.45 * k2))
+		ci.draw_circle(Vector2(-3.0, -2.4), 1.8, Color(1, 1, 1, 0.5))
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+func _oval(ci: CanvasItem, c: Vector2, rx: float, ry: float, col: Color) -> void:
+	var pts := PoolVector2Array()
+	for i in 16:
+		var a = TAU * i / 16.0
+		pts.append(c + Vector2(cos(a) * rx, sin(a) * ry))
+	ci.draw_colored_polygon(pts, col)
+
+
+# Scent trails: a soft glowing ribbon that follows the ground (not stair steps), strength shown by brightness and width, and
+# little beads of scent drifting toward the nest along it.
+func _draw_trails(ci: CanvasItem) -> void:
+	var g = sim.grid
+	var C = g.CELL
+	var cols = _view_cols(g)
+	var x0 = int(max(cols[0], g.ox))
+	var x1 = int(min(cols[1], g.ox + g.W - 1))
+	var z = cam.zoom.x if cam != null else 1.0
+	var pts := PoolVector2Array()
+	var core := PoolColorArray()
+	var halo := PoolColorArray()
+	var run_a = x0
+	for x in range(x0, x1 + 2):
+		var p = g.pher[x - g.ox] if x <= x1 else 0.0
+		if p > 0.05:
+			if pts.empty():
+				run_a = x
+			var k = clamp(p / 2.0, 0.0, 1.0)
+			pts.append(Vector2((x + 0.5) * C, _smooth_surf(g, x) - DEPTH * 0.5))
+			core.append(Color(0.9, 1.0, 0.62, 0.22 + 0.62 * k))
+			halo.append(Color(0.55, 0.95, 0.3, 0.05 + 0.2 * k))
+		elif not pts.empty():
+			if pts.size() >= 2:
+				ci.draw_polyline_colors(pts, halo, 10.0 * max(1.0, z * 0.8), true)
+				ci.draw_polyline_colors(pts, core, 3.4 * max(1.0, z * 0.8), true)
+				_trail_beads(ci, run_a, x - 1, z)
+			pts = PoolVector2Array()
+			core = PoolColorArray()
+			halo = PoolColorArray()
+
+
+func _trail_beads(ci: CanvasItem, xa: int, xb: int, z: float) -> void:
+	var g = sim.grid
+	var C = g.CELL
+	var ex = int(g.entrance.x)
+	var gap = 34.0
+	var r = max(2.3, 1.7 * z)
+	for side in 2:
+		# beads on the west of the nest drift east and vice versa: the food is going home
+		var lo = xa if side == 0 else max(xa, ex)
+		var hi = min(xb, ex) if side == 0 else xb
+		if hi <= lo:
+			continue
+		var dir = 1.0 if side == 0 else -1.0
+		var off = fposmod(-_t * 44.0 * dir, gap)
+		var bx = ceil((lo * C - off) / gap) * gap + off
+		while bx < hi * C:
+			var xi = int(floor(bx / C))
+			var f = bx / C - xi
+			var k = clamp(g.pher[xi - g.ox] / 2.0, 0.0, 1.0) if xi >= g.ox and xi < g.ox + g.W else 0.0
+			if k > 0.03:
+				var y = lerp(_smooth_surf(g, xi), _smooth_surf(g, xi + 1), f) - DEPTH * 0.5
+				ci.draw_circle(Vector2(bx, y), r * 2.2, Color(0.8, 1.0, 0.5, 0.16 * k))
+				ci.draw_circle(Vector2(bx, y), r, Color(1.0, 1.0, 0.86, 0.35 + 0.55 * k))
+			bx += gap
 
 
 # Drawn above the dirt by the Overlay child (see colony_scene.gd).
 func draw_overlay(ci: CanvasItem) -> void:
 	var g = sim.grid
 	var C = g.CELL
-	# trails
 	if show_trails:
-		var cols = _view_cols(g)
-		for x in range(max(cols[0], g.ox), min(cols[1], g.ox + g.W)):
-			var p = g.pher[x - g.ox]
-			if p > 0.05:
-				var y = _smooth_surf(g, x) - DEPTH * 0.5
-				ci.draw_rect(Rect2(x * C, y, C, 4.0), Color(0.78, 1.0, 0.5, clamp(p / 2.0, 0.0, 1.0) * 0.7))
+		_draw_trails(ci)
 	_draw_back_rooms(ci)
 	# food piles
 	for pile in sim.piles:
@@ -382,17 +479,7 @@ func _draw_chamber(ci: CanvasItem, c: Dictionary, mod: Color = Color.white) -> v
 				var oy = -(i / 5) * 9.0
 				draw_gem(ci, Vector2(cx + ox, floor_y - 6 + oy), 0.55, i % 5, mod)
 		"farm":
-			var t = _tex.get(GARDEN_TEX)
-			if t != null:
-				var sc = (c["rx"] * C * 1.1) / t.get_width()
-				ci.draw_set_transform(Vector2(cx, floor_y + 4), 0.0, Vector2(sc, sc))
-				ci.draw_texture(t, Vector2(-t.get_width() * 0.5, -t.get_height()), mod)
-				ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-			else:
-				for i in 5:
-					var mx = cx + (i - 2) * 12.0
-					ci.draw_rect(Rect2(mx - 2, floor_y - 10, 4, 10), Color("#e8dcc4"))
-					ci.draw_circle(Vector2(mx, floor_y - 12), 7.0, Color("#c96a4a"))
+			_draw_fungus(ci, c, mod, cx, floor_y)
 		"brood":
 			ci.draw_circle(Vector2(cx, floor_y - 2), 3.0, Color(mod.r, mod.g, mod.b, 0.15))
 		"armory", "venom", "battery", "architects":
@@ -447,6 +534,98 @@ func _draw_chamber(ci: CanvasItem, c: Dictionary, mod: Color = Color.white) -> v
 					ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 				else:
 					ci.draw_circle(Vector2(hx, hy), 5.0, Color(0.3, 0.22, 0.15))
+
+
+# A fungus garden the way leafcutter ants keep one: a bed of chewed leaf pulp with a pale spongy body of fungus growing on it,
+# threads of mycelium creeping out at the edges, and the little white food bulbs the ants actually eat on the surface.
+func _draw_fungus(ci: CanvasItem, c: Dictionary, mod: Color, cx: float, floor_y: float) -> void:
+	var C = sim.grid.CELL
+	var W = c["rx"] * C * 1.55
+	var H = clamp(c["ry"] * C * 0.9, 14.0, 64.0)
+	var sd = c["center"].x * 0.37 + c["center"].y * 0.11
+	var breathe = 1.0 + 0.012 * sin(_t * 0.9 + sd)
+	var bed_d = Color("#3b2a17") * mod
+	var bed_l = Color("#6b5a2c") * mod
+	var cream = Color("#e8e0cb") * mod
+	var shade = Color("#aaa088") * mod
+	var lite = Color("#fffcef") * mod
+	ci.draw_set_transform(Vector2(cx, floor_y), 0.0, Vector2(1.0, 1.0))
+	# the bed: dark chewed pulp with olive leaf chips in it
+	_lump(ci, Vector2(0, -H * 0.1), W * 0.54, H * 0.2, INK, sd, 0.05, 20)
+	_lump(ci, Vector2(0, -H * 0.1), W * 0.5, H * 0.16, bed_d, sd + 1.0, 0.05, 20)
+	for i in 9:
+		var cxp = (_hash(sd + i * 3.1) - 0.5) * W * 0.8
+		var cyp = -H * 0.1 - _hash(sd + i * 5.3) * H * 0.1
+		ci.draw_set_transform(Vector2(cx + cxp, floor_y + cyp), _hash(sd + i) * PI, Vector2.ONE)
+		ci.draw_rect(Rect2(-3.2, -1.1, 6.4, 2.2), bed_l)
+	ci.draw_set_transform(Vector2(cx, floor_y), 0.0, Vector2(1.0, breathe))
+	# the fungus: a lumpy dome of wide soft lobes in two rows (tall behind, low in front), shaded underneath and lit from the upper right
+	var lobes := []
+	var n = 7
+	for i in n:
+		var u = (i + 0.5) / n
+		var env = pow(sin(PI * u), 0.6)
+		var hh = H * (0.42 + 0.58 * env) * (0.8 + 0.2 * _hash(sd + i * 2.3))
+		var lrx = W * (0.105 + 0.05 * _hash(sd + i * 4.7))
+		lobes.append([Vector2((u - 0.5) * W * 0.86 + (_hash(sd + i * 6.1) - 0.5) * W * 0.05, -H * 0.14 - hh * 0.42), lrx, hh * 0.46, abs(u - 0.5) + 1.0])
+	n = 8
+	for i in n:
+		var u2 = (i + 0.5) / n
+		var hh2 = H * (0.22 + 0.26 * pow(sin(PI * u2), 0.7)) * (0.75 + 0.25 * _hash(sd + 30.0 + i))
+		var lrx2 = W * (0.07 + 0.045 * _hash(sd + 40.0 + i * 4.7))
+		lobes.append([Vector2((u2 - 0.5) * W * 0.9 + (_hash(sd + 50.0 + i) - 0.5) * W * 0.04, -H * 0.1 - hh2 * 0.4), lrx2, hh2 * 0.44, abs(u2 - 0.5)])
+	lobes.sort_custom(self, "_lobe_far")
+	for L in lobes:
+		_lump(ci, L[0], L[1] + 2.2, L[2] + 2.2, INK, sd + L[0].x, 0.06, 18)
+	var k = 0
+	for L in lobes:
+		_lump(ci, L[0], L[1], L[2], shade, sd + k, 0.06, 18)
+		_lump(ci, L[0] + Vector2(L[1] * 0.1, -L[2] * 0.08), L[1] * 0.9, L[2] * 0.86, cream, sd + k + 0.5, 0.05, 18)
+		_lump(ci, L[0] + Vector2(L[1] * 0.3, -L[2] * 0.38), L[1] * 0.52, L[2] * 0.36, lite, sd + k + 0.9, 0.07, 12)
+		for q in 5:
+			var pa = TAU * _hash(sd + k * 5.0 + q)
+			var pr = _hash(sd + k * 7.0 + q * 3.0) * 0.7
+			ci.draw_circle(L[0] + Vector2(cos(pa) * L[1] * pr, sin(pa) * L[2] * pr), 0.8 + 0.8 * _hash(sd + k + q), Color(0.42, 0.37, 0.28, 0.4))
+		k += 1
+	# dark galleries where the ants work their way into the comb
+	for i in 3:
+		var gx = (_hash(sd + 70.0 + i) - 0.5) * W * 0.55
+		var gy = -H * (0.22 + 0.2 * _hash(sd + 80.0 + i))
+		_lump(ci, Vector2(gx, gy), W * 0.035, H * 0.07, Color(0.2, 0.15, 0.1, 0.9 * mod.a), sd + i, 0.1, 10)
+		ci.draw_arc(Vector2(gx, gy + H * 0.02), W * 0.035, 0.2, PI - 0.2, 8, Color(1, 1, 0.92, 0.55 * mod.a), 1.0, true)
+	# the food bulbs: tiny white spheres that gleam on the surface
+	for i in 9:
+		var Lb = lobes[int(_hash(sd + i * 9.7) * (lobes.size() - 0.01))]
+		var a = PI * (1.1 + 0.8 * _hash(sd + i * 2.9))
+		var bp = Lb[0] + Vector2(cos(a) * Lb[1] * 0.95, sin(a) * Lb[2] * 0.95)
+		var tw = 0.65 + 0.35 * sin(_t * 1.7 + i * 2.1)
+		ci.draw_circle(bp, 2.0, Color(1.0, 1.0, 0.94, 0.9 * mod.a))
+		ci.draw_circle(bp + Vector2(-0.5, -0.5), 0.8, Color(1, 1, 1, tw))
+	# mycelium threads fanning out over the floor
+	ci.draw_set_transform(Vector2(cx, floor_y), 0.0, Vector2.ONE)
+	for i in 8:
+		var side = -1.0 if i % 2 == 0 else 1.0
+		var x0 = side * W * (0.38 + 0.1 * _hash(sd + i))
+		var pts := PoolVector2Array()
+		for j in 5:
+			var uu = float(j) / 4.0
+			pts.append(Vector2(x0 + side * uu * W * (0.12 + 0.1 * _hash(sd + i * 2.0)), -H * 0.08 + sin(uu * 5.0 + sd + i) * 1.6 - uu * H * 0.05 * _hash(sd + i * 3.0)))
+		ci.draw_polyline(pts, Color(0.96, 0.95, 0.9, 0.55 * mod.a), 1.0, true)
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+func _lobe_far(a, b) -> bool:
+	return a[3] > b[3]
+
+
+# A soft lump: an ellipse whose edge wobbles a little, so nothing looks stamped.
+func _lump(ci: CanvasItem, c: Vector2, rx: float, ry: float, col: Color, seed_v: float, jag: float, segs: int) -> void:
+	var pts := PoolVector2Array()
+	for i in segs:
+		var a = TAU * i / segs
+		var k = 1.0 - jag + jag * 2.0 * _hash(seed_v * 12.9898 + i * 7.233)
+		pts.append(c + Vector2(cos(a) * rx * k, sin(a) * ry * k))
+	ci.draw_colored_polygon(pts, col)
 
 
 func _draw_pile(ci: CanvasItem, pile: Dictionary) -> void:

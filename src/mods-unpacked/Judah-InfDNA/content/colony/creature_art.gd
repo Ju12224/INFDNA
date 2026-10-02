@@ -198,17 +198,38 @@ static func bird(ci: CanvasItem, pos: Vector2, scale: float, t: float, facing: i
 		var ang = lerp(0.2 + 1.1 * flap, -0.55, fold) * (1.0 if near else 0.8)    # wing angle above horizontal
 		var sh = Vector2(8, -22) + Vector2(0, 0 if near else -4)
 		var tip = sh + Vector2(-26.0 - 10.0 * (1.0 - fold), -150.0 * sin(ang) * (1.0 - 0.45 * fold)) + Vector2(-60.0 * fold, 0)
-		var mid = sh + Vector2(-70.0, -70.0 * sin(ang))
-		var wing = PoolVector2Array([sh + Vector2(36, 0), sh + Vector2(10, -36.0 * sin(ang) - 10), mid + Vector2(10, -14), tip, tip + Vector2(-26, 10), mid + Vector2(-42, 22), sh + Vector2(-58, 14), sh + Vector2(-30, 24)])
+		var axis = tip - sh
+		var ad = axis.normalized()
+		var an = Vector2(-ad.y, ad.x)
+		if an.x > 0.0:
+			an = -an           # the trailing edge always sweeps back toward the tail
+		# leading edge shoulder -> tip, then back along the wider, tapering trailing edge: a simple outline in every pose
+		# (a hand-placed outline crossed itself when the wings dropped and the polygon was refused)
+		var us = [0.0, 0.3, 0.65, 1.0]
+		var fwd = [8.0, 10.0, 8.0, 2.0]
+		var chord = [62.0, 68.0, 48.0, 16.0]
+		var wing = PoolVector2Array()
+		for i in 4:
+			wing.append(sh + axis * us[i] - an * fwd[i])
+		for i in range(3, -1, -1):
+			var qb = sh + axis * us[i] + an * chord[i]
+			if i < 3 and i > 0:
+				wing.append(sh + axis * (us[i] + 0.1) + an * (chord[i] + 9.0))     # a feather tip along the trailing edge
+			wing.append(qb)
 		var wc = body if near else dark
-		ci.draw_colored_polygon(wing, ink)
-		var inner = PoolVector2Array()
-		var cen = (sh + tip) * 0.5
+		var cen = Vector2.ZERO
 		for q in wing:
-			inner.append(cen + (q - cen) * 0.93)
+			cen += q
+		cen /= wing.size()
+		var outer = PoolVector2Array()
+		var inner = PoolVector2Array()
+		for q in wing:
+			outer.append(cen + (q - cen) * 1.05)
+			inner.append(cen + (q - cen) * 0.94)
+		ci.draw_colored_polygon(outer, ink)
 		ci.draw_colored_polygon(inner, wc)
 		for k in 5:      # primary feathers
-			var u = 0.35 + 0.13 * k
-			var f0 = sh.linear_interpolate(tip, u)
-			ci.draw_line(f0, f0 + Vector2(-30, 22 - 4 * k), Color(0.2, 0.15, 0.12, alpha * 0.7), 2.2, true)
+			var u = 0.3 + 0.14 * k
+			var f0 = sh + axis * u + an * 12.0
+			ci.draw_line(f0, f0 + an * (38.0 - 3.0 * k) + ad * 5.0, Color(0.2, 0.15, 0.12, alpha * 0.7), 2.2, true)
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
