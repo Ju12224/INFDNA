@@ -20,6 +20,7 @@ const WeatherView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/wea
 const LightView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/light_view.gd")
 const SeasonView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/season_view.gd")
 const RivalView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/rival_view.gd")
+const Ambience = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ambience.gd")
 const Legacy = preload("res://mods-unpacked/Judah-InfDNA/core/legacy.gd")
 const DayCycle = preload("res://mods-unpacked/Judah-InfDNA/content/colony/day_cycle.gd")
 const WatchCam = preload("res://mods-unpacked/Judah-InfDNA/content/colony/watch_cam.gd")
@@ -35,6 +36,7 @@ var baker
 var world_view
 var ant_view
 var rival_view
+var ambience
 var enemy_view
 var layers_view
 var perf               # the optimizer (perf.gd): adaptive quality
@@ -57,7 +59,7 @@ var _watch_saved := {}
 var _shop_noted := false
 var armed := ""              # a command waiting for a click on the ground (rally, harvest)
 # view layers (HUD "Layers" panel and the P/C/F/T/H keys); see set_layer
-var layer_state := {"trails": true, "castes": true, "fights": true, "tasks": false, "health": false, "follow": false, "light": true}
+var layer_state := {"trails": true, "castes": true, "fights": true, "tasks": false, "health": false, "follow": false, "light": true, "sound": true}
 
 
 func _ready() -> void:
@@ -166,6 +168,12 @@ func _ready() -> void:
 	sfx = Sfx.new()
 	sfx.sim = sim
 	add_child(sfx)
+	ambience = Ambience.new()           # wind, birds, crickets, rain: synthesised, quiet, muted by the Sound layer (O)
+	ambience.sim = sim
+	ambience.cam = cam
+	ambience.day = day
+	ambience.ground = world_view.ground
+	add_child(ambience)
 
 	hud = Hud.new()
 	hud.scene = self
@@ -318,6 +326,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				toggle_layer("follow")
 			KEY_K:
 				toggle_layer("light")
+			KEY_O:
+				toggle_layer("sound")
 			KEY_L:
 				hud.toggle_evolution()
 
@@ -429,6 +439,9 @@ func set_layer(key: String, on: bool) -> void:
 			pass          # read in _process
 		"light":
 			day.locked = not on          # off = always midday
+		"sound":
+			if ambience != null:
+				ambience.set_enabled(on)
 		_:
 			layers_view.set_layer(key, on)
 	if hud != null:
