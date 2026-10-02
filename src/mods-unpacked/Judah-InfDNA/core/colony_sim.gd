@@ -130,6 +130,9 @@ class Raider:
 	var timer := 0.0
 	var flash := 0.0
 	var engaged := false
+	var chase_id := 0       # the ant it is going after, kept for a few hops so it does not zig-zag between neighbours
+	var chase_t := 0
+	var turn_t := 0         # hops before it may reverse again
 	var lane := 0.5
 	var dest := Vector2()   # burrowers: the cell they are boring toward
 	var spark := 0.0
@@ -2018,7 +2021,7 @@ func _enemy_arrive(e) -> void:
 	if e.cls == "prey":
 		var near = _nearest_surface_ant(e.x, 6)
 		if near != null:
-			e.heading = -1 if near.x > e.x else 1
+			_set_heading(e, -1 if near.x > e.x else 1)
 		elif rng.randf() < 0.04:
 			e.heading = -e.heading
 		if e.x <= grid.arena_l + 3 or e.x >= grid.arena_r - 3:
@@ -2036,8 +2039,11 @@ func _enemy_arrive(e) -> void:
 			else:
 				_go(e, Vector2(e.x, e.y))
 			return
-		var prey = _nearest_surface_ant(e.x, 6)
-		e.heading = _dir_to(e.x, prey.x if prey != null else ex)
+		var prey = _chase_target(e, 6)
+		if prey != null and abs(prey.x - e.x) <= 1:
+			_go(e, Vector2(e.x, e.y))        # on top of its target: stand and fight, do not shuffle back and forth
+			return
+		_set_heading(e, _dir_to(e.x, prey.x if prey != null else ex))
 		_walk_surface(e)
 		return
 
@@ -2049,18 +2055,29 @@ func _enemy_arrive(e) -> void:
 		e.state = 2
 		banner = "The %s retreats" % e.def["name"]
 		banner_t = 3.0
-	var prey = _nearest_surface_ant(e.x, 10 if e.state == 1 else 14)
+	var prey = _chase_target(e, 10 if e.state == 1 else 14)
 	var goal = ex
 	if prey != null:
 		goal = prey.x
 	elif e.state == 1:
 		goal = ex + rng.randi_range(-5, 5)
 	var d = _dir_to(e.x, goal)
-	if d == 0:
+	if d == 0 or (prey != null and abs(goal - e.x) <= 1):
 		_go(e, Vector2(e.x, e.y))
 		return
-	e.heading = d
+	_set_heading(e, d)
 	_walk_surface(e)
+
+
+# A raider reverses at most every few hops, so a runner weaving past it does not make it flip left and right
+# (hops are short, and the squash-turn would read as a shiver).
+func _set_heading(e, d: int) -> void:
+	if e.turn_t > 0:
+		e.turn_t -= 1
+	if d == 0 or d == e.heading or e.turn_t > 0:
+		return
+	e.heading = d
+	e.turn_t = 5
 
 
 # Borers: brief surface wind-up (ants can hit them), then bore a fresh tunnel toward
@@ -2107,6 +2124,23 @@ func _dir_to(from_x: int, to_x: int) -> int:
 	if to_x < from_x:
 		return -1
 	return 0
+
+
+# The ant a raider is chasing: the same one for ~12 hops (so a runner weaving among neighbours does not make the
+# raider flip left and right every hop), then the nearest again.
+func _chase_target(e, max_d: int):
+	if e.chase_t > 0:
+		e.chase_t -= 1
+		for a in ants:
+			if a.id == e.chase_id:
+				if not grid.is_under(a.x, a.y) and abs(a.x - e.x) <= max_d + 4:
+					return a
+				break
+	var t = _nearest_surface_ant(e.x, max_d)
+	if t != null:
+		e.chase_id = t.id
+		e.chase_t = 12
+	return t
 
 
 func _nearest_surface_ant(x: int, max_d: int):

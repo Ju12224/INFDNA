@@ -15,6 +15,11 @@ NOT playtested in Brotato.
   they stand and fight), and facing flipping on vertical steps up the mound and at the shaft mouth (now left/right follows the screen on
   open ground). Rapid direction flips per 5 sim-minutes: 3416 -> 455. Surface ants also tilt to a smoothed hill slope instead of the
   6 px stair steps of the grid (big rotation jumps 10392 -> 757).
+- **Raiders stopped shivering too.** Small raiders and siegers used to flip toward whichever ant was nearest every hop (runners weave
+  past them at 18 cells/s). They now keep chasing the same ant for ~12 hops, stand and fight when it is within a cell, and reverse at most
+  every 5 hops; fleeing prey does the same. Rapid raider direction flips per 10 sim-minutes: 110 -> ~0 for small raiders, 14 -> 0 for brutes.
+- **Run summary** on the collapse screen (time survived, raids, peak ants, generation, farthest forager, kills, food hauled, last dominant
+  body plan) and a best run per queen kept in `user://infdna_runs.json`.
 - **Lanes without shimmer.** An ant's drawn lane is smoothed over time (the sim's per-hop lane jitter never shows) and pulled onto the
   nest mouth's lane near the hole and the pile's lane at food, so nobody reaches into the hole from a different depth; fighters converge
   on their raider's lane faster. Big boulders no longer stand beside the nest and sit toward the back lanes (so does every giant tree),
