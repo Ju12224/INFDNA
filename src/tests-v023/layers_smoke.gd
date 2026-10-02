@@ -62,6 +62,27 @@ func _idle(_delta):
 		s.hud._layer_btns["fights"].pressed = true
 		_check(s.layer_state["fights"] and s.layers_view.show_fights, "HUD button turns Fights on")
 		s.cam.position = Vector2(sim.grid.entrance.x * 6.0 + 20000.0, 200.0)   # raiders now off screen: arrows get drawn
+	elif frames == 130:
+		# watch mode (V): HUD hidden, busy layers off, camera directed; leaving restores everything
+		var saved = s.layer_state.duplicate()
+		var bar_was = s.hud._bar_panel.visible
+		s.set_watch(true)
+		_check(s.watch_mode and s.watch.active, "watch mode on")
+		_check(not s.hud._bar_panel.visible and not s.hud._mm_panel.visible and not s.hud._left_col.visible, "watch mode hides the HUD panels")
+		_check(not s.layer_state["castes"] and not s.layer_state["tasks"] and not s.layer_state["health"], "watch mode switches the busy layers off")
+		for i in 40:
+			s.watch._process(0.5)
+		_check(s.watch._kind != "", "watch camera picked a shot (%s)" % s.watch._kind)
+		s.watch.note_input()
+		var cam_before = s.cam.position
+		s.watch._process(0.5)
+		_check(s.cam.position == cam_before, "manual input holds the camera")
+		s.set_watch(false)
+		var same = true
+		for k in saved:
+			if s.layer_state[k] != saved[k]:
+				same = false
+		_check(not s.watch_mode and same and s.hud._bar_panel.visible == bar_was, "leaving watch mode restores the layers and HUD")
 	elif frames == 140:
 		print("RESULT %d failed" % fails)
 		quit(1 if fails > 0 else 0)

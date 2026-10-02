@@ -112,10 +112,10 @@ func _ready() -> void:
 	_f_l = Kit.font(34, 3)
 	_f_xl = Kit.font(52, 4)
 	root = Control.new()
-	root.anchor_right = 1.0
-	root.anchor_bottom = 1.0
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
+	_fit_root()
+	get_viewport().connect("size_changed", self, "_fit_root")
 
 	_vig = Control.new()
 	_vig.anchor_right = 1.0
@@ -138,6 +138,20 @@ func _ready() -> void:
 	Kit.slide_in(_left_col, Vector2(-60, 0), 0.15)
 	Kit.slide_margins(_lineage_panel, Vector2(60, 0), 0.25)
 	Kit.slide_margins(_bar_panel, Vector2(0, 70), 0.3)
+
+
+# The layout is built for a 1920x1080 view. On a smaller window the whole HUD is scaled down to the same
+# proportions instead of overlapping itself (panels, lever bar and layer buttons are fixed-size).
+func _fit_root() -> void:
+	var vs = get_viewport().get_visible_rect().size
+	var k = clamp(vs.y / 1080.0, 0.5, 1.0)
+	root.anchor_left = 0.0
+	root.anchor_top = 0.0
+	root.anchor_right = 0.0
+	root.anchor_bottom = 0.0
+	root.rect_position = Vector2.ZERO
+	root.rect_size = vs / k
+	root.rect_scale = Vector2(k, k)
 
 
 # ================================================================== build: left column
@@ -771,7 +785,7 @@ func _refresh_stats(sim) -> void:
 	var tc = sim.task_counts()
 	var av = sim.average_traits()
 	_name.text = sim.queen_def["name"]
-	_sub.text = "Day %d   ·   Generation %d" % [sim.day, sim.max_gen]
+	_sub.text = "Day %d   ·   Generation %d   ·   %s" % [sim.day, sim.max_gen, scene.day.label().capitalize()]
 	_food_bar.set_values(sim.food, sim.food_cap)
 	var note := ""
 	if sim.rot_rate > 0.05:
@@ -1326,7 +1340,7 @@ func _refresh_watch_info(sim) -> void:
 	var gen := 0
 	for a in sim.ants:
 		gen = int(max(gen, a.gen))
-	_watch_info.text = "%d ants   ·   gen %d   ·   day %d %s   ·   %s" % [sim.ants.size(), gen, scene.day.day_n, scene.day.label(),
+	_watch_info.text = "%d ants   ·   gen %d   ·   %s   ·   %s" % [sim.ants.size(), gen, scene.day.label(),
 		("raid %d" % sim.raid_n) if sim.raid_n > 0 else "calm"]
 
 
