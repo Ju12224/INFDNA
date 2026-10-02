@@ -109,7 +109,8 @@ All seeds survive 25 minutes (raid 14+), but population follows a boom-and-bust 
 (3-30 ants) around minute 14-18, recovery after. Upkeep of ~150 ants (~3.4 food/s) exceeds the forage income (~2.5-3 food/s), so the
 colony overshoots on its stockpile (the queen lays 3x faster above 150 spare food) and then starves out while the old cohort ages away
 (ant life ~270 s). Tried without effect: a wider lifespan spread, a lower food-frontier cap, 1.4x richer piles. What helped: recruitment of
-foragers to piles nestmates already found (stops the far-frontier starvation, no more outright collapses). Still open, in order of
+foragers to piles nestmates already found (stops the far-frontier starvation, no more outright collapses). Done after that: fast laying only below 90 ants (peaks now ~100,
+troughs mostly 30-60, one seed in four still dips to ~2 around raid 6), and a defender cap by threat. Still open, in order of
 likely payoff: (1) an income-aware cap on laying (allowed ants ~ income / 0.042), (2) fewer defenders per raider (92 of 166 ants
 defended against 7 raiders at raid 4: the reserve rule keeps only ~15% foraging), (3) cheaper brood late. Use `bal.gd` with MINS=25 and
 SEED=11,22,33,66,77,88; results are deterministic per seed, so A/B a change on the same seeds.

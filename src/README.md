@@ -21,6 +21,12 @@ NOT playtested in Brotato.
   starved to a handful (one seed in seven died outright at raid 8). Foragers setting out are now often told (recruitment) about a pile
   a nestmate already found and that still holds food, nearer ones likelier. 8 seeds x 25 minutes: all survive (before: 6 of 7), peak
   pop 140-174 (was ~120), and the mid-game crash is shallower. Also: new piles spawn near again if the colony has dwindled.
+- **Smoother population (boom and bust tamed).** The same probe showed the colony peaking near 165 ants on its stockpile and then
+  starving down to a handful (the queen laid 3x faster above 150 spare food, and every ant costs upkeep for life). The fast-laying
+  bonus now applies only while the colony has fewer than 90 ants, and non-soldiers stop leaving the food runs for a raid once ~6 + 5 per
+  threat point are already defending (a raid of 7 small raiders used to pull 92 of 166 ants off the food, and into a blob). 4 seeds x 25
+  minutes: population holds 60-100 instead of swinging 165 -> 3, no collapses; the cost is a lower peak (~100). Goals above 100 ants still
+  need real income (Lab, farms).
 - **Raiders stopped shivering too.** Small raiders and siegers used to flip toward whichever ant was nearest every hop (runners weave
   past them at 18 cells/s). They now keep chasing the same ant for ~12 hops, stand and fight when it is within a cell, and reverse at most
   every 5 hops; fleeing prey does the same. Rapid raider direction flips per 10 sim-minutes: 110 -> ~0 for small raiders, 14 -> 0 for brutes.

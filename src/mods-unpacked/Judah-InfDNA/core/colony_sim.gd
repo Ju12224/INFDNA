@@ -39,6 +39,7 @@ const RANGE_GROW = 1.7           # radius multiplier after each empty-handed tri
 const RANGE_MAX = 1500           # farthest a trip may reach (cells; 1 cell = 6 px, an ant is ~7 cells long)
 const SURFACE_K = 3.0            # ants run this much faster over open ground than their tunnel speed (v0.23: long expeditions)
 const LEG_MEAN = 70.0            # mean length of a straight scouting leg (cells)
+const DEFEND_WEIGHT = {"small": 0.5, "burrower": 1.0, "brute": 2.0, "elite": 4.0, "boss": 8.0}
 const PHER_TAU = 50.0            # trail half-life scale (s): long routes need trails that last
 const TRAIL_BOOST = 0.25         # ants run up to 25% faster on a well-used trail
 const FIRST_RAID = 180.0
@@ -216,6 +217,7 @@ var queen_flash := 0.0           # >0 while the queen is being hurt (view + HUD)
 var queen_hits := 0              # raids that have hurt the queen (stats)
 var _queen_warned := 0.0
 var _next_enemy_id := 1
+var _defender_cap := 1000
 var _stim_defend := 0.0
 # shop / Evolution Lab
 var owned := {}
@@ -743,6 +745,12 @@ func _update_stimuli() -> void:
 	var capacity = max(1.0, grid.open_under / 22.0)
 	_stim_dig = clamp(n / capacity - 0.55, 0.0, 1.2)
 	_stim_defend = 0.0
+	# how many non-soldiers a raid is worth: a handful of small raiders does not need half the colony off the food runs
+	var threat := 0.0
+	for e0 in enemies:
+		if e0.cls != "prey" and e0.state != 2:
+			threat += DEFEND_WEIGHT.get(e0.cls, 1.0)
+	_defender_cap = 6 + int(5.0 * threat)
 	var hostiles = hostile_count()
 	_inside_n = 0
 	if hostiles > 0:
@@ -804,6 +812,8 @@ func _choose_task(a) -> void:
 			var share = FORAGER_RESERVE_LOW if food < _food_target * 0.25 else FORAGER_RESERVE
 			reserve = max(3, int(ants.size() * share))
 			keep = a.caste != 2 and _n_foragers < reserve and queen_hp >= queen_max * 0.5
+		if not keep and a.caste != 2 and _inside_n == 0 and a.task != Task.DEFEND and _n_defenders >= _defender_cap:
+			keep = true          # enough ants are already on it; this one stays on the food
 		if not keep:
 			if a.task != Task.DEFEND:
 				_n_defenders += 1
@@ -1469,10 +1479,13 @@ func _step_queen(dt: float) -> void:
 	var interval = [9.0, 5.0, 2.5][brood]
 	var reserve = [30.0, 14.0, 5.0][brood] + min(ants.size(), 60) * [0.8, 0.4, 0.15][brood]   # v0.22: size term capped, big colonies kept laying too rarely
 	var surplus = food - reserve
-	if surplus > 150.0:
-		interval *= 0.35
-	elif surplus > 60.0:
-		interval *= 0.55
+	# a stockpile is turned into ants quickly only while the colony is small: every ant costs upkeep for life, and
+	# burning a big stockpile into a big cohort is what made the population boom and then starve out
+	if ants.size() < 90:
+		if surplus > 150.0:
+			interval *= 0.35
+		elif surplus > 60.0:
+			interval *= 0.55
 	_lay_timer -= dt
 	if _lay_timer > 0.0:
 		return
