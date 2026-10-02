@@ -1163,13 +1163,13 @@ func _search(a, ex: int, off: int) -> bool:
 		a.leg -= 1
 		if a.leg <= 0:          # short sweeps, not a coin flip every hop: the ant visibly casts about instead of vibrating
 			a.heading = -a.heading
-			a.leg = rng.randi_range(5, 9)
+			a.leg = rng.randi_range(14, 24)
 		return false
 	if a.site != NO_SITE:
 		if abs(a.site - a.x) <= 2:
 			a.site = NO_SITE         # got there: the pile is gone, circle the spot
-			a.local_t = 14
-			a.leg = rng.randi_range(4, 8)
+			a.local_t = 40
+			a.leg = rng.randi_range(10, 18)
 		else:
 			a.heading = 1 if a.site > a.x else -1
 		return false
@@ -1390,6 +1390,8 @@ func _nurse(a) -> void:
 			return
 	var nb := []
 	for c in grid.neighbors(a.x, a.y, a.z):
+		if grid.is_surface_cell(int(c.x), int(c.y)):
+			continue          # nurses shuffle about inside the nest, not out on the grass beside the hole
 		var d = grid.field(grid.dist_home, int(c.x), int(c.y), a.z)
 		if d >= 0 and d <= 8:
 			nb.append(c)
