@@ -108,7 +108,7 @@ a throne room that upgrades the queen, workshops visibly staffed by ants.
 All seeds survive 25 minutes (raid 14+), but population follows a boom-and-bust cycle: peak 130-170 ants at minute 8-10, trough
 (3-30 ants) around minute 14-18, recovery after. Upkeep of ~150 ants (~3.4 food/s) exceeds the forage income (~2.5-3 food/s), so the
 colony overshoots on its stockpile (the queen lays 3x faster above 150 spare food) and then starves out while the old cohort ages away
-(ant life ~270 s). Tried without effect: a wider lifespan spread, a lower food-frontier cap, 1.4x richer piles. What helped: recruitment of
+(ant life ~270 s). Tried without effect: a wider lifespan spread, 1.4x richer piles, small "scrap" piles near the nest plus a colony-size-scaled frontier (made two seeds worse). Kept: the food frontier (minimum distance of new piles) now stops growing at 480 cells (20% of piles still spawn out to 1440). What helped: recruitment of
 foragers to piles nestmates already found (stops the far-frontier starvation, no more outright collapses). Done after that: fast laying only below 90 ants (peaks now ~100,
 troughs mostly 30-60, one seed in four still dips to ~2 around raid 6), and a defender cap by threat. Still open, in order of
 likely payoff: (1) an income-aware cap on laying (allowed ants ~ income / 0.042), (2) fewer defenders per raider (92 of 166 ants
