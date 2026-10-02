@@ -106,6 +106,7 @@ class Ant:
 	var empty_trips := 0
 	var leg := 0             # cells left in the current straight scouting leg
 	var local_t := 0         # hops of tight area-restricted search around a lost site
+	var flee := 0            # hops left of running from a raider (so a threat edge does not make it dither)
 	var far := 0             # farthest distance from the nest this trip
 	var rich := 0.5          # fullness of the pile it loaded from (trail strength)
 	var jack := false        # carrying jackpot food
@@ -885,10 +886,13 @@ func _step_ant(a, dt: float) -> void:
 	var rk = a.tx * 7919 + a.ty * 31 + a.tz
 	if rk != a.rot_key:
 		a.rot_key = rk
-		var n = grid.ground_normal(a.tx, a.ty, a.tz)
-		a.trot = atan2(-n.x, n.y)
-		if grid.is_solid(a.tx, a.ty + 1, a.tz) or grid.is_solid(a.x, a.y + 1, a.z):
-			a.trot = clamp(a.trot, -1.1, 1.1)
+		if grid.is_surface_cell(a.tx, a.ty):
+			a.trot = grid.surface_tilt(a.tx)      # open ground: follow the smoothed hill, not the 6 px stair steps
+		else:
+			var n = grid.ground_normal(a.tx, a.ty, a.tz)
+			a.trot = atan2(-n.x, n.y)
+			if grid.is_solid(a.tx, a.ty + 1, a.tz) or grid.is_solid(a.x, a.y + 1, a.z):
+				a.trot = clamp(a.trot, -1.1, 1.1)
 	a.rot = lerp_angle(a.rot, a.trot, clamp(dt * 8.0, 0.0, 1.0))
 
 	if a.dig_timer > 0.0:
@@ -923,6 +927,10 @@ func _step_ant(a, dt: float) -> void:
 			var move = Vector2(a.tx - a.x, a.ty - a.y)
 			var tangent = Vector2(cos(a.rot), sin(a.rot))
 			var d = move.dot(tangent)
+			if grid.is_surface_cell(a.x, a.y):
+				d = move.x       # open ground: left/right is simply the screen direction, and a vertical step (hill, shaft mouth) keeps facing
+			elif move.x == 0.0 and abs(tangent.y) < 0.7:
+				d = 0.0          # a plain vertical step on near-level ground must not turn the ant round
 			if abs(d) > 0.1:
 				a.facing = 1 if d > 0 else -1
 		if (moved or a.tz != a.z) and a.dig_timer <= 0.0:
@@ -1048,10 +1056,16 @@ func _forage(a) -> void:
 	if abs(off) > a.far:
 		a.far = abs(off)
 
-	# on the surface: run from nearby raiders
+	# on the surface: run from nearby raiders, and keep running for a few hops after (hops are 1/18 s, so
+	# re-deciding at the edge of the danger zone made ants flip back and forth in front of the raider)
+	if a.flee > 0:
+		a.flee -= 1
+		_walk_surface(a)
+		return
 	var threat = _nearest_surface_enemy(a.x, 5)
 	if threat != null:
 		a.heading = -1 if threat.x > a.x else 1
+		a.flee = 10
 		_walk_surface(a)
 		return
 	# food in reach?
@@ -1087,6 +1101,8 @@ func _forage(a) -> void:
 			nearest = {"x": e.x}
 			nd = abs(e.x - a.x)
 	if nearest != null:
+		if nd <= 1:
+			return          # on top of it: stand and fight (the combat step is range-based) instead of stepping back and forth
 		a.heading = 1 if nearest["x"] > a.x else -1
 		a.leg = 0
 		a.local_t = 0
@@ -1101,13 +1117,16 @@ func _forage(a) -> void:
 func _search(a, ex: int, off: int) -> bool:
 	if a.local_t > 0:
 		a.local_t -= 1
-		if rng.randf() < 0.14:
+		a.leg -= 1
+		if a.leg <= 0:          # short sweeps, not a coin flip every hop: the ant visibly casts about instead of vibrating
 			a.heading = -a.heading
+			a.leg = rng.randi_range(5, 9)
 		return false
 	if a.site != NO_SITE:
 		if abs(a.site - a.x) <= 2:
 			a.site = NO_SITE         # got there: the pile is gone, circle the spot
 			a.local_t = 14
+			a.leg = rng.randi_range(4, 8)
 		else:
 			a.heading = 1 if a.site > a.x else -1
 		return false

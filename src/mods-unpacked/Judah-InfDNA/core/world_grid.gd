@@ -199,6 +199,13 @@ func surf_y(x: int) -> int:
 	return base_y(x) - _mound.get(x, 0)
 
 
+# Tilt (radians, + = downhill to the right) of the open ground at column x, averaged over a few cells so
+# the 6 px steps of the height map do not make a walker rock back and forth.
+func surface_tilt(x: int) -> float:
+	var dy = float(surf_y(x + 4) - surf_y(x - 4))
+	return clamp(atan2(dy, 8.0), -0.9, 0.9)
+
+
 func mound_h(x: int) -> int:
 	return _mound.get(x, 0)
 
