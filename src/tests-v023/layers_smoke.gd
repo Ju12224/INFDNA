@@ -271,6 +271,36 @@ func _idle(_delta):
 				from_rival += 1
 		_check(sim._raid_rival and from_rival > 0, "every third raid marches out of the rival's mound")
 		sim.raid_queue.clear()
+		# fungus gardens: mould that nurses weed out (the antibiotic item helps), and a garden that matures
+		var farm = null
+		for c in sim.planner.chambers:
+			if c["purpose"] == "farm":
+				farm = c
+				break
+		if farm != null:
+			var fk = sim.farm_key(farm)
+			var nfarms = sim.planner.count("farm")
+			sim.farm_born[fk] = sim.time - 400.0
+			sim.farm_mold[fk] = 0.5
+			var h_moldy = sim._step_gardens(0.1, nfarms)
+			sim.farm_mold.erase(fk)
+			var h_clean = sim._step_gardens(0.1, nfarms)
+			_check(h_moldy < h_clean, "a mouldy garden gives less")
+			sim.farm_mold[fk] = 0.5
+			sim._step_gardens(5.0, 0)
+			_check(sim.mold_of(farm) > 0.5, "an unattended garden is overgrown")
+			sim.farm_mold[fk] = 0.5
+			sim._step_gardens(5.0, nfarms * 3)
+			_check(sim.mold_of(farm) < 0.5, "nurses weed the mould out")
+			sim.farm_mold[fk] = 0.5
+			sim._step_gardens(5.0, nfarms)
+			var thin = sim.mold_of(farm)
+			sim.mods["mold_resist"] = 1.0
+			sim.farm_mold[fk] = 0.5
+			sim._step_gardens(5.0, nfarms)
+			_check(thin > 0.5 and sim.mold_of(farm) < 0.5, "the antibiotic glands turn a losing fight into a won one")
+			sim.mods.erase("mold_resist")
+			sim.farm_mold.clear()
 	elif frames == 130:
 		# watch mode (V): HUD hidden, busy layers off, camera directed; leaving restores everything
 		sim.strain_events.append({"uid": sim.ants[0].genome.uid, "text": "test strain", "t": sim.time})

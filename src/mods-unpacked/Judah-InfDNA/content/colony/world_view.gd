@@ -388,12 +388,29 @@ func _trail_beads(ci: CanvasItem, xa: int, xb: int, z: float) -> void:
 			bx += gap
 
 
+# A warning sign above every fungus garden the mould has reached (drawn above the dirt, so it shows even when the room is small).
+func _draw_mold_warnings(ci: CanvasItem) -> void:
+	if sim.farm_mold.empty():
+		return
+	var C = sim.grid.CELL
+	var pulse = 0.65 + 0.35 * sin(_t * 6.0)
+	for c in sim.planner.chambers:
+		if c["purpose"] != "farm" or c.get("z", 0) != 0 or sim.mold_of(c) < 0.2:
+			continue
+		var wp = Vector2((c["center"].x + 0.5) * C, (c["center"].y - c["ry"]) * C - 22.0)
+		ci.draw_colored_polygon(PoolVector2Array([wp + Vector2(-13.0, 10.0), wp + Vector2(13.0, 10.0), wp + Vector2(0.0, -15.0)]), Color(INK.r, INK.g, INK.b, pulse))
+		ci.draw_colored_polygon(PoolVector2Array([wp + Vector2(-9.5, 7.0), wp + Vector2(9.5, 7.0), wp + Vector2(0.0, -10.0)]), Color(0.96, 0.78, 0.2, pulse))
+		ci.draw_rect(Rect2(wp.x - 1.2, wp.y - 5.0, 2.4, 8.0), INK)
+		ci.draw_rect(Rect2(wp.x - 1.2, wp.y + 4.0, 2.4, 2.4), INK)
+
+
 # Drawn above the dirt by the Overlay child (see colony_scene.gd).
 func draw_overlay(ci: CanvasItem) -> void:
 	var g = sim.grid
 	var C = g.CELL
 	if show_trails:
 		_draw_trails(ci)
+	_draw_mold_warnings(ci)
 	_draw_back_rooms(ci)
 	# food piles
 	for pile in sim.piles:
@@ -564,7 +581,10 @@ func _draw_chamber(ci: CanvasItem, c: Dictionary, mod: Color = Color.white) -> v
 func _draw_fungus(ci: CanvasItem, c: Dictionary, mod: Color, cx: float, floor_y: float) -> void:
 	var C = sim.grid.CELL
 	var W = c["rx"] * C * 1.55
-	var H = clamp(c["ry"] * C * 0.9, 14.0, 64.0)
+	# the garden grows after its room is dug: spores and white threads, then small fluffy lobes, then the mature sponge
+	var grow = 0.28 + 0.72 * smoothstep(0.0, 1.0, clamp(sim.farm_age(c) / 150.0, 0.0, 1.0))
+	var mold = sim.mold_of(c)
+	var H = clamp(c["ry"] * C * 0.9, 14.0, 64.0) * (0.45 + 0.55 * grow)
 	var sd = c["center"].x * 0.37 + c["center"].y * 0.11
 	var breathe = 1.0 + 0.012 * sin(_t * 0.9 + sd)
 	var bed_d = Color("#3b2a17") * mod
@@ -586,6 +606,8 @@ func _draw_fungus(ci: CanvasItem, c: Dictionary, mod: Color, cx: float, floor_y:
 	var lobes := []
 	var n = 7
 	for i in n:
+		if _hash(sd + i * 7.7) > grow + 0.3:
+			continue
 		var u = (i + 0.5) / n
 		var env = pow(sin(PI * u), 0.6)
 		var hh = H * (0.42 + 0.58 * env) * (0.8 + 0.2 * _hash(sd + i * 2.3))
@@ -593,6 +615,8 @@ func _draw_fungus(ci: CanvasItem, c: Dictionary, mod: Color, cx: float, floor_y:
 		lobes.append([Vector2((u - 0.5) * W * 0.86 + (_hash(sd + i * 6.1) - 0.5) * W * 0.05, -H * 0.14 - hh * 0.42), lrx, hh * 0.46, abs(u - 0.5) + 1.0])
 	n = 8
 	for i in n:
+		if _hash(sd + i * 5.9 + 3.0) > grow + 0.3:
+			continue
 		var u2 = (i + 0.5) / n
 		var hh2 = H * (0.22 + 0.26 * pow(sin(PI * u2), 0.7)) * (0.75 + 0.25 * _hash(sd + 30.0 + i))
 		var lrx2 = W * (0.07 + 0.045 * _hash(sd + 40.0 + i * 4.7))
@@ -616,8 +640,19 @@ func _draw_fungus(ci: CanvasItem, c: Dictionary, mod: Color, cx: float, floor_y:
 		var gy = -H * (0.22 + 0.2 * _hash(sd + 80.0 + i))
 		_lump(ci, Vector2(gx, gy), W * 0.035, H * 0.07, Color(0.2, 0.15, 0.1, 0.9 * mod.a), sd + i, 0.1, 10)
 		ci.draw_arc(Vector2(gx, gy + H * 0.02), W * 0.035, 0.2, PI - 0.2, 8, Color(1, 1, 0.92, 0.55 * mod.a), 1.0, true)
+	# mould: a rival fungus, grey-green and fuzzy, creeping over the lobes
+	if mold > 0.0:
+		var j = 0
+		for L in lobes:
+			if _hash(sd + j * 3.3 + 1.0) < mold * 1.4:
+				var mr = 0.35 + 0.5 * mold
+				_lump(ci, L[0] + Vector2(L[1] * 0.1, -L[2] * 0.15), L[1] * mr, L[2] * mr * 0.8, Color(0.34, 0.5, 0.3, 0.9 * mod.a), sd + j + 5.0, 0.2, 12)
+				_lump(ci, L[0] + Vector2(-L[1] * 0.1, -L[2] * 0.05), L[1] * mr * 0.55, L[2] * mr * 0.45, Color(0.2, 0.33, 0.22, 0.85 * mod.a), sd + j + 6.0, 0.25, 10)
+				for q in 3:
+					ci.draw_circle(L[0] + Vector2((_hash(sd + j + q) - 0.5) * L[1], -L[2] * 0.2 - _hash(sd + j * 2.0 + q) * L[2] * 0.4), 1.2, Color(0.55, 0.75, 0.4, 0.9 * mod.a))
+			j += 1
 	# the food bulbs: tiny white spheres that gleam on the surface
-	for i in 9:
+	for i in (9 if grow > 0.7 else 0):
 		var Lb = lobes[int(_hash(sd + i * 9.7) * (lobes.size() - 0.01))]
 		var a = PI * (1.1 + 0.8 * _hash(sd + i * 2.9))
 		var bp = Lb[0] + Vector2(cos(a) * Lb[1] * 0.95, sin(a) * Lb[2] * 0.95)

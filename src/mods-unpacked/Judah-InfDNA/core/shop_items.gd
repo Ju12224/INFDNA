@@ -14,6 +14,7 @@ extends Reference
 #            tunnel_dmg interest price_disc reroll_disc corpse_food kill_food raid_size
 #            the director's: will_regen (+x = +x*100%) will_max (+flat) cmd_cd cmd_cost (multipliers, -x = x*100% less)
 #            rally_power harvest_power surge_power (+x = +x*100% longer, a little stronger) breed_power (+eggs) bird_ward
+#            mold_resist (fungus garden mould is rarer and cleared faster)
 # Tiers follow Brotato: 1 common, 2 uncommon, 3 rare, 4 legendary.
 
 const ICON = "res://items/all/%s/%s_icon.png"
@@ -85,6 +86,7 @@ const ITEMS = {
 	"adrenal": {"name": "Adrenal Glands", "icon": "injection", "tier": 2, "price": 45, "desc": "Surge lasts 50% longer and runs 15% faster.", "mods": {"surge_power": 0.5}, "max": 2},
 	"studbook": {"name": "Stud Book", "icon": "pile_of_books", "tier": 2, "price": 50, "desc": "Breed steers 4 more eggs.", "mods": {"breed_power": 4.0}, "max": 2},
 	"hivevoice": {"name": "Hive Voice", "icon": "triangle_of_power", "tier": 4, "price": 150, "desc": "The colony hangs on your word: +50% Will regeneration, commands recharge 20% faster, +30 Will.", "mods": {"will_regen": 0.5, "cmd_cd": -0.2, "will_max": 30.0}, "max": 1},
+	"metapleural": {"name": "Metapleural Glands", "icon": "medikit", "tier": 2, "price": 45, "desc": "The antibiotic glands real ants carry: mould in the fungus gardens is rarer and gets weeded out faster.", "mods": {"mold_resist": 1.0}, "max": 2},
 	# ---- defenses
 	"barricade": {"name": "Thorn Barricade", "icon": "barricade", "tier": 2, "price": 50, "desc": "Raiders sieging the entrance take 4 damage per second.", "mods": {"siege_dmg": 4.0}},
 	"landmines": {"name": "Tunnel Traps", "icon": "landmines", "tier": 2, "price": 50, "desc": "Raiders inside the tunnels take 5 damage per second.", "mods": {"tunnel_dmg": 5.0}},

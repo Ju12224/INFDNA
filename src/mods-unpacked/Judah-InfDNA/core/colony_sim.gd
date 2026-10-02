@@ -3237,8 +3237,11 @@ func _step_economy(dt: float) -> void:
 		if a.task == Task.NURSE:
 			nurses += 1
 	var farms = planner.count("farm")
-	# fungus farms ferment scraps (and part of what rots) back into food
-	farm_rate = farms * 0.14 * float(rule("farm_boost", 1.0)) * (0.5 + 0.5 * min(1.0, nurses / max(1.0, farms * 3.0))) + rot_rate * (0.4 if farms > 0 else 0.0)
+	# fungus farms ferment scraps (and part of what rots) back into food; a mouldy garden gives much less
+	var healthy := float(farms)
+	if farms > 0:
+		healthy = _step_gardens(dt, nurses)
+	farm_rate = healthy * 0.14 * float(rule("farm_boost", 1.0)) * (0.5 + 0.5 * min(1.0, nurses / max(1.0, farms * 3.0))) + rot_rate * (0.4 if farms > 0 else 0.0)
 	food += farm_rate * dt
 	ledger["farm"] += farm_rate * dt
 	_sync_trees(dt)
@@ -3248,6 +3251,63 @@ func _step_economy(dt: float) -> void:
 		if tr["t"] <= 0.0:
 			tr["t"] = rng.randf_range(22.0, 34.0)       # the giant fruit trees are the landscape's oases (a few feed a small colony; a big one must range)
 			_drop_fruit(tr["x"])
+
+
+# ---- Fungus gardens, the way leafcutters really keep them: the garden grows in stages after the room is dug (spores, then white
+# hyphae, then the mature sponge with its food bulbs), and a rival fungus (mould) now and then gets into one. Nurses weed it out
+# (more nurses per garden, faster); a neglected garden is overgrown and gives little. The Metapleural Glands item (the antibiotic
+# gland real ants carry) makes outbreaks rarer and the weeding quicker.
+var farm_born := {}                # garden key -> the time its room was first seen
+var farm_mold := {}                # garden key -> 0..1, how much of the garden the mould holds
+var mold_events := 0
+var _mold_timer := 240.0
+
+
+func farm_key(c) -> int:
+	return int(c["center"].x) * 1000 + int(c["center"].y)
+
+
+func farm_age(c) -> float:
+	return time - float(farm_born.get(farm_key(c), time))
+
+
+func mold_of(c) -> float:
+	return float(farm_mold.get(farm_key(c), 0.0))
+
+
+# Returns the number of gardens' worth of healthy fungus.
+func _step_gardens(dt: float, nurses: int) -> float:
+	var list := []
+	for c in planner.chambers:
+		if c["purpose"] == "farm":
+			list.append(c)
+			if not farm_born.has(farm_key(c)):
+				farm_born[farm_key(c)] = time
+	if list.empty():
+		return 0.0
+	_mold_timer -= dt
+	if _mold_timer <= 0.0:
+		_mold_timer = rng.randf_range(200.0, 360.0) * (1.0 + 0.8 * mod("mold_resist"))
+		var pick = list[rng.randi_range(0, list.size() - 1)]
+		if mold_of(pick) <= 0.0 and farm_age(pick) > 60.0:
+			farm_mold[farm_key(pick)] = 0.12
+			mold_events += 1
+			toasts.append({"text": "Mould in a fungus garden! The nurses will weed it out (more nurses, faster).", "t": 6.0})
+	var care = min(3.0, nurses / float(list.size()))             # nurses per garden
+	var healthy := 0.0
+	for c in list:
+		var k = farm_key(c)
+		var m = float(farm_mold.get(k, 0.0))
+		if m > 0.0:
+			m = clamp(m + dt * (0.018 - 0.014 * care * (1.0 + mod("mold_resist"))), 0.0, 1.0)
+			if m <= 0.0:
+				farm_mold.erase(k)
+				toasts.append({"text": "The garden is clean again.", "t": 4.0})
+			else:
+				farm_mold[k] = m
+		var grown = clamp(farm_age(c) / 150.0, 0.25, 1.0)        # a young garden gives less
+		healthy += grown * (1.0 - 0.8 * m)
+	return healthy
 
 
 # The giant trees of the landscape (world_features.gd) are the fruit sources, everywhere out to RANGE_MAX.

@@ -978,6 +978,8 @@ func _refresh_stats(sim) -> void:
 		note += "rotting -%.1f/s   " % sim.rot_rate
 	if sim.farm_rate > 0.05:
 		note += "farms +%.1f/s" % sim.farm_rate
+	if not sim.farm_mold.empty():
+		note += "   mould!"
 	_food_note.text = note
 	_food_note.add_color_override("font_color", Color("#ff8a7a") if sim.rot_rate > 0.05 else Kit.GREEN)
 	_queen_bar.set_values(sim.queen_hp, sim.queen_max)
