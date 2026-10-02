@@ -22,6 +22,7 @@ const Queens = preload("res://mods-unpacked/Judah-InfDNA/core/queens.gd")
 const WF = preload("res://mods-unpacked/Judah-InfDNA/core/world_features.gd")
 const Seasons = preload("res://mods-unpacked/Judah-InfDNA/core/seasons.gd")
 const Legacy = preload("res://mods-unpacked/Judah-InfDNA/core/legacy.gd")
+const Rival = preload("res://mods-unpacked/Judah-InfDNA/core/rival.gd")
 
 enum Task { NURSE, FORAGE, DIG, HOME, DEFEND }
 enum Focus { FORAGE, BALANCED, DIG, DEFEND }
@@ -149,6 +150,8 @@ class Raider:
 	var tz := 0
 	var slow_t := 0.0      # webbed: moves slower
 	var stun_t := 0.0      # snared: cannot move or bite
+	var tongue_cd := 2.0   # anteater: seconds to its next lick
+	var guard_x := 0       # a rival's guard: the column of the mound it defends (0 = an ordinary raider)
 
 
 var grid
@@ -202,7 +205,7 @@ var queen_hp := QUEEN_HP
 var queen_max := QUEEN_HP
 var kills := 0
 var died_combat := 0
-var deaths := {"old": 0, "starve": 0, "combat": 0, "bird": 0, "other": 0}   # by cause (harness/HUD)
+var deaths := {"old": 0, "starve": 0, "combat": 0, "bird": 0, "anteater": 0, "other": 0}   # by cause (harness/HUD)
 var dist_threat := PoolIntArray()
 var fx: Array = []               # view effects: {"kind", "pos", "text", "color", "t"}
 var _threat_timer := 0.0
@@ -303,11 +306,16 @@ const COMMANDS = {
 		"tip": "Surface ants run 45% faster for 10 s"},
 	"breed": {"name": "Breed", "cost": 40.0, "cd": 45.0, "key": "M", "target": false,
 		"tip": "The next 8 eggs are bred from the selected ant (or mutate hard if none) - steer evolution"},
+	"strike": {"name": "Strike", "cost": 35.0, "cd": 75.0, "key": "Y", "target": false,
+		"tip": "Send a strike party (soldiers first, half the colony) to the rival nest: beat its guards, then storm the mound for its food and five quiet minutes. Needs the nest found"},
 }
 var will := 50.0
 var cmd_cd := {}                  # command id -> seconds left
 var rally_x := 0
 var rally_t := 0.0
+var strike_t := 0.0               # a strike party is out (the rally flag is planted at the rival's mound)
+var rival                         # rival.gd: the neighbouring colony
+var _raid_rival := false          # the raid now in progress is the rival's
 var harvest_x := 0
 var harvest_t := 0.0
 var surge_t := 0.0
@@ -379,6 +387,8 @@ func _init(seed_value: int = 0, queen_id: String = "well_rounded", heirloom_in: 
 	Queens.apply_body(queen_genome, queen_def["body"])
 	for k in queen_def["traits"].keys():
 		founder.traits[k] = clamp(founder.traits[k] + queen_def["traits"][k], 0.02, 1.0)
+	rival = Rival.new()
+	rival.setup(self)
 	heirloom = heirloom_in
 	if not heirloom.empty():
 		if heirloom.get("kind", "") == "mods":
@@ -709,6 +719,7 @@ func _step_weather(dt: float) -> void:
 
 
 func _step_extras(dt: float) -> void:
+	rival.step(self, dt)
 	_step_seasons(dt)
 	_step_weather(dt)
 	_step_director(dt)
@@ -839,25 +850,7 @@ func cast(id: String, x: int = 0, sel = null) -> bool:
 				return false
 			rally_x = x
 			rally_t = RALLY_LEN * (1.0 + mod("rally_power"))
-			# call up to ~45% of the colony: soldiers first, then idle hands; never an ant carrying food
-			var want = int(ants.size() * 0.45)
-			var order := []
-			for a in ants:
-				if a.carry <= 0.0:
-					order.append(a)
-			order.sort_custom(self, "_rally_order")
-			var n := 0
-			for a in order:
-				if n >= want:
-					break
-				if a.task != Task.DEFEND:
-					if a.task == Task.FORAGE:
-						_n_foragers = max(0, _n_foragers - 1)
-					a.task = Task.DEFEND
-					a.timer = 0.0
-					a.spoil = 0.0
-					a.hauling = false
-				n += 1
+			_call_up(0.45)
 			fx.append({"kind": "ring", "pos": grid.center(x, grid.surf_y(x) - 3), "t": 0.0, "color": Color("#ff6a4a")})
 			fx.append({"kind": "text", "pos": grid.center(x, grid.surf_y(x) - 8), "t": 0.0, "text": "RALLY!", "color": Color("#ff6a4a")})
 		"harvest":
@@ -883,6 +876,24 @@ func cast(id: String, x: int = 0, sel = null) -> bool:
 					sent += 1
 			fx.append({"kind": "ring", "pos": grid.center(harvest_x, grid.surf_y(harvest_x) - 3), "t": 0.0, "color": Color("#ffd86b")})
 			fx.append({"kind": "text", "pos": grid.center(harvest_x, grid.surf_y(harvest_x) - 8), "t": 0.0, "text": "HARVEST", "color": Color("#ffd86b")})
+		"strike":
+			if not rival.found:
+				toasts.append({"text": "No rival nest found yet: your foragers will come across it as they range farther.", "t": 3.5})
+				return false
+			if not rival.alive():
+				toasts.append({"text": "The %s are broken for now (%d s)." % [rival.name, int(rival.broken_t)], "t": 3.0})
+				return false
+			if _inside_n > 0 or queen_hp < queen_max * 0.5:
+				toasts.append({"text": "Raiders are inside or the queen is hurt: the colony will not march out to strike.", "t": 3.0})
+				return false
+			rally_x = rival.x
+			rally_t = Rival.STRIKE_LEN
+			strike_t = Rival.STRIKE_LEN
+			_call_up(0.5)
+			fx.append({"kind": "ring", "pos": grid.center(rival.x, grid.surf_y(rival.x) - 3), "t": 0.0, "color": Color("#ff3a3a")})
+			fx.append({"kind": "text", "pos": grid.center(rival.x, grid.surf_y(rival.x) - 8), "t": 0.0, "text": "STRIKE!", "color": Color("#ff3a3a")})
+			banner = "Strike party marching on the %s" % rival.name
+			banner_t = 4.0
 		"recall":
 			recall_t = 12.0
 			for a in ants:
@@ -982,6 +993,81 @@ func _step_bird(dt: float) -> void:
 			shake = max(shake, 0.25)
 
 
+# ---- Predator two: the anteater. Every ten minutes or so one lumbers in from the edge of the meadow (enemy kind "anteater": slow,
+# shaggy, a huge pile of hit points that grows with the colony). It sieges the entrance like the other bosses, and every couple of
+# seconds its long tongue licks up to three ants off the ground near it. Rally the soldiers to the entrance; Recall keeps the rest
+# below. Killing one earns food and a mutagen.
+var _anteater_timer := 480.0
+var anteaters_slain := 0
+const ANTEATER_CD = 2.6
+
+
+func _step_anteater_spawn(dt: float) -> void:
+	_anteater_timer -= dt
+	if _anteater_timer > 0.0:
+		return
+	for e in enemies:
+		if e.kind == "anteater":
+			_anteater_timer = 60.0
+			return
+	if ants.size() < 45 or _inside_n > 0 or collapsed:
+		_anteater_timer = 30.0
+		return
+	_anteater_timer = rng.randf_range(520.0, 760.0)
+	var side = -1 if rng.randf() < 0.5 else 1
+	_spawn_enemy("anteater", side)
+	banner = "An anteater lumbers in from the %s!  Hold the entrance: Rally the soldiers (R)." % ("west" if side < 0 else "east")
+	banner_t = 6.0
+	_sfx("boss")
+
+
+func _anteater_tongue(e, dt: float) -> void:
+	e.tongue_cd -= dt
+	if e.tongue_cd > 0.0 or e.state == 2 or e.stun_t > 0.0:
+		return
+	var near := []
+	for a in ants:
+		if a.z == e.z and abs(a.x - e.x) <= 16 and abs(a.y - e.y) <= 6:
+			near.append(a)
+	if near.empty():
+		e.tongue_cd = 0.4
+		return
+	e.tongue_cd = ANTEATER_CD * rng.randf_range(0.85, 1.15)
+	var n = 1 + (1 if near.size() >= 6 else 0) + (1 if near.size() >= 14 else 0)
+	var mouth = enemy_pos(e) + Vector2(e.facing * 150.0, -55.0)
+	for i in n:
+		if near.empty():
+			break
+		var a = near[rng.randi_range(0, near.size() - 1)]
+		near.erase(a)
+		fx.append({"kind": "beam", "pos": mouth, "to": ant_pos(a), "t": 0.0, "color": Color("#e8728f")})
+		fx.append({"kind": "puff", "pos": ant_pos(a), "t": 0.0, "color": Color("#c9a37a")})
+		kill(a, "anteater")
+	shake = max(shake, 0.2)
+
+
+# Call up to `frac` of the colony to the flag: soldiers first, then idle hands; never an ant carrying food.
+func _call_up(frac: float) -> void:
+	var want = int(ants.size() * frac)
+	var order := []
+	for a in ants:
+		if a.carry <= 0.0:
+			order.append(a)
+	order.sort_custom(self, "_rally_order")
+	var n := 0
+	for a in order:
+		if n >= want:
+			break
+		if a.task != Task.DEFEND:
+			if a.task == Task.FORAGE:
+				_n_foragers = max(0, _n_foragers - 1)
+			a.task = Task.DEFEND
+			a.timer = 0.0
+			a.spoil = 0.0
+			a.hauling = false
+		n += 1
+
+
 func _rally_order(a, b) -> bool:
 	var ka = 0 if a.caste == 2 else (1 if a.task != Task.FORAGE else 2)
 	var kb = 0 if b.caste == 2 else (1 if b.task != Task.FORAGE else 2)
@@ -990,6 +1076,8 @@ func _rally_order(a, b) -> bool:
 
 func _step_director(dt: float) -> void:
 	_step_bird(dt)
+	_step_anteater_spawn(dt)
+	strike_t = max(0.0, strike_t - dt)
 	will = min(will_max(), will + WILL_REGEN * (1.0 + mod("will_regen")) * dt)
 	for k in cmd_cd.keys():
 		cmd_cd[k] = max(0.0, cmd_cd[k] - dt)
@@ -2224,6 +2312,10 @@ func _step_raids(dt: float) -> void:
 		banner = "Raid %d repelled" % raid_n
 		banner_t = 3.0
 		raids_repelled += 1
+		if _raid_rival:
+			_raid_rival = false
+			rival.power = max(1.0, rival.power - 5.0)
+			toasts.append({"text": "The %s's raid broke against your defenders: they have lost heart." % rival.name, "t": 6.0})
 		adapt[2] = {"left": 8, "bias": {"armor": 1.6, "spike": 1.0, "claw": 1.2, "size": 1.0}}
 		toasts.append({"text": "The survivors breed hardier soldiers: armor, spikes, claws.", "t": 6.0})
 		if raids_repelled % 2 == 0 and mutagen < 3:
@@ -2233,7 +2325,7 @@ func _step_raids(dt: float) -> void:
 		q["delay"] -= dt
 		if q["delay"] <= 0.0:
 			raid_queue.erase(q)
-			_spawn_enemy(q["kind"], q["side"])
+			_spawn_enemy(q["kind"], q["side"], int(q.get("from_x", 0)))
 
 
 func _launch_raid() -> void:
@@ -2241,6 +2333,10 @@ func _launch_raid() -> void:
 	var rr = sub_rng("raid", raid_n)
 	var side = -1 if rr.randf() < 0.5 else 1
 	var budget = (3.0 + 5.5 * pow(raid_n - 1, 0.8)) * max(0.3, 1.0 + mod("raid_size"))
+	# every third raid is the rival colony's: its ants march out of its own mound, so they are seen coming
+	_raid_rival = rival.alive() and raid_n >= 3 and raid_n % 3 == 0
+	if _raid_rival:
+		budget *= 0.8 + rival.power / 80.0
 	# a strong colony draws a bigger raid, and the later raids keep climbing, so a healthy colony is tested rather than coasting
 	budget *= clamp(ants.size() / RAID_SIZE_REF, 0.85, 1.7) * (1.0 + RAID_LATE * max(0, raid_n - 6))
 	var pool = EnemyDefs.SMALL.duplicate()
@@ -2272,6 +2368,16 @@ func _launch_raid() -> void:
 			budget -= EnemyDefs.DEFS[k]["cost"]
 			if EnemyDefs.ELITE.has(k):
 				n_elite += 1
+	var from_x := 0
+	if _raid_rival:
+		side = rival.side
+		from_x = rival.x
+		rival.raids += 1
+		var conv = {"small": "redant", "brute": "redsoldier", "elite": "redmajor"}
+		for i in kinds.size():
+			var kc = EnemyDefs.DEFS[kinds[i]]["cls"]
+			if conv.has(kc):
+				kinds[i] = conv[kc]
 	_raid_active = true
 	# Raiders arrive in waves, not one every 0.9 s: a trickle was killed one by one as it came, so even a 70-raider raid
 	# never put more than ~15 on the field and a big colony coasted. A wave walks in together and has to be fought as a mass.
@@ -2280,8 +2386,10 @@ func _launch_raid() -> void:
 		var dly = i * 0.9                                                      # small raids keep the old trickle
 		if kinds.size() > 10:
 			dly = (i / wave) * 7.0 + (i % wave) * 0.25
-		raid_queue.append({"kind": kinds[i], "side": side, "delay": dly})
+		raid_queue.append({"kind": kinds[i], "side": side, "delay": dly, "from_x": from_x})
 	banner = "Raid %d  -  %d raiders from the %s" % [raid_n, kinds.size(), "west" if side < 0 else "east"]
+	if _raid_rival:
+		banner = "Raid %d  -  the %s attack from the %s!  (%d raiders)" % [raid_n, rival.name, "west" if side < 0 else "east", kinds.size()]
 	if borers > 0:
 		banner += "  -  %d BORING toward the queen!" % borers
 	_sfx("boss" if kinds.has("butcher") else "raid")
@@ -2315,7 +2423,7 @@ const BORER_FORCE_RAID = 10
 const BORER_PER_ANTS = 60.0
 
 
-func _spawn_enemy(kind: String, side: int) -> void:
+func _spawn_enemy(kind: String, side: int, from_x: int = 0, guard_at: int = 0) -> void:
 	var d = EnemyDefs.DEFS[kind]
 	var e = Raider.new()
 	e.id = _next_enemy_id
@@ -2324,6 +2432,9 @@ func _spawn_enemy(kind: String, side: int) -> void:
 	e.def = d
 	e.cls = d["cls"]
 	e.x = grid.arena_l + rng.randi_range(2, 8) if side < 0 else grid.arena_r + 1 - rng.randi_range(3, 9)
+	if from_x != 0:
+		e.x = int(clamp(from_x + rng.randi_range(-4, 4), grid.arena_l + 3, grid.arena_r - 3))
+	e.guard_x = guard_at
 	if d["cls"] == "burrower":
 		# breaks ground 22-44 cells from the main shaft, on the raid's side
 		e.x = int(clamp(int(grid.entrance.x) + side * rng.randi_range(22, 44), grid.arena_l + 14, grid.arena_r - 14))
@@ -2341,12 +2452,14 @@ func _spawn_enemy(kind: String, side: int) -> void:
 			e.max_hp *= clamp(ants.size() / 80.0, 0.45, 1.35)
 		else:
 			e.max_hp *= clamp(ants.size() / 70.0, 0.55, 1.0)   # a small colony faces a weaker borer
+	if kind == "anteater":
+		e.max_hp *= clamp(ants.size() / 110.0, 0.7, 1.7)       # bigger colony, bigger beast
 	e.hp = e.max_hp
 	e.heading = -side
 	e.facing = e.heading
 	e.lane = rng.randf_range(0.1, 0.9)
 	enemies.append(e)
-	if kind == "butcher":
+	if kind == "butcher" or kind == "anteater":
 		shake = max(shake, 0.7)
 		fx.append({"kind": "ring", "pos": grid.center(e.x, e.y - 2), "t": 0.0, "color": Color("#ff8a5c")})
 
@@ -2356,6 +2469,8 @@ func enemy_pos(e) -> Vector2:
 
 
 func _step_enemy(e, dt: float) -> void:
+	if e.kind == "anteater":
+		_anteater_tongue(e, dt)
 	if e.cls != "burrower":
 		_footing_fix(e, dt)
 	e.flash = max(0.0, e.flash - dt)
@@ -2435,6 +2550,17 @@ func _enemy_arrive(e) -> void:
 		_walk_surface(e)
 		return
 
+	if e.guard_x != 0:
+		# a rival's guard: holds its own mound, goes for any ant that comes near, then goes back
+		var gp = _chase_target(e, 10)
+		var gg = e.guard_x if gp == null else gp.x
+		var gd = _dir_to(e.x, gg)
+		if gd == 0 or (gp != null and abs(gg - e.x) <= 1) or (gp == null and abs(e.x - e.guard_x) <= 3):
+			_go(e, Vector2(e.x, e.y))
+			return
+		_set_heading(e, gd)
+		_walk_surface(e)
+		return
 	# surface siegers
 	if e.state == 0 and abs(e.x - ex) <= 4:
 		e.state = 1
@@ -2840,6 +2966,13 @@ func _step_zap(dt: float) -> void:
 func _enemy_die(e) -> void:
 	enemies.erase(e)
 	kills += 1
+	if e.kind == "anteater":
+		anteaters_slain += 1
+		var xtra = ""
+		if mutagen < 3:
+			mutagen += 1
+			xtra = " +1 mutagen"
+		toasts.append({"text": "The anteater is dead!%s  (a pile of food is left where it fell)" % xtra, "t": 8.0})
 	var p = enemy_pos(e)
 	var amount = e.def["food"] * (1.0 + 0.1 * (raid_n - 1)) * (1.0 + mod("kill_food"))
 	if e.cls == "prey":

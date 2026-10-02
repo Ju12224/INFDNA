@@ -43,6 +43,10 @@ static func draw(art: String, ci: CanvasItem, feet: Vector2, scale: float, shade
 			_spider(ci, t + id * 0.7, shade, alpha, moving, flash)
 		"hornet":
 			_bee(ci, t + id * 0.9, shade, alpha, moving, flash, lift, true)
+		"anteater":
+			_anteater(ci, t + id * 0.3, shade, alpha, moving, flash)
+		"redant":
+			_redant(ci, t + id * 0.6, shade, alpha, moving, flash)
 		_:
 			_bee(ci, t + id * 0.9, shade, alpha, moving, flash, lift, false)
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
@@ -64,6 +68,124 @@ static func butterfly(ci: CanvasItem, pos: Vector2, scale: float, t: float, faci
 	ci.draw_circle(Vector2(6.0, -0.5), 2.2, INK)
 	ci.draw_line(Vector2(6.0, -1.5), Vector2(10.0, -5.0), INK, 1.2, true)
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+# A rival colony's ant, side-on, facing +x: saturated red with a dark gaster and black legs, so it is never mistaken for yours.
+# About 75 px nose to tail before `scale`.
+static func _redant(ci: CanvasItem, t: float, shade: float, alpha: float, moving: bool, flash: bool) -> void:
+	var red = _tint(Color("#c63a2a"), shade, alpha, flash)
+	var red_d = _tint(Color("#7e211a"), shade, alpha, flash)
+	var red_l = _tint(Color("#e4604a"), shade, alpha, flash)
+	var blk = _tint(Color("#2a1210"), shade, alpha, flash)
+	var gait = 10.0 if moving else 1.8
+	var bob = sin(t * gait * 2.0) * (1.4 if moving else 0.4)
+	for side in 2:
+		for i in 3:
+			var ph = t * gait + i * 2.1 + side * PI
+			var sw = sin(ph) * (8.0 if moving else 1.0)
+			var lf = max(0.0, cos(ph)) * (6.0 if moving else 0.0)
+			var ax = -4.0 + i * 8.0
+			var hip = Vector2(ax, -17.0 + bob)
+			var knee = Vector2(ax + (i - 1) * 6.0 + sw * 0.35, -31.0 - lf * 0.4)
+			var foot = Vector2(ax + (i - 1) * 11.0 + sw, -lf)
+			_limb(ci, PoolVector2Array([hip, knee, foot]), 2.4, blk if side == 0 else red_d)
+	_ink(ci, Vector2(-30.0, -20.0 + bob), 19.0, 14.0, red_d, 2.8, 0.12)
+	_ell(ci, Vector2(-32.0, -25.0 + bob), 8.0, 4.0, Color(1, 1, 1, 0.22 * alpha), 0.1, 8)
+	_ink(ci, Vector2(-11.0, -17.0 + bob), 6.0, 5.0, red, 2.2)
+	_ink(ci, Vector2(3.0, -19.0 + bob), 12.0, 10.0, red, 2.8)
+	_ell(ci, Vector2(5.0, -23.0 + bob), 6.0, 3.0, red_l, 0.0, 8)
+	_ink(ci, Vector2(24.0, -19.0 + bob), 11.0, 9.5, red, 2.8)
+	ci.draw_circle(Vector2(29.0, -23.0 + bob), 3.3, INK)
+	ci.draw_circle(Vector2(29.0, -23.0 + bob), 2.2, Color(1.0, 0.92, 0.7, alpha))
+	ci.draw_circle(Vector2(29.8, -23.0 + bob), 1.0, INK)
+	var open = 0.45 + 0.3 * sin(t * 6.0) if not moving else 0.3
+	for sgn in [-1.0, 1.0]:
+		var base = Vector2(34.0, -18.0 + bob + sgn * 3.0)
+		ci.draw_colored_polygon(PoolVector2Array([base + Vector2(0, -2.4), base + Vector2(9.0, sgn * open * 8.0 - 1.5), base + Vector2(1.0, 2.4)]), INK)
+		ci.draw_colored_polygon(PoolVector2Array([base + Vector2(0, -1.4), base + Vector2(7.0, sgn * open * 8.0 - 0.8), base + Vector2(1.0, 1.4)]), blk)
+	var aw = sin(t * 4.0) * 2.0
+	ci.draw_polyline(PoolVector2Array([Vector2(28.0, -27.0 + bob), Vector2(36.0, -36.0 + bob + aw), Vector2(46.0, -39.0 + bob + aw * 1.4)]), INK, 2.0, true)
+
+
+# A giant anteater, side-on: shaggy grey-brown, a black shoulder stripe edged in white, a long sniffing snout, a bushy tail and big
+# foreclaws. About 320 px from tail to snout before `scale`; it ambles on its knuckles. The tongue is a fx beam from the sim.
+static func _anteater(ci: CanvasItem, t: float, shade: float, alpha: float, moving: bool, flash: bool) -> void:
+	var fur = _tint(Color("#7b6b5a"), shade, alpha, flash)
+	var fur_d = _tint(Color("#4f4337"), shade, alpha, flash)
+	var fur_l = _tint(Color("#a8957c"), shade, alpha, flash)
+	var blk = _tint(Color("#211a17"), shade, alpha, flash)
+	var wht = _tint(Color("#ede3cf"), shade, alpha, flash)
+	var gait = 3.0 if moving else 0.7
+	var bob = sin(t * gait * 2.0) * (2.6 if moving else 0.8)
+	var by = -68.0 + bob
+	var sn = sin(t * 2.3) * 4.0
+	# the legs on the far side first, darker; then the tail and body; the near legs over them; head and snout last
+	for side in 2:
+		var near = side == 1
+		if near:
+			# the long bushy tail trailing behind and down, swaying a little: one tapering plume with streaming hair
+			var sw = sin(t * 1.4) * 5.0
+			var top := PoolVector2Array()
+			var bot := PoolVector2Array()
+			for k in 8:
+				var u = float(k) / 7.0
+				var spine = Vector2(-78.0 - u * 108.0, by + 2.0 + u * u * 50.0 + sw * u * 0.6)
+				var wd = 26.0 * (1.0 - u * 0.55) + 4.0 * sin(u * 9.0)
+				top.append(spine + Vector2(0.0, -wd))
+				bot.append(spine + Vector2(0.0, wd * 0.8))
+			var plume := PoolVector2Array()
+			for q in top:
+				plume.append(q)
+			for q in range(bot.size() - 1, -1, -1):
+				plume.append(bot[q])
+			var plume_ink := PoolVector2Array()
+			var pc = Vector2(-150.0, by + 20.0)
+			for q in plume:
+				plume_ink.append(pc + (q - pc) * 1.07)
+			ci.draw_colored_polygon(plume_ink, INK)
+			ci.draw_colored_polygon(plume, fur_d)
+			for k in 11:
+				var u2 = float(k) / 10.0
+				var a0 = Vector2(-84.0 - u2 * 96.0, by - 18.0 + u2 * u2 * 50.0 + sw * u2 * 0.6)
+				ci.draw_line(a0, a0 + Vector2(-12.0, 11.0), fur_l, 1.8, true)
+				ci.draw_line(a0 + Vector2(0.0, 12.0), a0 + Vector2(-10.0, 22.0), fur, 1.6, true)
+			_ink(ci, Vector2(0.0, by), 88.0, 42.0, fur, 3.6, 0.0)
+			_ell(ci, Vector2(10.0, by + 24.0), 66.0, 14.0, fur_l, 0.0, 16)
+			_ell(ci, Vector2(-8.0, by - 24.0), 70.0, 12.0, fur_d, 0.0, 14)
+			# the black shoulder stripe with its white edge
+			ci.draw_colored_polygon(PoolVector2Array([Vector2(60.0, by + 32.0), Vector2(84.0, by + 6.0), Vector2(44.0, by - 44.0), Vector2(-40.0, by - 34.0)]), wht)
+			ci.draw_colored_polygon(PoolVector2Array([Vector2(58.0, by + 27.0), Vector2(77.0, by + 6.0), Vector2(41.0, by - 38.0), Vector2(-30.0, by - 31.0)]), blk)
+			for k in 12:
+				var fx0 = -64.0 + k * 9.5
+				var fy0 = by - 38.0 + abs(sin(k * 1.7)) * 8.0
+				ci.draw_line(Vector2(fx0, fy0), Vector2(fx0 - 5.0, fy0 + 9.0), Color(0.1, 0.07, 0.05, 0.45 * alpha), 2.0, true)
+		for lg in 2:
+			var front = lg == 0
+			var ph = t * gait + (0.0 if front else PI) + (PI if near else 0.0)
+			var swing = sin(ph) * (11.0 if moving else 1.0)
+			var lift = max(0.0, cos(ph)) * (9.0 if moving else 0.0)
+			var hip = Vector2(34.0 if front else -48.0, by + 20.0)
+			var foot = Vector2(hip.x + 8.0 + swing, -lift)
+			var col = fur if near else fur_d
+			_limb(ci, PoolVector2Array([hip, Vector2(hip.x + 3.0, (hip.y + foot.y) * 0.5 + 6.0), foot]), 15.0 if front else 17.0, col)
+			if front:
+				for c in 3:
+					var cb = foot + Vector2(-2.0 + c * 5.0, -2.0)
+					ci.draw_polyline(PoolVector2Array([cb, cb + Vector2(7.0, 3.0 + c), cb + Vector2(11.0, 9.0 + c * 2.0)]), INK, 4.6, true)
+					ci.draw_polyline(PoolVector2Array([cb, cb + Vector2(7.0, 3.0 + c), cb + Vector2(11.0, 9.0 + c * 2.0)]), wht, 2.2, true)
+	# head: a small skull, a long tube of a snout that sniffs, a tiny eye and ear
+	var hd = Vector2(96.0, by - 14.0)
+	_ink(ci, hd, 24.0, 22.0, fur, 3.2, 0.1)
+	var snout = PoolVector2Array([hd + Vector2(8.0, -14.0), hd + Vector2(70.0, 14.0 + sn), hd + Vector2(72.0, 24.0 + sn), hd + Vector2(10.0, 12.0)])
+	var big = PoolVector2Array([snout[0] + Vector2(-2.0, -3.4), snout[1] + Vector2(3.4, -3.0), snout[2] + Vector2(3.4, 3.4), snout[3] + Vector2(-2.0, 3.4)])
+	ci.draw_colored_polygon(big, INK)
+	ci.draw_colored_polygon(snout, fur_l)
+	ci.draw_line(hd + Vector2(12.0, 6.0), hd + Vector2(70.0, 20.0 + sn), fur_d, 2.0, true)
+	_ell(ci, hd + Vector2(72.0, 21.0 + sn), 5.0, 4.0, blk, 0.0, 8)
+	_ink(ci, hd + Vector2(-12.0, -18.0), 7.0, 10.0, fur_d, 2.0, -0.4)
+	ci.draw_circle(hd + Vector2(8.0, -6.0), 5.0, INK)
+	ci.draw_circle(hd + Vector2(8.0, -6.0), 3.4, Color(0.95, 0.9, 0.8, alpha))
+	ci.draw_circle(hd + Vector2(9.0, -6.0), 1.6, INK)
 
 
 static func _spider(ci: CanvasItem, t: float, shade: float, alpha: float, moving: bool, flash: bool) -> void:

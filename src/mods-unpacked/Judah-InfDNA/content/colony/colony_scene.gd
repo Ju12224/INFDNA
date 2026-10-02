@@ -19,6 +19,7 @@ const DirectorView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/di
 const WeatherView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/weather_view.gd")
 const LightView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/light_view.gd")
 const SeasonView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/season_view.gd")
+const RivalView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/rival_view.gd")
 const Legacy = preload("res://mods-unpacked/Judah-InfDNA/core/legacy.gd")
 const DayCycle = preload("res://mods-unpacked/Judah-InfDNA/content/colony/day_cycle.gd")
 const WatchCam = preload("res://mods-unpacked/Judah-InfDNA/content/colony/watch_cam.gd")
@@ -33,6 +34,7 @@ var sim
 var baker
 var world_view
 var ant_view
+var rival_view
 var enemy_view
 var layers_view
 var perf               # the optimizer (perf.gd): adaptive quality
@@ -79,6 +81,11 @@ func _ready() -> void:
 	world_view.day = day
 	world_view.ground.day = day
 
+	rival_view = RivalView.new()   # the rival colony's mound, under the units
+	rival_view.sim = sim
+	rival_view.ground = world_view.ground
+	rival_view.perf = perf
+	add_child(rival_view)
 	_overlay = Node2D.new()     # food, trails, eggs, queen: above the dirt
 	_overlay.connect("draw", self, "_draw_overlay")
 	add_child(_overlay)
@@ -100,6 +107,7 @@ func _ready() -> void:
 	add_child(cam)
 	cam.setup(world_view.world_size())
 	ant_view.cam = cam
+	rival_view.cam = cam
 	ant_view.ground = world_view.ground
 	world_view.cam = cam
 
@@ -263,6 +271,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				command("surge", true)
 			KEY_M:
 				command("breed", true)
+			KEY_Y:
+				command("strike", true)
 			KEY_ESCAPE:
 				if armed != "":
 					set_armed("")

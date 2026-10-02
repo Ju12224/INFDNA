@@ -35,6 +35,15 @@ const DEFS = {
 	"bee": {"name": "Bee", "hp": 22.0, "dmg": 1.7, "speed": 5.8, "cls": "small", "food": 5.0, "cost": 1, "tex": [], "art": "bee", "fly": true},
 	"hornet": {"name": "Hornet", "hp": 300.0, "dmg": 7.0, "speed": 4.6, "cls": "elite", "food": 46.0, "cost": 7, "tex": [], "art": "hornet", "fly": true},
 
+	# v0.29: the anteater is not part of a raid roster. It lumbers in now and then (colony_sim._step_anteater): slow, shaggy
+	# and huge, it sieges the entrance and licks ants off the ground with its tongue.
+	"anteater": {"name": "Anteater", "hp": 1000.0, "dmg": 6.5, "speed": 1.5, "cls": "boss", "food": 190.0, "cost": 18, "tex": [], "art": "anteater"},
+
+	# v0.29: the rival colony's ants (drawn procedurally, bigger for the heavier castes)
+	"redant": {"name": "Red Ant", "hp": 34.0, "dmg": 2.4, "speed": 4.2, "cls": "small", "food": 7.0, "cost": 1, "tex": [], "art": "redant", "art_scale": 1.0},
+	"redsoldier": {"name": "Red Soldier", "hp": 140.0, "dmg": 4.8, "speed": 2.8, "cls": "brute", "food": 18.0, "cost": 3, "tex": [], "art": "redant", "art_scale": 1.55},
+	"redmajor": {"name": "Red Major", "hp": 330.0, "dmg": 7.5, "speed": 2.0, "cls": "elite", "food": 44.0, "cost": 7, "tex": [], "art": "redant", "art_scale": 2.2},
+
 	# passive prey (not raiders): wanders the surface, flees ants, big food when hunted
 	"looter": {"name": "Looter", "hp": 45.0, "dmg": 0.0, "speed": 3.0, "cls": "prey", "food": 24.0, "cost": 0,
 		"tex": ["res://dlcs/dlc_1/enemies/looting_pig/looting_pig.png", "res://entities/units/enemies/looter/looter.png"]},

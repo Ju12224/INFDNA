@@ -457,6 +457,12 @@ func _draw_minimap() -> void:
 		var blink = 0.55 + 0.45 * sin(_t * 8.0)
 		_mm.draw_colored_polygon(PoolVector2Array([Vector2(bx - 7.0, cy - 12.0), Vector2(bx + 7.0, cy - 12.0), Vector2(bx, cy - 2.0)]), Color(1.0, 0.25, 0.2, blink))
 		_mm.draw_string(_mm_font, Vector2(bx - 3.0, cy - 14.0), "!", Color(1, 1, 1, blink))
+	# the rival's mound, once found
+	if sim.rival.found:
+		var rvx = MM_W * 0.5 + (sim.rival.x - ex) * sc
+		var rcol = Color("#c63a2a") if sim.rival.alive() else Color(0.5, 0.5, 0.5, 0.8)
+		_mm.draw_colored_polygon(PoolVector2Array([Vector2(rvx - 5.0, cy + 6.0), Vector2(rvx + 5.0, cy + 6.0), Vector2(rvx, cy - 7.0)]), Kit.INK)
+		_mm.draw_colored_polygon(PoolVector2Array([Vector2(rvx - 3.5, cy + 5.0), Vector2(rvx + 3.5, cy + 5.0), Vector2(rvx, cy - 4.5)]), rcol)
 	# nest
 	_mm.draw_colored_polygon(PoolVector2Array([Vector2(MM_W * 0.5 - 5.0, cy + 6.0), Vector2(MM_W * 0.5 + 5.0, cy + 6.0), Vector2(MM_W * 0.5, cy - 7.0)]), Kit.GOLD)
 	# the camera's view
@@ -534,7 +540,7 @@ func _build_layers() -> void:
 
 # ================================================================== build: the director's panel
 # Will (fills over time) and the commands it buys, plus the brood's caste order. Keys work too (see colony_scene).
-const CMD_ICONS = {"rally": "attack", "harvest": "food", "recall": "armor", "surge": "speed", "breed": "power"}
+const CMD_ICONS = {"rally": "attack", "harvest": "food", "recall": "armor", "surge": "speed", "breed": "power", "strike": "horde"}
 
 
 func _build_director() -> void:
@@ -599,15 +605,18 @@ func _refresh_director() -> void:
 		var c = Sim.COMMANDS[id]
 		var cd = sim.cmd_cd.get(id, 0.0)
 		var cost = sim.cmd_cost(id)
-		var ready = cd <= 0.0 and sim.will >= cost
+		var usable = id != "strike" or sim.rival.can_strike()
+		var ready = cd <= 0.0 and sim.will >= cost and usable
 		var armed = scene.armed == id
-		var sig = "%d|%d|%s|%d|%d" % [int(ceil(cd)), int(sim.will >= cost), str(armed), int(ceil(cost)), int(sim.cmd_recharge(id))]
+		var sig = "%d|%d|%s|%d|%d|%d" % [int(ceil(cd)), int(sim.will >= cost), str(armed), int(ceil(cost)), int(sim.cmd_recharge(id)), int(usable)]
 		var b: Button = _dir_btns[id]
 		if _dir_sig.get(id, "") != sig:
 			_dir_sig[id] = sig
 			var tail = ("%ds" % int(ceil(cd))) if cd > 0.0 else ("%d" % int(ceil(cost)))
 			b.text = "%s  (%s)    %s" % [c["name"], c["key"], tail]
 			b.hint_tooltip = "%s (%s): %s. Costs %d Will, recharges in %d s." % [c["name"], c["key"], c["tip"], int(ceil(cost)), int(round(sim.cmd_recharge(id)))]
+			if not usable:
+				b.hint_tooltip += "\n" + ("The %s are broken for now." % sim.rival.name if sim.rival.found else "No rival nest found yet: send foragers farther.")
 			b.modulate = Color(1, 1, 1, 1.0 if ready else 0.5)
 		b.pressed = armed
 	_dir_hint.visible = scene.armed != "" and not scene.watch_mode

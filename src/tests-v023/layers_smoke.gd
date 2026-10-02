@@ -67,7 +67,7 @@ func _idle(_delta):
 		var ex = int(sim.grid.entrance.x)
 		sim.will = 100.0
 		sim.cmd_cd.clear()
-		_check(s.hud._dir_btns.size() == 5, "director panel has five command buttons")
+		_check(s.hud._dir_btns.size() == 6, "director panel has six command buttons")
 		_check(sim.cast("surge") and sim.surge_t > 0.0, "Surge goes out")
 		_check(sim.cast("recall") and sim.recall_t > 0.0, "Recall goes out")
 		var any_cover = false
@@ -189,6 +189,88 @@ func _idle(_delta):
 		s.hud._offer_heirlooms(sim)
 		_check(s.hud._legacy_row.get_child_count() >= 2, "the run summary offers heirloom choices")
 		Lg.clear()
+	elif frames == 129:
+		# the anteater: it licks ants off the ground near it, and its death pays out
+		var n0 = sim.enemies.size()
+		sim._spawn_enemy("anteater", 1)
+		_check(sim.enemies.size() == n0 + 1 and sim.enemies.back().kind == "anteater", "an anteater can lumber in")
+		var at = sim.enemies.back()
+		at.x = int(sim.grid.entrance.x) + 3
+		at.tx = at.x
+		at.y = sim.grid.surf_y(at.x) - 1
+		at.ty = at.y
+		var near_n = 0
+		for a in sim.ants:
+			if near_n < 10:
+				a.x = at.x + (near_n % 5) - 2
+				a.tx = a.x
+				a.y = at.y
+				a.ty = a.y
+				a.z = at.z
+				near_n += 1
+		var before = sim.ants.size()
+		at.tongue_cd = 0.0
+		sim._anteater_tongue(at, 0.1)
+		_check(sim.ants.size() < before and sim.deaths["anteater"] > 0, "its tongue licks ants off the ground")
+		var slain = sim.anteaters_slain
+		sim._enemy_die(at)
+		_check(sim.anteaters_slain == slain + 1 and not sim.enemies.has(at), "killing it is counted")
+		# the rival colony: found by foragers, raids out of its own mound, a strike that breaks it
+		var rv = sim.rival
+		_check(rv.x > sim.grid.arena_l and rv.x < sim.grid.arena_r and abs(rv.x - int(sim.grid.entrance.x)) >= 80, "a rival nest sits out on the meadow")
+		rv.found = false
+		sim.will = 100.0
+		sim.cmd_cd.clear()
+		var wbefore = sim.will
+		_check(not sim.cast("strike") and sim.will == wbefore, "Strike needs the rival found, and costs nothing until then")
+		sim.ants[0].x = rv.x
+		sim.ants[0].tx = rv.x
+		sim.ants[0].y = sim.grid.surf_y(rv.x) - 1
+		sim.ants[0].ty = sim.ants[0].y
+		rv.step(sim, 0.1)
+		_check(rv.found, "a forager near the mound finds it")
+		sim.will = 100.0
+		sim.cmd_cd.clear()
+		sim._inside_n = 0
+		sim.queen_hp = sim.queen_max
+		_check(sim.cast("strike") and sim.strike_t > 0.0 and sim.rally_x == rv.x, "Strike sends the party to the mound")
+		var party := 0
+		for a in sim.ants:
+			if a.task == sim.Task.DEFEND and party < 24:
+				a.x = rv.x + (party % 7) - 3
+				a.tx = a.x
+				a.y = sim.grid.surf_y(a.x) - 1
+				a.ty = a.y
+				a.z = 0
+				party += 1
+		rv.step(sim, 0.1)
+		var guards := 0
+		for e in sim.enemies:
+			if e.guard_x == rv.x:
+				guards += 1
+		_check(rv.guards_out and guards >= 6, "the guards come out when the party arrives (%d)" % guards)
+		for e in sim.enemies.duplicate():
+			if e.guard_x != 0:
+				sim.enemies.erase(e)
+		var food0 = sim.food
+		for i in 400:
+			rv.step(sim, 0.1)
+			if rv.broken_t > 0.0:
+				break
+		_check(rv.conquered == 1 and rv.broken_t > 0.0 and sim.food > food0 and sim.strike_t == 0.0, "with the guards down the party storms the mound: loot, peace, strike over")
+		sim.raid_n = 5
+		sim._launch_raid()
+		_check(not sim._raid_rival, "a broken rival sends no raids")
+		rv.broken_t = 0.0
+		sim.raid_n = 8
+		sim.raid_queue.clear()
+		sim._launch_raid()
+		var from_rival := 0
+		for q in sim.raid_queue:
+			if q.get("from_x", 0) == rv.x:
+				from_rival += 1
+		_check(sim._raid_rival and from_rival > 0, "every third raid marches out of the rival's mound")
+		sim.raid_queue.clear()
 	elif frames == 130:
 		# watch mode (V): HUD hidden, busy layers off, camera directed; leaving restores everything
 		sim.strain_events.append({"uid": sim.ants[0].genome.uid, "text": "test strain", "t": sim.time})
