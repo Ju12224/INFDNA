@@ -1,7 +1,8 @@
-# InfDNA (Brotato mod) - v0.22.0 (+ v0.23.0 work in progress, see below)
+# InfDNA (Brotato mod) - v0.23.0
 
-## v0.23.0 (unreleased) - a living world: deep ground, giant trees, creatures, far expeditions, bolder evolution
-Compile-checked, rendered headless under Xvfb (software GL) and balance-probed on 4-6 seeds; NOT playtested in Brotato.
+## v0.23.0 - a living world: deep ground, giant trees, creatures, far expeditions, bolder evolution
+Compile-checked, rendered headless under Xvfb (software GL), balance-probed on 4-6 seeds and fuzzed for 8 sim-minutes (raids with the
+new creatures, flight, random camera/minimap/layer input: no script errors); NOT playtested in Brotato.
 - **Startup fix (ant_view.gd):** two bare `randf_range(...)` calls (Godot 4 only) stopped the colony scene from compiling in Godot 3.5.
 - **Ground and backdrop rebuilt as cached meshes** (`mesh_kit.gd`, `ground_view.gd`, `sky_layers.gd`). The old per-frame
   ground band cost 12-20 ms; static scenery is now built once per 48-column chunk and drawn with a few `draw_mesh` calls.
