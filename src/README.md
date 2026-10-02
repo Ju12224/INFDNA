@@ -16,6 +16,11 @@ NOT playtested in Brotato.
   they stand and fight), and facing flipping on vertical steps up the mound and at the shaft mouth (now left/right follows the screen on
   open ground). Rapid direction flips per 5 sim-minutes: 3416 -> 455. Surface ants also tilt to a smoothed hill slope instead of the
   6 px stair steps of the grid (big rotation jumps 10392 -> 757).
+- **The colony no longer starves itself on the far frontier.** Diagnosis from the balance probe: once the food frontier had moved past
+  what a young forager's own search radius covers, only scouts ever found anything, trails were never laid, and a 150-ant colony
+  starved to a handful (one seed in seven died outright at raid 8). Foragers setting out are now often told (recruitment) about a pile
+  a nestmate already found and that still holds food, nearer ones likelier. 8 seeds x 25 minutes: all survive (before: 6 of 7), peak
+  pop 140-174 (was ~120), and the mid-game crash is shallower. Also: new piles spawn near again if the colony has dwindled.
 - **Raiders stopped shivering too.** Small raiders and siegers used to flip toward whichever ant was nearest every hop (runners weave
   past them at 18 cells/s). They now keep chasing the same ant for ~12 hops, stand and fight when it is within a cell, and reverse at most
   every 5 hops; fleeing prey does the same. Rapid raider direction flips per 10 sim-minutes: 110 -> ~0 for small raiders, 14 -> 0 for brutes.

@@ -1230,6 +1230,8 @@ func _start_trip(a) -> void:
 	a.search_r = int(min(RANGE_MAX, RANGE_BASE * pow(RANGE_GROW, a.empty_trips)))
 	if a.site == NO_SITE and not beacons.empty() and rng.randf() < 0.65:
 		a.site = beacons[rng.randi_range(0, beacons.size() - 1)]["x"]   # the player's scent flag
+	if a.site == NO_SITE and rng.randf() < 0.7:
+		a.site = _recruit_site()                                         # nestmates' news of a pile somebody already found
 	if a.site != NO_SITE:
 		var ex = int(grid.entrance.x)
 		a.search_r = int(min(RANGE_MAX, max(a.search_r, abs(a.site - ex) + 60)))
@@ -1239,6 +1241,22 @@ func _start_trip(a) -> void:
 		if _scouting:
 			# scouts range far whether or not nearer food exists: long-tailed radius, 150..RANGE_MAX
 			a.search_r = int(min(RANGE_MAX, max(a.search_r, 150 + int(-log(max(0.001, rng.randf())) * 420.0))))
+
+
+# Recruitment: a forager setting out is often told about a pile some nestmate has already found and that still holds
+# food (nearer ones likelier, a few at random so one pile is not mobbed). Without it, once the food frontier moved past
+# what a young forager's own search radius covers, only scouts ever found anything and the colony starved.
+func _recruit_site() -> int:
+	var ex = int(grid.entrance.x)
+	var items := []
+	var weights := []
+	for p in piles:
+		if p.get("found", false) and p["amount"] > 8.0:
+			items.append(p["x"])
+			weights.append(1.0 / (1.0 + abs(p["x"] - ex) / 250.0))
+	if items.empty():
+		return NO_SITE
+	return _weighted(items, weights)
 
 
 func _pher_at(x: int) -> float:
@@ -1654,7 +1672,8 @@ func _pile_distance(near: int) -> int:
 		return rng.randi_range(near, 130)    # an early colony must be able to find its first meals
 	# The near ground has been picked over: after the first minutes new food only appears beyond a minimum
 	# distance that keeps growing, so the colony has to send ants on longer and longer expeditions.
-	var lo = int(clamp(60.0 + 0.9 * time + 0.5 * ants.size(), 60.0, 1000.0))
+	# the frontier follows the colony's strength, not just the clock: a colony that has dwindled finds food nearer again
+	var lo = int(clamp(60.0 + min(0.9 * time, 14.0 * ants.size()) + 0.5 * ants.size(), 60.0, 480.0))
 	if mod("pile_near") > 0.0:
 		lo = int(lo * 0.6)
 	var hi = int(min(RANGE_MAX - 60, lo + 450))
