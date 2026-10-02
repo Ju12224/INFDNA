@@ -266,6 +266,7 @@ var _pher_acc := 0.0
 var _inside_n := 0               # raiders inside the nest right now
 var stat_deliv := [0.0, 0.0, 0.0, 0.0]   # food hauled by trip reach: <100, 100-250, 250-400, 400+ cells
 var stat_far := 0
+var peak_ants := 0
 # --- play layer (v0.22): goals, mutagen, beacons, jackpots
 var goals_done := {}
 var raids_repelled := 0
@@ -562,6 +563,7 @@ func step(dt: float) -> void:
 		_pe("nav")
 		_nav_timer = NAV_INTERVAL
 
+	peak_ants = int(max(peak_ants, ants.size()))
 	_hist_timer -= dt
 	if _hist_timer <= 0.0:
 		_hist_timer = 5.0

@@ -10,6 +10,7 @@ const ShopItems = preload("res://mods-unpacked/Judah-InfDNA/core/shop_items.gd")
 const Queens = preload("res://mods-unpacked/Judah-InfDNA/core/queens.gd")
 const LayersView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/layers_view.gd")
 const Sim = preload("res://mods-unpacked/Judah-InfDNA/core/colony_sim.gd")
+const RunLog = preload("res://mods-unpacked/Judah-InfDNA/core/run_log.gd")
 
 # task order in the sim: NURSE, FORAGE, DIG, HOME, DEFEND (shared with the Tasks layer so the legend matches)
 const TASK_COLORS = LayersView.TASK_COLORS
@@ -86,6 +87,8 @@ var _reroll_btn: Button
 var _reroll_icon: TextureRect
 var _collapse_root: Control
 var _collapse_label: Label
+var _collapse_stats: Label
+var _collapse_best: Label
 var _collapse_shown := false
 var _refresh := 0.0
 # M4 evolution panel (L key / Lineage button): trait spread over time + ancestry strip
@@ -349,7 +352,7 @@ func _build_bar() -> void:
 	_btn(bar, "Lab", "luck").connect("pressed", scene, "open_shop")
 	_btn(bar, "Menu", "exit").connect("pressed", scene, "go_to_menu")
 
-	var hint = Kit.label(root, "WASD / right-drag pan   Wheel zoom   Click an ant   Space pause   P trails   C badges   F fights   T tasks   H health   X follow   L lineage   U nest   Esc menu", _f_s)
+	var hint = Kit.label(root, "WASD / right-drag pan   Wheel zoom   Click an ant   Space pause   P C F T H layers   X follow   L lineage   U nest   N new strain   V watch   Esc menu", _f_s)
 	hint.anchor_top = 1.0
 	hint.anchor_bottom = 1.0
 	hint.grow_vertical = Control.GROW_DIRECTION_BEGIN
@@ -706,6 +709,11 @@ func _build_collapse() -> void:
 	_collapse_label = Kit.label(v, "", _f_m)
 	_collapse_label.align = Label.ALIGN_CENTER
 	_collapse_label.modulate = Color(1, 1, 1, 0.8)
+	_collapse_stats = Kit.label(v, "", _f_s)
+	_collapse_stats.align = Label.ALIGN_CENTER
+	_collapse_stats.modulate = Color(1, 1, 1, 0.72)
+	_collapse_best = Kit.label(v, "", _f_m, Kit.GOLD)
+	_collapse_best.align = Label.ALIGN_CENTER
 	var ch = HBoxContainer.new()
 	ch.alignment = BoxContainer.ALIGN_CENTER
 	ch.add_constant_override("separation", 14)
@@ -757,6 +765,7 @@ func _process(delta: float) -> void:
 	if sim.collapsed and not _collapse_shown:
 		_collapse_shown = true
 		_collapse_label.text = sim.collapse_reason if sim.collapse_reason != "" else "The colony has fallen."
+		_show_run_summary(sim)
 		_collapse_root.visible = true
 		_collapse_root.modulate.a = 0.0
 		var tw = Kit.tween(_collapse_root)
@@ -779,6 +788,23 @@ func _process(delta: float) -> void:
 	_graph.update()
 	_task_bar.update()
 	_mm.update()
+
+
+# Closing the run: what the colony achieved, and whether it beat this queen's best.
+func _show_run_summary(sim) -> void:
+	var tr = sim.top_genomes(1)
+	var plan = ""
+	if not tr.empty():
+		plan = "\nLast dominant body plan: " + tr[0]["genome"].describe()
+	_collapse_stats.text = "Survived %s  ·  %d raids  ·  peak %d ants  ·  generation %d\nFarthest forager %d cells  ·  %d raiders slain  ·  %d food hauled%s" % [
+		RunLog.clock(sim.time), sim.raid_n, sim.peak_ants, sim.max_gen, sim.stat_far, sim.kills, int(sim.delivered_total), plan]
+	var qid = Engine.get_meta("infdna_queen") if Engine.has_meta("infdna_queen") else "well_rounded"
+	var rec = RunLog.record(str(qid), sim.time, sim.raid_n, sim.peak_ants)
+	if rec["new"]:
+		_collapse_best.text = "New best for this queen!"
+	else:
+		var b = rec["best"]
+		_collapse_best.text = "Best with this queen: %s  ·  %d raids" % [RunLog.clock(float(b["time"])), int(b["raids"])]
 
 
 func _refresh_stats(sim) -> void:
