@@ -14,6 +14,8 @@ const UndergroundUI = preload("res://mods-unpacked/Judah-InfDNA/content/colony/u
 const Sfx = preload("res://mods-unpacked/Judah-InfDNA/content/colony/sfx.gd")
 const CameraRig = preload("res://mods-unpacked/Judah-InfDNA/content/colony/camera_rig.gd")
 const Hud = preload("res://mods-unpacked/Judah-InfDNA/content/colony/hud.gd")
+const PredatorView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/predator_view.gd")
+const DirectorView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/director_view.gd")
 const WeatherView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/weather_view.gd")
 const LightView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/light_view.gd")
 const DayCycle = preload("res://mods-unpacked/Judah-InfDNA/content/colony/day_cycle.gd")
@@ -49,6 +51,7 @@ var watch              # watch_cam.gd: the self-directing camera of watch mode (
 var watch_mode := false
 var _watch_saved := {}
 var _shop_noted := false
+var armed := ""              # a command waiting for a click on the ground (rally, harvest)
 # view layers (HUD "Layers" panel and the P/C/F/T/H keys); see set_layer
 var layer_state := {"trails": true, "castes": true, "fights": true, "tasks": false, "health": false, "follow": false, "light": true}
 
@@ -96,6 +99,12 @@ func _ready() -> void:
 	ant_view.ground = world_view.ground
 	world_view.cam = cam
 
+	var pview = PredatorView.new()      # the bird, before the light pass so night tints it
+	pview.sim = sim
+	pview.cam = cam
+	pview.ground = world_view.ground
+	add_child(pview)
+
 	var weather = WeatherView.new()    # rain streaks and splashes (drawn above the light so they stay bright)
 	weather.sim = sim
 	weather.cam = cam
@@ -119,6 +128,12 @@ func _ready() -> void:
 	layers_view.show_tasks = layer_state["tasks"]
 	layers_view.show_health = layer_state["health"]
 	add_child(layers_view)
+
+	var dview = DirectorView.new()      # the rally flag and harvest marker
+	dview.sim = sim
+	dview.cam = cam
+	dview.ground = world_view.ground
+	add_child(dview)
 
 	var ambient = AmbientView.new()     # bees and butterflies over the meadow
 	ambient.sim = sim
@@ -207,6 +222,15 @@ func _draw_overlay() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if watch_mode:
 		_watch_input(event)
+	if armed != "" and event is InputEventMouseButton and event.pressed:
+		if event.button_index == BUTTON_LEFT:
+			var ax = int(floor(get_global_mouse_position().x / sim.grid.CELL))
+			var aid = armed
+			set_armed("")
+			sim.cast(aid, ax, selected)
+		elif event.button_index == BUTTON_RIGHT:
+			set_armed("")
+		return
 	if event is InputEventMouseButton and event.pressed and event.button_index == BUTTON_LEFT:
 		selected = ant_view.pick(get_global_mouse_position(), 30.0)
 		if watch_mode and selected != null:
@@ -217,8 +241,20 @@ func _unhandled_input(event: InputEvent) -> void:
 				set_watch(not watch_mode)
 			KEY_N:
 				show_new_strain()
+			KEY_R:
+				command("rally", true)
+			KEY_E:
+				command("harvest", true)
+			KEY_Z:
+				command("recall", true)
+			KEY_J:
+				command("surge", true)
+			KEY_M:
+				command("breed", true)
 			KEY_ESCAPE:
-				if watch_mode:
+				if armed != "":
+					set_armed("")
+				elif watch_mode:
 					set_watch(false)
 				elif hud.is_evolution_open():
 					hud.toggle_evolution()
@@ -276,6 +312,25 @@ func open_shop() -> void:
 func close_shop() -> void:
 	shop_open = false
 	hud.show_shop(false)
+
+
+# A director command from a button or key. Commands that need a place arm and wait for a click, unless a key was
+# pressed with the cursor already over the spot (`at_cursor`).
+func command(id: String, at_cursor: bool = false) -> void:
+	if shop_open or sim.collapsed:
+		return
+	var c = sim.COMMANDS[id]
+	if c["target"] and not at_cursor:
+		set_armed("" if armed == id else id)
+		return
+	var x = int(floor(get_global_mouse_position().x / sim.grid.CELL))
+	if sim.cast(id, x, selected):
+		set_armed("")
+
+
+func set_armed(id: String) -> void:
+	armed = id
+	Input.set_default_cursor_shape(Input.CURSOR_CROSS if id != "" else Input.CURSOR_ARROW)
 
 
 # The first living ant of the newest new body plan (see colony_sim._note_strain), or null.

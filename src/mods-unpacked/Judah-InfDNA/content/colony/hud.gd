@@ -65,6 +65,12 @@ var _task_legend: HBoxContainer
 var _mm: Control
 var _mm_panel: Control
 var _hint: Label
+var _dir_panel: PanelContainer
+var _will_bar: Control
+var _dir_btns := {}
+var _dir_sig := {}
+var _caste_btns := []
+var _dir_hint: Label
 var _watch_chip: Label
 var _watch_info: Label
 var _watch_t := 0.0
@@ -130,6 +136,7 @@ func _ready() -> void:
 	_build_left()
 	_build_lineage()
 	_build_bar()
+	_build_director()
 	_build_inspector()
 	_build_overlays()
 	_build_shop()
@@ -433,6 +440,19 @@ func _draw_minimap() -> void:
 	for e in sim.enemies:
 		var x5 = MM_W * 0.5 + (e.x - ex) * sc
 		_mm.draw_circle(Vector2(x5, cy - 3.0), 2.8 if e.cls == "prey" else 3.6, Color("#9fe3a8") if e.cls == "prey" else Color("#ff4a3d"))
+	# the director's orders and the bird
+	if sim.rally_t > 0.0:
+		var rx = MM_W * 0.5 + (sim.rally_x - ex) * sc
+		_mm.draw_line(Vector2(rx, cy + 8.0), Vector2(rx, cy - 12.0), Color("#ff6a4a"), 2.0)
+		_mm.draw_colored_polygon(PoolVector2Array([Vector2(rx, cy - 12.0), Vector2(rx + 9.0, cy - 9.0), Vector2(rx, cy - 5.0)]), Color("#ff6a4a"))
+	if sim.harvest_t > 0.0:
+		var hx = MM_W * 0.5 + (sim.harvest_x - ex) * sc
+		_mm.draw_circle(Vector2(hx, cy - 3.0), 6.0, Color(1.0, 0.85, 0.42, 0.5 + 0.4 * sin(_t * 6.0)))
+	if sim.bird != null:
+		var bx = MM_W * 0.5 + (sim.bird["x"] - ex) * sc
+		var blink = 0.55 + 0.45 * sin(_t * 8.0)
+		_mm.draw_colored_polygon(PoolVector2Array([Vector2(bx - 7.0, cy - 12.0), Vector2(bx + 7.0, cy - 12.0), Vector2(bx, cy - 2.0)]), Color(1.0, 0.25, 0.2, blink))
+		_mm.draw_string(_mm_font, Vector2(bx - 3.0, cy - 14.0), "!", Color(1, 1, 1, blink))
 	# nest
 	_mm.draw_colored_polygon(PoolVector2Array([Vector2(MM_W * 0.5 - 5.0, cy + 6.0), Vector2(MM_W * 0.5 + 5.0, cy + 6.0), Vector2(MM_W * 0.5, cy - 7.0)]), Kit.GOLD)
 	# the camera's view
@@ -506,6 +526,90 @@ func _build_layers() -> void:
 		_task_legend.add_child(sw)
 		Kit.label(_task_legend, TASK_LABELS[i], _f_s)
 	_task_legend.visible = scene.layer_state["tasks"]
+
+
+# ================================================================== build: the director's panel
+# Will (fills over time) and the commands it buys, plus the brood's caste order. Keys work too (see colony_scene).
+const CMD_ICONS = {"rally": "attack", "harvest": "food", "recall": "armor", "surge": "speed", "breed": "power"}
+
+
+func _build_director() -> void:
+	_dir_panel = PanelContainer.new()
+	_dir_panel.add_stylebox_override("panel", Kit.panel(Color(0.34, 0.26, 0.3), 0.95, 6.0))
+	_dir_panel.anchor_left = 1.0
+	_dir_panel.anchor_right = 1.0
+	_dir_panel.margin_left = -440
+	_dir_panel.margin_right = -24
+	_dir_panel.margin_top = 394
+	root.add_child(_dir_panel)
+	var v = VBoxContainer.new()
+	v.add_constant_override("separation", 5)
+	_dir_panel.add_child(v)
+	var t = Kit.label(v, "Director", _f_m, Kit.GOLD)
+	t.align = Label.ALIGN_CENTER
+	_will_bar = KBar.new().setup("luck", Kit.GOLD, 28, 330, 17)
+	v.add_child(_will_bar)
+	for id in Sim.COMMANDS.keys():
+		var c = Sim.COMMANDS[id]
+		var b = _btn(v, "", CMD_ICONS.get(id, ""), Color("#f2c14e"), 20)
+		b.hint_tooltip = "%s (%s): %s. Costs %d Will, recharges in %d s." % [c["name"], c["key"], c["tip"], int(c["cost"]), int(c["cd"])]
+		b.connect("pressed", self, "_on_cmd", [id])
+		_dir_btns[id] = b
+	var row = HBoxContainer.new()
+	row.add_constant_override("separation", 4)
+	v.add_child(row)
+	var cl = Kit.label(row, "Brood", _f_s)
+	cl.valign = Label.VALIGN_CENTER
+	cl.modulate = Color(1, 1, 1, 0.7)
+	var bg = ButtonGroup.new()
+	var names = [["Mixed", ""], ["Workers", ""], ["Soldiers", ""]]
+	var tips = ["The queen breeds whatever the colony needs", "Lean toward foragers and diggers", "Lean toward soldiers"]
+	for i in names.size():
+		var cb = _btn(row, names[i][0], "", Color("#f2c14e"), 17)
+		cb.toggle_mode = true
+		cb.group = bg
+		cb.pressed = i == 0
+		cb.hint_tooltip = tips[i]
+		cb.connect("pressed", self, "_on_caste", [i])
+		_caste_btns.append(cb)
+	_dir_hint = Kit.label(root, "", _f_m, Kit.GOLD)
+	_dir_hint.anchor_left = 0.5
+	_dir_hint.anchor_right = 0.5
+	_dir_hint.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_dir_hint.margin_top = 150
+	_dir_hint.visible = false
+
+
+func _on_cmd(id: String) -> void:
+	scene.command(id)
+
+
+func _on_caste(i: int) -> void:
+	scene.sim.caste_order = i
+
+
+func _refresh_director() -> void:
+	var sim = scene.sim
+	_will_bar.set_values(sim.will, Sim.WILL_MAX, "Will  %d" % int(sim.will))
+	for id in _dir_btns.keys():
+		var c = Sim.COMMANDS[id]
+		var cd = sim.cmd_cd.get(id, 0.0)
+		var ready = cd <= 0.0 and sim.will >= c["cost"]
+		var armed = scene.armed == id
+		var sig = "%d|%d|%s" % [int(ceil(cd)), int(sim.will >= c["cost"]), str(armed)]
+		var b: Button = _dir_btns[id]
+		if _dir_sig.get(id, "") != sig:
+			_dir_sig[id] = sig
+			var tail = ("%ds" % int(ceil(cd))) if cd > 0.0 else ("%d" % int(c["cost"]))
+			b.text = "%s  (%s)    %s" % [c["name"], c["key"], tail]
+			b.modulate = Color(1, 1, 1, 1.0 if ready else 0.5)
+		b.pressed = armed
+	_dir_hint.visible = scene.armed != "" and not scene.watch_mode
+	if scene.armed != "":
+		_dir_hint.text = "Click the ground to use %s   (Esc or right-click cancels)" % Sim.COMMANDS[scene.armed]["name"]
+	for i in _caste_btns.size():
+		if _caste_btns[i].pressed != (i == sim.caste_order):
+			_caste_btns[i].pressed = i == sim.caste_order
 
 
 # ================================================================== build: inspector
@@ -754,6 +858,7 @@ func _process(delta: float) -> void:
 	else:
 		_banner.visible = false
 		_banner_text = ""
+	_refresh_director()
 	if scene.watch_mode:
 		_watch_t += delta
 		_watch_chip.modulate.a = lerp(0.9, 0.28, smoothstep(5.0, 9.0, _watch_t))
@@ -1347,7 +1452,7 @@ func sync_quality() -> void:
 func set_watch(on: bool) -> void:
 	if on:
 		_watch_hidden = []
-		for n in [_left_col, _lineage_panel, _bar_panel, _mm_panel, _hint, _layers_panel, _inspect]:
+		for n in [_left_col, _lineage_panel, _bar_panel, _mm_panel, _hint, _layers_panel, _inspect, _dir_panel, _dir_hint]:
 			if n != null:
 				_watch_hidden.append([n, n.visible])
 				n.visible = false

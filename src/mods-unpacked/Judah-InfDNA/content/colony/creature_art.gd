@@ -154,3 +154,61 @@ static func _bee(ci: CanvasItem, t: float, shade: float, alpha: float, moving: b
 	ci.draw_circle(Vector2(21.0, cy - 1.0), 2.5, eye)
 	ci.draw_circle(Vector2(21.8, cy - 0.8), 1.2, Color(0.05, 0.05, 0.06, alpha))
 	_limb(ci, PoolVector2Array([Vector2(22.0, cy - 5.0), Vector2(27.0, cy - 11.0), Vector2(32.0, cy - 10.0 + sin(t * 5.0) * 1.5)]), 1.6, blk)
+
+
+# A bird of prey seen side-on, facing +x, origin at the body centre. `flap` 0..1 is how raised the wings are, `fold` 0..1 tucks them
+# for a stoop (talons forward). About 250 px across before `scale`: the size of a small cloud next to an ant.
+static func bird(ci: CanvasItem, pos: Vector2, scale: float, t: float, facing: int, fold: float, alpha: float) -> void:
+	ci.draw_set_transform(pos, 0.0, Vector2(facing * scale, scale))
+	var flap = 0.5 + 0.5 * sin(t * 9.0)
+	var body = Color(0.36, 0.29, 0.24, alpha)
+	var dark = Color(0.24, 0.19, 0.16, alpha)
+	var belly = Color(0.82, 0.74, 0.58, alpha)
+	var beak = Color(0.95, 0.66, 0.2, alpha)
+	var ink = Color(INK.r, INK.g, INK.b, alpha)
+	# the wing on the far side first, darker; then the tail; body; head; the near wing over everything
+	for pass_n in 2:
+		var near = pass_n == 1
+		if near:
+			_ell(ci, Vector2(-62, 6), 30.0, 12.0, dark, -0.25, 12)           # tail base
+			var tail = PoolVector2Array([Vector2(-70, -2), Vector2(-150, -10 + 14.0 * fold), Vector2(-146, 14 + 10.0 * fold), Vector2(-68, 16)])
+			ci.draw_colored_polygon(PoolVector2Array([tail[0] + Vector2(2, -3), tail[1] + Vector2(-5, -4), tail[2] + Vector2(-5, 5), tail[3] + Vector2(2, 4)]), ink)
+			ci.draw_colored_polygon(tail, dark)
+			for k in 3:
+				ci.draw_line(Vector2(-78 - k * 4, 0 + k * 6), Vector2(-142, -2 + k * 9 + 6.0 * fold), Color(0.45, 0.36, 0.3, alpha), 2.0, true)
+			_ink(ci, Vector2(0, 0), 78.0, 36.0, body, 3.4, 0.05)
+			_ell(ci, Vector2(8, 15), 60.0, 18.0, belly, 0.06, 16)
+			_ink(ci, Vector2(76, -16), 25.0, 23.0, body, 3.2)
+			_ell(ci, Vector2(80, -4), 17.0, 11.0, belly, 0.0, 12)
+			var bk = PoolVector2Array([Vector2(97, -20), Vector2(130, -10), Vector2(97, -4)])
+			ci.draw_colored_polygon(PoolVector2Array([bk[0] + Vector2(-3, -4), bk[1] + Vector2(5, 0), bk[2] + Vector2(-3, 4)]), ink)
+			ci.draw_colored_polygon(bk, beak)
+			ci.draw_circle(Vector2(86, -26), 7.0, ink)
+			ci.draw_circle(Vector2(86, -26), 5.0, Color(1.0, 0.95, 0.7, alpha))
+			ci.draw_circle(Vector2(87.5, -26), 2.6, Color(0.05, 0.04, 0.05, alpha))
+			ci.draw_line(Vector2(78, -41), Vector2(104, -34), ink, 4.0, true)   # a stern brow
+			# talons: tucked in cruise, thrust forward and down in a stoop
+			for k in 2:
+				var lx = 8.0 + k * 14.0
+				var foot = Vector2(lx + 44.0 * fold, 34.0 + 30.0 * fold)
+				ci.draw_line(Vector2(lx, 30), foot, ink, 7.0, true)
+				ci.draw_line(Vector2(lx, 30), foot, beak, 3.2, true)
+				for c in 3:
+					ci.draw_line(foot, foot + Vector2(10 + c * 4, 8 - c * 6), ink, 3.0, true)
+		var ang = lerp(0.2 + 1.1 * flap, -0.55, fold) * (1.0 if near else 0.8)    # wing angle above horizontal
+		var sh = Vector2(8, -22) + Vector2(0, 0 if near else -4)
+		var tip = sh + Vector2(-26.0 - 10.0 * (1.0 - fold), -150.0 * sin(ang) * (1.0 - 0.45 * fold)) + Vector2(-60.0 * fold, 0)
+		var mid = sh + Vector2(-70.0, -70.0 * sin(ang))
+		var wing = PoolVector2Array([sh + Vector2(36, 0), sh + Vector2(10, -36.0 * sin(ang) - 10), mid + Vector2(10, -14), tip, tip + Vector2(-26, 10), mid + Vector2(-42, 22), sh + Vector2(-58, 14), sh + Vector2(-30, 24)])
+		var wc = body if near else dark
+		ci.draw_colored_polygon(wing, ink)
+		var inner = PoolVector2Array()
+		var cen = (sh + tip) * 0.5
+		for q in wing:
+			inner.append(cen + (q - cen) * 0.93)
+		ci.draw_colored_polygon(inner, wc)
+		for k in 5:      # primary feathers
+			var u = 0.35 + 0.13 * k
+			var f0 = sh.linear_interpolate(tip, u)
+			ci.draw_line(f0, f0 + Vector2(-30, 22 - 4 * k), Color(0.2, 0.15, 0.12, alpha * 0.7), 2.2, true)
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

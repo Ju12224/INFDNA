@@ -577,7 +577,7 @@ func _draw_ant(a) -> void:
 	_face_k[a.id] = fk
 	var fk_draw = fk if abs(fk) > 0.35 else (0.35 if fk >= 0.0 else -0.35)     # a quick squash-turn, never a vanished sprite
 	draw_set_transform(feet + _p_off, a.rot + _p_rot, Vector2(fk_draw * s * _p_sx * (1.0 + 0.12 * hurt), s * _p_sy * (1.0 + bob - 0.14 * hurt)))
-	var alpha = d[3]
+	var alpha = d[3] * (0.55 if a.shelter_t > 0.0 else 1.0)       # sheltering in cover after a Recall
 	var tint = Color(shade, shade, shade, alpha)
 	if hurt > 0.0:
 		tint = Color(shade, shade * (1.0 - 0.6 * hurt), shade * (1.0 - 0.6 * hurt), alpha)

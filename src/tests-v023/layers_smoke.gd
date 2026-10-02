@@ -62,6 +62,49 @@ func _idle(_delta):
 		s.hud._layer_btns["fights"].pressed = true
 		_check(s.layer_state["fights"] and s.layers_view.show_fights, "HUD button turns Fights on")
 		s.cam.position = Vector2(sim.grid.entrance.x * 6.0 + 20000.0, 200.0)   # raiders now off screen: arrows get drawn
+	elif frames == 125:
+		# director commands: Will, cooldowns, effects, the HUD panel and click-to-place arming
+		var ex = int(sim.grid.entrance.x)
+		sim.will = 100.0
+		sim.cmd_cd.clear()
+		_check(s.hud._dir_btns.size() == 5, "director panel has five command buttons")
+		_check(sim.cast("surge") and sim.surge_t > 0.0, "Surge goes out")
+		_check(sim.cast("recall") and sim.recall_t > 0.0, "Recall goes out")
+		var any_cover = false
+		for a in sim.ants:
+			if a.shelter_t > 0.0:
+				any_cover = true
+		_check(any_cover or sim.ants.empty(), "Recall puts surface ants in cover")
+		var pile = null
+		for p in sim.piles:
+			if p["amount"] > 8.0:
+				pile = p
+				break
+		if pile != null:
+			sim.will = 100.0
+			_check(sim.cast("harvest", pile["x"]) and sim.harvest_x == pile["x"], "Harvest picks the pile at the cursor")
+		sim.will = 100.0
+		sim.cmd_cd.clear()
+		_check(sim.cast("rally", ex + 20) or sim._inside_n > 0, "Rally goes out (or is refused while raiders are inside)")
+		sim.will = 100.0
+		sim.cmd_cd.clear()
+		_check(sim.cast("breed", 0, sim.ants[0]) and sim.blessed_left == 8, "Breed steers the next eggs from the selected ant")
+		sim.will = 100.0
+		sim.cast("surge")
+		var before = sim.will
+		_check(not sim.cast("surge") and sim.will == before, "a command on cooldown costs nothing")
+		s.command("rally")
+		_check(s.armed == "rally", "a button arms rally for a click")
+		s.set_armed("")
+		s.hud._on_caste(2)
+		_check(sim.caste_order == 2, "caste order lever reaches the sim")
+		sim.caste_order = 0
+		sim.bird = {"x": float(ex + 60), "t": 20.0, "cd": 0.0, "dive": 0.0, "alt": 1.0, "face": 1, "kills": 0}
+		sim.ants[0].shelter_t = 0.0
+		for i in 120:
+			sim._step_bird(0.1)
+		_check(sim.bird == null or sim.bird["t"] < 20.0, "the bird hunts and gives up without errors")
+		sim.bird = null
 	elif frames == 130:
 		# watch mode (V): HUD hidden, busy layers off, camera directed; leaving restores everything
 		sim.strain_events.append({"uid": sim.ants[0].genome.uid, "text": "test strain", "t": sim.time})

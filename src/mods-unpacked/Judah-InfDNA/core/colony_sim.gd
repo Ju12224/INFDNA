@@ -111,6 +111,7 @@ class Ant:
 	var empty_trips := 0
 	var leg := 0             # cells left in the current straight scouting leg
 	var local_t := 0         # hops of tight area-restricted search around a lost site
+	var shelter_t := 0.0     # in cover (after a Recall): a bird cannot pick it out
 	var flee := 0            # hops left of running from a raider (so a threat edge does not make it dither)
 	var far := 0             # farthest distance from the nest this trip
 	var rich := 0.5          # fullness of the pile it loaded from (trail strength)
@@ -199,7 +200,7 @@ var queen_hp := QUEEN_HP
 var queen_max := QUEEN_HP
 var kills := 0
 var died_combat := 0
-var deaths := {"old": 0, "starve": 0, "combat": 0, "other": 0}   # by cause (harness/HUD)
+var deaths := {"old": 0, "starve": 0, "combat": 0, "bird": 0, "other": 0}   # by cause (harness/HUD)
 var dist_threat := PoolIntArray()
 var fx: Array = []               # view effects: {"kind", "pos", "text", "color", "t"}
 var _threat_timer := 0.0
@@ -283,6 +284,35 @@ var mutagen := 1
 var blessed = null
 var blessed_left := 0
 var beacons: Array = []          # [{"x": int, "t": time_left}]
+
+# ---- The director's commands. The colony alone is only competent; the player is its voice. Will fills over time and is spent on
+# commands, each with a cooldown. See cast().
+const CASTE_ORDER = [[1.0, 1.0, 1.0], [1.8, 1.3, 0.45], [0.6, 0.6, 2.6]]   # mixed, workers, soldiers
+const WILL_MAX = 100.0
+const WILL_REGEN = 1.5             # per second: a full bar in about a minute
+const COMMANDS = {
+	"rally": {"name": "Rally", "cost": 30.0, "cd": 10.0, "key": "R", "target": true,
+		"tip": "Plant a flag: defenders and soldiers hold it for 25 s and bite 35% harder near it"},
+	"harvest": {"name": "Harvest", "cost": 20.0, "cd": 12.0, "key": "E", "target": true,
+		"tip": "Send foragers to the pile at the cursor for 60 s: they carry 30% more"},
+	"recall": {"name": "Recall", "cost": 15.0, "cd": 20.0, "key": "Z", "target": false,
+		"tip": "Everyone on the surface without a load runs home and stays in for 12 s"},
+	"surge": {"name": "Surge", "cost": 25.0, "cd": 30.0, "key": "J", "target": false,
+		"tip": "Surface ants run 45% faster for 10 s"},
+	"breed": {"name": "Breed", "cost": 40.0, "cd": 45.0, "key": "M", "target": false,
+		"tip": "The next 8 eggs are bred from the selected ant (or mutate hard if none) - steer evolution"},
+}
+var will := 50.0
+var cmd_cd := {}                  # command id -> seconds left
+var rally_x := 0
+var rally_t := 0.0
+var harvest_x := 0
+var harvest_t := 0.0
+var surge_t := 0.0
+var recall_t := 0.0
+var caste_order := 0              # 0 mixed, 1 workers, 2 soldiers: what the queen's brood leans toward
+const RALLY_LEN = 25.0
+const HARVEST_LEN = 60.0
 var _beacon_cd := 0.0
 var _goal_t := 2.0
 var jackpot_t := 150.0
@@ -615,6 +645,7 @@ func _step_weather(dt: float) -> void:
 
 func _step_extras(dt: float) -> void:
 	_step_weather(dt)
+	_step_director(dt)
 	_trail_t -= dt
 	if _trail_t <= 0.0:
 		_trail_t = 1.0
@@ -701,6 +732,185 @@ func place_beacon(x: int) -> bool:
 	fx.append({"kind": "text", "pos": grid.center(x, grid.surf_y(x) - 7), "t": 0.0, "text": "SCOUT HERE", "color": Color("#7ed957")})
 	toasts.append({"text": "Scent beacon set %d cells %s of the nest." % [abs(x - ex), "west" if x < ex else "east"], "t": 4.0})
 	return true
+
+
+# The director's voice. `x` is the world column the cursor is over (rally, harvest), `sel` the selected ant (breed).
+# Returns true if the command went out.
+func cast(id: String, x: int = 0, sel = null) -> bool:
+	if collapsed or not COMMANDS.has(id):
+		return false
+	var c = COMMANDS[id]
+	if cmd_cd.get(id, 0.0) > 0.0:
+		toasts.append({"text": "%s is recharging (%d s)." % [c["name"], int(ceil(cmd_cd[id]))], "t": 2.0})
+		return false
+	if will < c["cost"]:
+		toasts.append({"text": "Not enough Will for %s (%d needed)." % [c["name"], int(c["cost"])], "t": 2.0})
+		return false
+	var ex = int(grid.entrance.x)
+	x = int(clamp(x, ex - RANGE_MAX + 20, ex + RANGE_MAX - 20))
+	match id:
+		"rally":
+			if _inside_n > 0:
+				toasts.append({"text": "Raiders are inside the nest: the colony will not leave it to rally.", "t": 3.0})
+				return false
+			rally_x = x
+			rally_t = RALLY_LEN
+			# call up to ~45% of the colony: soldiers first, then idle hands; never an ant carrying food
+			var want = int(ants.size() * 0.45)
+			var order := []
+			for a in ants:
+				if a.carry <= 0.0:
+					order.append(a)
+			order.sort_custom(self, "_rally_order")
+			var n := 0
+			for a in order:
+				if n >= want:
+					break
+				if a.task != Task.DEFEND:
+					if a.task == Task.FORAGE:
+						_n_foragers = max(0, _n_foragers - 1)
+					a.task = Task.DEFEND
+					a.timer = 0.0
+					a.spoil = 0.0
+					a.hauling = false
+				n += 1
+			fx.append({"kind": "ring", "pos": grid.center(x, grid.surf_y(x) - 3), "t": 0.0, "color": Color("#ff6a4a")})
+			fx.append({"kind": "text", "pos": grid.center(x, grid.surf_y(x) - 8), "t": 0.0, "text": "RALLY!", "color": Color("#ff6a4a")})
+		"harvest":
+			var best = null
+			var bd = 90
+			for p in piles:
+				var d = abs(p["x"] - x)
+				if p["amount"] > 8.0 and d < bd:
+					bd = d
+					best = p
+			if best == null:
+				toasts.append({"text": "No pile near the cursor: put it over a food pile (they show on the minimap).", "t": 3.0})
+				return false
+			harvest_x = best["x"]
+			harvest_t = HARVEST_LEN
+			best["found"] = true
+			var sent := 0
+			for a in ants:
+				if a.task == Task.FORAGE and a.carry <= 0.0 and not grid.is_under(a.x, a.y) and sent < 60:
+					a.site = harvest_x
+					a.search_r = int(min(RANGE_MAX, max(a.search_r, abs(harvest_x - ex) + 60)))
+					a.heading = 1 if harvest_x > a.x else -1
+					sent += 1
+			fx.append({"kind": "ring", "pos": grid.center(harvest_x, grid.surf_y(harvest_x) - 3), "t": 0.0, "color": Color("#ffd86b")})
+			fx.append({"kind": "text", "pos": grid.center(harvest_x, grid.surf_y(harvest_x) - 8), "t": 0.0, "text": "HARVEST", "color": Color("#ffd86b")})
+		"recall":
+			recall_t = 12.0
+			for a in ants:
+				if grid.is_under(a.x, a.y):
+					continue
+				a.shelter_t = 14.0          # everyone outside scatters into cover while they run for home
+				if a.carry <= 0.0 and a.task != Task.DEFEND:
+					a.task = Task.HOME
+					a.spoil = 0.0
+					a.hauling = false
+			banner = "Recall: the colony runs for home"
+			banner_t = 3.0
+		"surge":
+			surge_t = 10.0
+			fx.append({"kind": "ring", "pos": grid.center(ex, grid.surf_y(ex) - 3), "t": 0.0, "color": Color("#7fe0c4")})
+			toasts.append({"text": "Surge: surface ants sprint for 10 s.", "t": 3.0})
+		"breed":
+			if sel != null and ants.has(sel):
+				blessed = sel.genome
+				blessed_left = 8
+				fx.append({"kind": "ring", "pos": ant_pos(sel), "t": 0.0, "color": Color("#b58cff")})
+				toasts.append({"text": "Breed: the next 8 eggs come from the selected ant, each with a fresh mutation.", "t": 5.0})
+			else:
+				fate.ray_eggs += 8
+				toasts.append({"text": "Breed: the next 8 eggs mutate hard. (Select an ant first to breed from it.)", "t": 5.0})
+	will -= c["cost"]
+	cmd_cd[id] = c["cd"]
+	return true
+
+
+# ---- Predators. A bird now and then hunts the foragers far from the nest: it drifts toward the nearest ant on the open
+# ground and picks one off every few seconds (two when they bunch up). Ants underground are safe, so Recall is the answer;
+# the bird gives up when nothing is left outside, or after half a minute. The view draws it (predator_view.gd).
+var bird = null                    # {"x": float, "t": seconds left, "cd": strike cooldown, "dive": 0..1, "alt": 0..1, "face": 1|-1, "kills": int}
+var _bird_timer := 170.0
+const BIRD_LEN = 32.0
+const BIRD_SPEED = 38.0            # cells per second
+const BIRD_STRIKE_CD = 3.6
+
+
+func _step_bird(dt: float) -> void:
+	if bird == null:
+		_bird_timer -= dt
+		if _bird_timer <= 0.0 and time > 150.0:
+			var ex = int(grid.entrance.x)
+			var far := []
+			for a in ants:
+				if not grid.is_under(a.x, a.y) and abs(a.x - ex) > 90:
+					far.append(a)
+			if far.size() >= 6:
+				var t = far[rng.randi_range(0, far.size() - 1)]
+				bird = {"x": float(t.x) + rng.randf_range(-60.0, 60.0), "t": BIRD_LEN * clamp(ants.size() / 120.0, 0.5, 1.0), "cd": 2.0, "dive": 0.0, "alt": 1.0, "face": 1, "kills": 0}
+				bird["x"] = clamp(bird["x"], float(ex - RANGE_MAX + 20), float(ex + RANGE_MAX - 20))
+				banner = "A bird is hunting over the %s meadow!  (Recall brings the foragers home)" % ("west" if bird["x"] < ex else "east")
+				banner_t = 5.0
+				_sfx("boss")
+			else:
+				_bird_timer = 30.0
+		return
+	bird["t"] -= dt
+	bird["cd"] = max(0.0, bird["cd"] - dt)
+	bird["dive"] = max(0.0, bird["dive"] - dt * 1.4)
+	var target = null
+	var bd = 1e9
+	for a in ants:
+		if not grid.is_under(a.x, a.y) and a.shelter_t <= 0.0:
+			var d = abs(a.x - bird["x"])
+			if d < bd:
+				bd = d
+				target = a
+	if target == null or bd > 500.0 or bird["t"] <= 0.0:
+		toasts.append({"text": "The bird flies off.", "t": 3.0})
+		bird = null
+		_bird_timer = rng.randf_range(150.0, 260.0)
+		return
+	var dir = 1.0 if target.x > bird["x"] else -1.0
+	var alt_goal = 1.0 if bird["dive"] > 0.2 else clamp(bd / 55.0, 0.08, 1.0)      # stoops as it closes in, climbs away after a strike
+	bird["alt"] = lerp(bird["alt"], alt_goal, 1.0 - exp(-4.0 * dt))
+	if bd > 4.0:
+		bird["x"] += dir * min(bd, BIRD_SPEED * dt)
+		bird["face"] = int(dir)
+	if bd <= 10.0 and bird["cd"] <= 0.0:
+		bird["cd"] = BIRD_STRIKE_CD
+		bird["dive"] = 1.0
+		var near := []
+		for a in ants:
+			if not grid.is_under(a.x, a.y) and a.shelter_t <= 0.0 and abs(a.x - bird["x"]) <= 12.0:
+				near.append(a)
+		var victims := near.slice(0, 1 if near.size() < 9 else 2)         # one ant, or two when they bunch up
+		for a in victims:
+			fx.append({"kind": "puff", "pos": ant_pos(a), "t": 0.0, "color": Color("#c9a37a")})
+			kill(a, "bird")
+			bird["kills"] += 1
+		if not victims.empty():
+			shake = max(shake, 0.25)
+
+
+func _rally_order(a, b) -> bool:
+	var ka = 0 if a.caste == 2 else (1 if a.task != Task.FORAGE else 2)
+	var kb = 0 if b.caste == 2 else (1 if b.task != Task.FORAGE else 2)
+	return ka < kb
+
+
+func _step_director(dt: float) -> void:
+	_step_bird(dt)
+	will = min(WILL_MAX, will + WILL_REGEN * dt)
+	for k in cmd_cd.keys():
+		cmd_cd[k] = max(0.0, cmd_cd[k] - dt)
+	rally_t = max(0.0, rally_t - dt)
+	harvest_t = max(0.0, harvest_t - dt)
+	surge_t = max(0.0, surge_t - dt)
+	recall_t = max(0.0, recall_t - dt)
 
 
 # Player power 2: mutagen. The queen breeds the next 8 eggs from the chosen ant, each mutated.
@@ -798,6 +1008,11 @@ func _p(s: float, t: float) -> float:
 
 func _choose_task(a) -> void:
 	a.timer = 0.0
+	if recall_t > 0.0 and a.caste != 2 and _stim_defend <= 0.0:
+		a.task = Task.NURSE      # recalled: stay in the nest until the order lapses
+		a.spoil = 0.0
+		a.hauling = false
+		return
 	# a digger holding a pellet finishes the trip instead of dropping it in the tunnel
 	if a.spoil > 0.0 and a.task == Task.DIG and _stim_defend < 0.9:
 		a.hauling = true
@@ -950,6 +1165,7 @@ func _footing_fix(u, dt: float) -> void:
 func _step_ant(a, dt: float) -> void:
 	a.age += dt
 	a.hurt = max(0.0, a.hurt - dt)
+	a.shelter_t = max(0.0, a.shelter_t - dt)
 	a.timer += dt
 	if a.age > a.life:
 		kill(a, "old")
@@ -987,6 +1203,8 @@ func _step_ant(a, dt: float) -> void:
 	else:
 		var und = grid.is_under(a.x, a.y)
 		var sp = a.ph["speed"] * (a.ph["tunnel_mult"] if und else SURFACE_K)
+		if surge_t > 0.0 and not und:
+			sp *= 1.45
 		if not und and a.task == Task.FORAGE:
 			sp *= 1.0 + TRAIL_BOOST * min(1.0, grid.pher_at(a.x) / 1.2)   # ants run faster on a used trail
 		a.t += sp * dt / dist
@@ -1159,7 +1377,7 @@ func _forage(a) -> void:
 			p["amount"] -= take
 			# far piles are richer: seeds, honeydew, whole carcasses. The load is worth more the farther it came
 			# from (up to x2.2 past 720 cells), which pays for the long walk home.
-			a.carry = take * (1.0 + clamp(abs(p["x"] - ex) / 600.0, 0.0, 1.2))
+			a.carry = take * (1.0 + clamp(abs(p["x"] - ex) / 600.0, 0.0, 1.2)) * (1.3 if (harvest_t > 0.0 and p["x"] == harvest_x) else 1.0)
 			a.site = p["x"]          # route memory: it will come straight back here
 			a.empty_trips = 0
 			if not p.get("found", false):
@@ -1247,7 +1465,7 @@ func _start_trip(a) -> void:
 	a.search_r = int(min(RANGE_MAX, RANGE_BASE * pow(RANGE_GROW, a.empty_trips)))
 	if a.site == NO_SITE and not beacons.empty() and rng.randf() < 0.65:
 		a.site = beacons[rng.randi_range(0, beacons.size() - 1)]["x"]   # the player's scent flag
-	if a.site == NO_SITE and rng.randf() < 0.7:
+	if a.site == NO_SITE and (harvest_t > 0.0 or rng.randf() < 0.7):
 		a.site = _recruit_site()                                         # nestmates' news of a pile somebody already found
 	if a.site != NO_SITE:
 		var ex = int(grid.entrance.x)
@@ -1265,6 +1483,10 @@ func _start_trip(a) -> void:
 # what a young forager's own search radius covers, only scouts ever found anything and the colony starved.
 func _recruit_site() -> int:
 	var ex = int(grid.entrance.x)
+	if harvest_t > 0.0 and rng.randf() < 0.9:
+		for p in piles:
+			if p["x"] == harvest_x and p["amount"] > 8.0:
+				return harvest_x
 	var items := []
 	var weights := []
 	for p in piles:
@@ -1582,7 +1804,8 @@ func _lay_egg() -> void:
 func _needed_caste() -> int:
 	var threat = 0.2 + 0.3 * min(1.0, raid_n / 4.0) + _stim_defend
 	var cb = rule("caste_bias", [1.0, 1.0, 1.0])
-	return _weighted([0, 1, 2], [max(0.25, _stim_forage) * cb[0], max(0.1, _stim_dig + 0.1) * cb[1], threat * cb[2]])
+	var co = CASTE_ORDER[caste_order]
+	return _weighted([0, 1, 2], [max(0.25, _stim_forage) * cb[0] * co[0], max(0.1, _stim_dig + 0.1) * cb[1] * co[1], threat * cb[2] * co[2]])
 
 
 func _caste_fitness(a, caste: int) -> float:
@@ -2389,7 +2612,7 @@ func _update_rally() -> void:
 	var src := []
 	var any_e = not enemies.empty()
 	for a in ants:
-		a.rally_k = 1.0
+		a.rally_k = 1.35 if (rally_t > 0.0 and abs(a.x - rally_x) <= 16) else 1.0
 		if any_e and src.size() < 24 and a.ph.get("rally", 0.0) > 0.0 and (a.task == Task.DEFEND or a.hurt > 0.0):
 			src.append(a)
 	if src.empty():
@@ -2590,6 +2813,17 @@ func _step_threat(dt: float) -> void:
 
 
 func _defend(a) -> void:
+	if rally_t > 0.0 and _inside_n == 0 and queen_hp >= queen_max * 0.7:
+		# the flag is up: walk to it and hold it, whatever is or is not attacking on the surface. Never while raiders are
+		# inside the nest or the queen is hurt: then everyone defends the nest as usual.
+		if grid.is_under(a.x, a.y):
+			_descend(a, grid.dist_exit)
+		elif abs(a.x - rally_x) > 3:
+			a.heading = 1 if rally_x > a.x else -1
+			_walk_surface(a)
+		else:
+			_go(a, Vector2(a.x, a.y))
+		return
 	if hostile_count() == 0 or a.timer > 70.0 or dist_threat.size() == 0:
 		a.task = Task.HOME
 		_descend(a, grid.dist_home)
