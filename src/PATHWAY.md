@@ -113,8 +113,10 @@ fix: no collapses, steady income, population grows to 170-220 and holds. Lesson:
 tuning numbers; the tuning experiments below (wider lifespan spread, 1.4x piles, scrap piles, lower frontier cap, laying limit) were all
 chasing a bug and have been dropped. Kept as sound on their own: recruitment of foragers to piles nestmates already found, and the defender
 cap by threat.
-Now open: the late game may be too easy for the bot (raid 14+ with queen at full health): steepen raid scaling (`_combat` scale
-1 + 0.065 per raid) or raid pacing, then re-measure against the targets below. Use `bal.gd` with MINS=25 and SEED=11,22,33,66,77,88;
+Late game (v0.27): raids now arrive in waves, scale with colony size and toughen quadratically after raid 8; the bot's colony is worn down from
+about raid 17 and two of four seeds lost the queen by raid 27-38 (minute 41-45). Next to look at: how a human with no bot's perfect
+purchases fares, and whether the first 15 minutes should be a little harder (raid 1-8 are currently never a threat).
+Use `bal.gd` with MINS=25 and SEED=11,22,33,66,77,88;
 results are deterministic per seed, so A/B a change on the same seeds.
 
 ## Balance targets (measure on the M3 harness; these are the pass/fail lines)

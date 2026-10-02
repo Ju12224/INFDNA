@@ -1,4 +1,17 @@
-# InfDNA (Brotato mod) - v0.26.1
+# InfDNA (Brotato mod) - v0.27.0
+
+## v0.27.0 - late raids that can actually end a run
+After the walking fix the balanced bot's colony sat at ~180 ants with a full-health queen through raid 26 (40 minutes): nothing late
+could hurt it. Why: a raid's budget was large (raid 15 = 71 raiders) but they spawned one every 0.9 s and were killed one by one as they
+trickled in, never more than ~15 on the field. Changes (all in `colony_sim.gd`, constants `RAID_*` at the top):
+- **Raiders arrive in waves** (raids of more than 10 raiders): about five waves, 7 s apart, each walking in together and fought as a mass.
+  Small raids keep the old trickle so early raids stay gentle.
+- **Raid size follows the colony:** budget x (colony size / 90, clamped 0.85-1.7), and x (1 + 0.09 per raid after the sixth).
+- **Late toughening:** raider HP and bite gain a quadratic term after raid 8 (`RAID_HP_LATE`, `RAID_BITE_LATE`).
+Measured with the balanced bot, 4 seeds up to 48 minutes: unchanged until about raid 17 (minute 27); then peak hostiles rise to 25-50 and
+the colony is worn down. Two of four seeds lost their queen (raid 27 at ~41 min, raid 38 at ~45 min), two were still alive at 48 minutes
+(raid 33, 91-133 ants). A human who buys less carefully than the bot will fall sooner. Tune with `RAID_LATE`, `RAID_HP_LATE`.
+
 
 ## v0.26.1 - watch mode, calmer ants and raiders, day/night and rain, recruitment, strain spotlight, run summary
 Compile-checked, rendered headless under Xvfb (software GL), fuzzed 8 sim-minutes with watch mode and random time of day (no
