@@ -31,6 +31,9 @@ NOT playtested in Brotato.
   HUD shows Dawn/Day/Dusk/Night. One multiply-blend pass lights everything above the ground line, so the tunnels keep their own warm
   light and the cost is a few polygons (GLES2 ignores `draw_mesh`'s modulate for vertex-coloured meshes, so a per-mesh tint was not
   possible). Purely visual.
+- **Rain** (`weather_view.gd`, sim `_step_weather`): every few minutes it rains for 35-70 s. The light turns grey-blue, streaks fall to the
+  ground and splash on it, the bees and butterflies shelter, and the scent trails wash away about 4x faster (foragers fall back on route
+  memory, the colony has to re-lay its roads). Toasts announce it. The HUD subtitle and watch-mode status say "Rain".
 - **New-strain spotlight.** A body plan the colony has never had (new limb count, ability or organ) is announced with a toast; `N` jumps
   the camera to the first ant wearing it, and watch mode cuts to it by itself.
 - **HUD scales down below 1080p** (the layout is built for 1920x1080) instead of overlapping at 1280x720.

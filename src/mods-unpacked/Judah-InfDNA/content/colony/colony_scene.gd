@@ -14,6 +14,7 @@ const UndergroundUI = preload("res://mods-unpacked/Judah-InfDNA/content/colony/u
 const Sfx = preload("res://mods-unpacked/Judah-InfDNA/content/colony/sfx.gd")
 const CameraRig = preload("res://mods-unpacked/Judah-InfDNA/content/colony/camera_rig.gd")
 const Hud = preload("res://mods-unpacked/Judah-InfDNA/content/colony/hud.gd")
+const WeatherView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/weather_view.gd")
 const LightView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/light_view.gd")
 const DayCycle = preload("res://mods-unpacked/Judah-InfDNA/content/colony/day_cycle.gd")
 const WatchCam = preload("res://mods-unpacked/Judah-InfDNA/content/colony/watch_cam.gd")
@@ -31,6 +32,7 @@ var ant_view
 var enemy_view
 var layers_view
 var perf               # the optimizer (perf.gd): adaptive quality
+var _weather
 var day                # day_cycle.gd: sun, moon and the colour of the surface light
 var cam
 var hud
@@ -93,12 +95,20 @@ func _ready() -> void:
 	ant_view.ground = world_view.ground
 	world_view.cam = cam
 
+	var weather = WeatherView.new()    # rain streaks and splashes (drawn above the light so they stay bright)
+	weather.sim = sim
+	weather.cam = cam
+	weather.ground = world_view.ground
+	weather.day = day
+	weather.perf = perf
+	_weather = weather
 	var light = LightView.new()        # the colour of the surface light, multiplied over sky, ground and units
 	light.sim = sim
 	light.cam = cam
 	light.ground = world_view.ground
 	light.day = day
 	add_child(light)
+	add_child(weather)
 
 	layers_view = LayersView.new()     # fight / task / health marks, above the ants and raiders
 	layers_view.sim = sim
@@ -134,7 +144,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	day.update(sim.time)
+	day.update(sim.time, sim.rain)
 	if sim.shop_pending and not shop_open and not sim.collapsed:
 		open_shop()
 	# Fixed-budget stepping: simulate what the speed asks for, but never spend more than BUDGET_US

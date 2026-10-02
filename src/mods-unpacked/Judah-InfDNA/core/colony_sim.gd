@@ -586,7 +586,29 @@ func step(dt: float) -> void:
 		collapse_reason = "The queen has fallen."
 
 
+# Weather: now and then it rains. Rain washes the scent trails away (they lose strength ~4x faster while it pours), so
+# foragers fall back on route memory and the colony has to re-lay its roads. The views add streaks, splashes and grey light.
+var rain := 0.0
+var _rain_goal := 0.0
+var _rain_timer := 170.0
+
+
+func _step_weather(dt: float) -> void:
+	_rain_timer -= dt
+	if _rain_timer <= 0.0:
+		if _rain_goal > 0.0:
+			_rain_goal = 0.0
+			_rain_timer = rng.randf_range(150.0, 300.0)
+			toasts.append({"text": "The rain stops. The scent trails will need re-laying.", "t": 5.0})
+		else:
+			_rain_goal = rng.randf_range(0.55, 1.0)
+			_rain_timer = rng.randf_range(35.0, 70.0)
+			toasts.append({"text": "Rain! The scent trails are washing away.", "t": 5.0})
+	rain = move_toward(rain, _rain_goal, dt / 6.0)
+
+
 func _step_extras(dt: float) -> void:
+	_step_weather(dt)
 	_trail_t -= dt
 	if _trail_t <= 0.0:
 		_trail_t = 1.0
@@ -1607,7 +1629,7 @@ func _step_food(dt: float) -> void:
 
 	_pher_acc += dt
 	if _pher_acc >= 0.5:
-		grid.pher_decay(exp(-_pher_acc / PHER_TAU))
+		grid.pher_decay(exp(-_pher_acc * (1.0 + 3.0 * rain) / PHER_TAU))
 		_pher_acc = 0.0
 
 	for l in legacy:

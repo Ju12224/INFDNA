@@ -16,9 +16,12 @@ var night := 0.0         # 0 day .. 1 full night
 var warm := 0.0          # 0..1 around sunrise and sunset
 var tint := Color.white  # multiply surface colours by this
 var day_n := 1
+var rain := 0.0          # 0..1, from the sim's weather
+const RAIN_TINT = Color(0.68, 0.76, 0.88)
 
 
-func update(t: float) -> void:
+func update(t: float, rain_k: float = 0.0) -> void:
+	rain = rain_k
 	var d = t / DAY_LEN + START
 	day_n = 1 + int(floor(d))
 	ph = force if force >= 0.0 else fposmod(d, 1.0)
@@ -28,7 +31,9 @@ func update(t: float) -> void:
 	warm = exp(-h * h) * (1.0 - night * 0.5)
 	var c = Color.white.linear_interpolate(NIGHT_TINT, night)
 	var w = warm * 0.65
-	tint = Color(c.r * (1.0 - w + w * DUSK_TINT.r), c.g * (1.0 - w + w * DUSK_TINT.g), c.b * (1.0 - w + w * DUSK_TINT.b), 1.0)
+	w *= 1.0 - 0.6 * rain
+	var wet = Color.white.linear_interpolate(RAIN_TINT, rain)
+	tint = Color(c.r * (1.0 - w + w * DUSK_TINT.r) * wet.r, c.g * (1.0 - w + w * DUSK_TINT.g) * wet.g, c.b * (1.0 - w + w * DUSK_TINT.b) * wet.b, 1.0)
 
 
 # Colour multiplier for something that is `k` of the way outside (1 = on the surface, 0 = underground).
@@ -39,6 +44,8 @@ func tint_at(k: float) -> Color:
 
 
 func label() -> String:
+	if rain > 0.35:
+		return "rain"
 	if elev < -0.28:
 		return "night"
 	if elev < 0.2:

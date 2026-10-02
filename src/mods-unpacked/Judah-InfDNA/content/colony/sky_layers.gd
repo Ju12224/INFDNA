@@ -129,6 +129,8 @@ func _stop_col(i: int) -> Color:
 		c = c.linear_interpolate(DUSK_STOPS[i], day.warm * 0.8)
 	if day.night > 0.01:
 		c = c.linear_interpolate(NIGHT_STOPS[i], day.night)
+	if day.rain > 0.01:
+		c = c.linear_interpolate(Color(0.55, 0.6, 0.66).linear_interpolate(Color(0.12, 0.15, 0.22), day.night), 0.6 * day.rain)     # overcast
 	# light_view.gd multiplies everything on screen by the light colour afterwards: pre-divide so the sky lands on its palette
 	var t = day.tint
 	return Color(min(c.r / max(t.r, 0.2), 1.0), min(c.g / max(t.g, 0.2), 1.0), min(c.b / max(t.b, 0.2), 1.0), 1.0)

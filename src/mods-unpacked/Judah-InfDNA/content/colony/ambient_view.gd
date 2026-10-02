@@ -42,8 +42,8 @@ func _draw() -> void:
 	var s1 = int(ceil((cx + half + 150.0) / SPAN))
 	if night > 0.15:
 		_fireflies(s0, s1, night)
-	if night > 0.45:
-		return          # the bees and butterflies are asleep
+	if night > 0.45 or (day != null and day.rain > 0.3):
+		return          # the bees and butterflies are asleep (or sheltering from the rain)
 	for s in range(s0, s1 + 1):
 		var h = _h(s * 7.77)
 		if h < 0.4:
