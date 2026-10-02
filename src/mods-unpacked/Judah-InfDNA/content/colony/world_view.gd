@@ -6,7 +6,8 @@ extends Node2D
 # and, added by colony_scene after this node: Overlay (props, food, queen), ants.
 
 const INK = Color("#15121a")
-const DEPTH = 46.0   # thickness of the ground's top face (2.5D surface band)
+const GroundView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ground_view.gd")
+const DEPTH = GroundView.DEPTH   # thickness of the ground's top face (2.5D surface band, many lanes)
 const TREE_TEX = "res://entities/units/neutral/tree.png"
 const ROCK_TEX = "res://entities/units/neutral/rock.png"
 const FRUIT_TEX = "res://items/consumables/fruit/fruit.png"
@@ -32,6 +33,7 @@ var _t := 0.0
 var _tex := {}
 var sky
 var terrain
+var ground
 var inner: Node2D
 var band: Node2D
 
@@ -46,6 +48,7 @@ func _set_cam(c) -> void:
 
 func _ready() -> void:
 	var g = sim.grid
+	ground = GroundView.new(sim)
 	sky = SkyLayers.new()
 	sky.grid = g
 	sky.anchor = Vector2(g.entrance.x * g.CELL, g.surf_y(int(g.entrance.x)) * g.CELL)
@@ -81,6 +84,7 @@ func _process(delta: float) -> void:
 		var g = sim.grid
 		g.surf_y(int((c.x - vp.x * z) / g.CELL))
 		g.surf_y(int((c.x + vp.x * z) / g.CELL))
+		ground.prepare(_view_cols(g), _t)
 	inner.update()
 	band.update()
 
@@ -120,76 +124,8 @@ static func _hash(x: float) -> float:
 func _draw_band() -> void:
 	var g = sim.grid
 	var C = g.CELL
-	var cols = _view_cols(g)
-	var front := PoolVector2Array()
-	var back := PoolVector2Array()
-	var mf := []          # 0 = turf, 1 = bare spoil (the mound)
-	for x in range(cols[0], cols[1] + 1):
-		var y = _smooth_surf(g, x)
-		front.append(Vector2(x * C, y + 2.0))
-		back.append(Vector2(x * C, y - DEPTH))
-		mf.append(_mound_f(g, x))
-	var poly := PoolVector2Array()
-	var pc := PoolColorArray()
-	for i in back.size():
-		poly.append(back[i])
-		pc.append(GRASS_BACK.linear_interpolate(MOUND_BACK, mf[i]))
-	for i in range(front.size() - 1, -1, -1):
-		poly.append(front[i])
-		pc.append(GRASS_FRONT.linear_interpolate(MOUND_FRONT, mf[i]))
-	band.draw_polygon(poly, pc)
-	# spoil pellets scattered over the mound's top face
-	for i in range(0, mf.size(), 1):
-		if mf[i] < 0.3:
-			continue
-		var x = cols[0] + i
-		for j in 3:
-			var h = _hash(x * 5.9 + j * 2.3)
-			var lane = _hash(x * 2.1 + j * 7.7)
-			var p = Vector2(x * C + h * C, _smooth_surf(g, x) - DEPTH * (0.08 + 0.84 * lane))
-			band.draw_circle(p, (1.2 + 1.6 * h) * (0.7 + 0.3 * (1.0 - lane)), Color("#6b4426") if h > 0.55 else Color("#c9935c"))
-	# mottled patches of lighter and darker turf
-	for x in range(cols[0], cols[1], 4):
-		var h = _hash(x * 1.7)
-		if h < 0.55 or _mound_f(g, x) > 0.3:
-			continue
-		var lane = _hash(x * 3.1)
-		var p = Vector2(x * C, _smooth_surf(g, x) - DEPTH * (0.15 + 0.7 * lane))
-		var sz = 10.0 + 14.0 * _hash(x * 5.3)
-		band.draw_set_transform(p, 0.0, Vector2(1.0, 0.32))
-		band.draw_circle(Vector2.ZERO, sz, Color(1, 1, 1, 0.07) if h > 0.8 else Color(0.2, 0.35, 0.1, 0.1))
-	band.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	# grass blades: three shades batched, smaller toward the back
-	var lines = [PoolVector2Array(), PoolVector2Array(), PoolVector2Array()]
-	for x in range(cols[0], cols[1]):
-		if _mound_f(g, x) > 0.2:
-			continue
-		var sy = _smooth_surf(g, x)
-		for j in 3:
-			var h = _hash(x * 7.13 + j * 1.91)
-			var lane = _hash(x * 3.7 + j * 5.3)
-			var p = Vector2(x * C + h * C, sy - DEPTH * (0.04 + 0.92 * lane) + 1.0)
-			var ln = (3.0 + 5.0 * h) * (0.6 + 0.4 * (1.0 - lane))
-			var lean = (h - 0.5) * 4.0 + sin(_t * 1.3 + x * 0.3) * 0.8
-			var b = lines[int(h * 2.99)]
-			b.append(p)
-			b.append(p + Vector2(lean, -ln))
-			lines[int(h * 2.99)] = b
-	for j in 3:
-		if lines[j].size() > 1:
-			band.draw_multiline(lines[j], GRASS_BLADES[j], 1.6)
-	# back edge: a soft darker fringe instead of a hard ink line
-	var bcol := PoolColorArray()
-	var lcol := PoolColorArray()
-	for f in mf:
-		bcol.append(Color("#5b8636").linear_interpolate(Color("#6a4527"), f))
-		lcol.append(Color("#c3e87a").linear_interpolate(Color("#d19a62"), f))
-	band.draw_polyline_colors(back, bcol, 3.0, true)
-	# front lip: bright top edge over a turf shadow
-	var lip := PoolVector2Array()
-	for p in front:
-		lip.append(p + Vector2(0, -2.5))
-	band.draw_polyline_colors(lip, lcol, 2.5, true)
+	# turf lanes, scenery shadows (cached meshes, see ground_view.gd)
+	ground.draw_ground(band)
 	# the mouths: a hole in the top face with a rim of freshly dropped pellets
 	for i in g.entrances.size():
 		var en = g.entrances[i]
@@ -332,11 +268,6 @@ func draw_overlay(ci: CanvasItem) -> void:
 				var y = _smooth_surf(g, x) - DEPTH * 0.5
 				ci.draw_rect(Rect2(x * C, y, C, 4.0), Color(0.78, 1.0, 0.5, clamp(p / 2.0, 0.0, 1.0) * 0.7))
 	_draw_back_rooms(ci)
-	# rocks and fruit trees on the band (back lanes)
-	for rk in sim.rocks:
-		_draw_prop(ci, ROCK_TEX, rk["x"], rk["lane"], 40.0 * rk["s"] / 0.3)
-	for tr in sim.trees:
-		_draw_prop(ci, TREE_TEX, tr["x"], tr["lane"], 150.0)
 	# food piles
 	for pile in sim.piles:
 		_draw_pile(ci, pile)

@@ -3,22 +3,44 @@ extends Node2D
 # (0 = fixed to the screen, 1 = moves with the world) and also scales less with zoom,
 # so distance reads both when panning and when zooming. Everything is procedural in x,
 # so the backdrop never ends.
-#   sky gradient -> sun -> far range -> near range -> hills -> forest -> clouds
-# Below the playable depth a bedrock fill closes the world off.
+#   sky gradient -> sun -> clouds -> mountains -> foothills -> farmland -> pines -> forest -> hedge
+# Each layer is built once per 1200 px chunk into a cached mesh (mesh_kit.gd) and redrawn with a
+# single draw_mesh call; only the clouds and birds move. Below the playable depth a bedrock fill
+# closes the world off.
+
+const MK = preload("res://mods-unpacked/Judah-InfDNA/content/colony/mesh_kit.gd")
 
 var cam
 var grid
 var anchor := Vector2()      # world point where every layer lines up (colony entrance)
 var _t := 0.0
+var _cache := {}             # "layer:chunk" -> ArrayMesh
+var _clouds := []            # prebuilt cloud meshes
+var _wisps := []
+var _budget := 3
 
+const CW = 1200.0            # layer-space chunk width
+const BOTTOM = 700.0         # layers hang this far below the anchor so no sky shows under them
+const HAZE = Color("#f0e4c8")
+const SKY_STOPS = [[-2200.0, Color("#5c9ccb")], [-1100.0, Color("#86bee0")], [-500.0, Color("#bcdbe0")], [-180.0, Color("#e8e6cf")], [-40.0, Color("#f6e6c0")]]
+
+# f = parallax; base = px above the anchor (clear of the 128 px ground band); amp = relief
 const LAYERS = [
-	# f, base (px above anchor), amp, kind, color
-	[0.08, 330.0, 150.0, "peaks", Color("#a3bccb")],
-	[0.18, 230.0, 110.0, "peaks", Color("#8eafba")],
-	[0.32, 140.0, 60.0, "hills", Color("#8db59c")],
-	[0.52, 70.0, 26.0, "forest", Color("#6a9a62")],
-	[0.72, 30.0, 14.0, "bushes", Color("#578a4c")],
+	{"f": 0.07, "base": 520.0, "amp": 320.0, "kind": "peaks", "col": Color("#b4c8dc"), "hz": 0.50},
+	{"f": 0.12, "base": 420.0, "amp": 250.0, "kind": "peaks", "col": Color("#97b3c8"), "hz": 0.40},
+	{"f": 0.20, "base": 330.0, "amp": 150.0, "kind": "ridge", "col": Color("#7ba48f"), "hz": 0.32},
+	{"f": 0.30, "base": 262.0, "amp": 90.0, "kind": "fields", "col": Color("#9dc27c"), "hz": 0.26},
+	{"f": 0.42, "base": 215.0, "amp": 55.0, "kind": "pines", "col": Color("#4b7b57"), "hz": 0.18},
+	{"f": 0.56, "base": 178.0, "amp": 30.0, "kind": "forest", "col": Color("#4f8a49"), "hz": 0.11},
+	{"f": 0.76, "base": 146.0, "amp": 14.0, "kind": "hedge", "col": Color("#477f3f"), "hz": 0.04},
 ]
+
+
+func _ready() -> void:
+	for i in 6:
+		_clouds.append(_cloud_mesh(i * 3.7 + 1.0, false))
+	for i in 4:
+		_wisps.append(_cloud_mesh(i * 5.3 + 2.0, true))
 
 
 func _process(delta: float) -> void:
@@ -44,24 +66,29 @@ func _xf(f: float) -> Array:
 func _draw() -> void:
 	if cam == null:
 		return
+	_budget = 10 if _cache.empty() else 3
 	var v = _view()
 	_sky(v)
 	_sun(v)
-	for L in LAYERS:
-		_layer(v, L)
-	_clouds(v)
+	_cloud_layer(v, 0.05, _wisps, 0.55, 900.0, 640.0, 1.6, 4.0)
+	_cloud_layer(v, 0.10, _clouds, 0.95, 640.0, 560.0, 1.0, 9.0)
+	for i in LAYERS.size():
+		_layer(v, i)
+		if i == 2:
+			_birds(v)
+		if i == 3:
+			_cloud_layer(v, 0.26, _clouds, 0.8, 760.0, 250.0, 0.55, 14.0)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	_bedrock(v)
 
 
 func _sky(v: Rect2) -> void:
-	var stops = [[-1600.0, Color("#6fa9cf")], [-700.0, Color("#93c6de")], [-250.0, Color("#cfe3dc")], [-60.0, Color("#f3e3c2")]]
 	var x0 = v.position.x - 10
 	var x1 = v.end.x + 10
 	var top = v.position.y - 10
 	var prev_y = top
-	var prev_c = stops[0][1]
-	for st in stops:
+	var prev_c = SKY_STOPS[0][1]
+	for st in SKY_STOPS:
 		var y = anchor.y + st[0] * 0.8 + (v.position.y + v.size.y * 0.5 - anchor.y) * 0.35
 		if y > prev_y:
 			draw_polygon(PoolVector2Array([Vector2(x0, prev_y), Vector2(x1, prev_y), Vector2(x1, y), Vector2(x0, y)]),
@@ -75,118 +102,307 @@ func _sky(v: Rect2) -> void:
 func _sun(v: Rect2) -> void:
 	var xf = _xf(0.03)
 	draw_set_transform(xf[1], 0.0, Vector2(xf[0], xf[0]))
-	var p = anchor + Vector2(520, -520)
+	var p = anchor + Vector2(560, -640)
 	var pulse = 1.0 + 0.02 * sin(_t * 0.8)
-	draw_circle(p, 120.0 * pulse, Color(1.0, 0.95, 0.75, 0.18))
-	draw_circle(p, 78.0 * pulse, Color(1.0, 0.93, 0.7, 0.35))
-	draw_circle(p, 52.0, Color("#fff4cf"))
-	draw_circle(p, 43.0, Color("#ffe08a"))
+	# slow rays
+	for k in 9:
+		var a = _t * 0.02 + TAU * k / 9.0
+		var d = Vector2(cos(a), sin(a))
+		var n = Vector2(-d.y, d.x)
+		draw_polygon(PoolVector2Array([p + d * 70.0 + n * 12.0, p + d * 560.0 + n * 70.0, p + d * 560.0 - n * 70.0, p + d * 70.0 - n * 12.0]),
+			PoolColorArray([Color(1.0, 0.96, 0.78, 0.07), Color(1.0, 0.96, 0.78, 0.0), Color(1.0, 0.96, 0.78, 0.0), Color(1.0, 0.96, 0.78, 0.07)]))
+	draw_circle(p, 150.0 * pulse, Color(1.0, 0.95, 0.75, 0.14))
+	draw_circle(p, 96.0 * pulse, Color(1.0, 0.93, 0.7, 0.30))
+	draw_circle(p, 58.0, Color("#fff4cf"))
+	draw_circle(p, 48.0, Color("#ffe08a"))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
-func _h(x: float, seed_v: float, kind: String) -> float:
+# ---------------------------------------------------------------- terrain layers
+static func _hh(a: float, b: float) -> float:
+	return fmod(abs(sin(a * 12.9898 + b * 78.233) * 43758.5453), 1.0)
+
+
+func _relief(x: float, sd: float, kind: String) -> float:
 	if kind == "peaks":
-		var a = abs(sin(x * 0.0021 + seed_v)) * 0.55 + abs(sin(x * 0.0053 + seed_v * 2.1)) * 0.3 + sin(x * 0.013 + seed_v * 3.7) * 0.08
-		return a + 0.07 * sin(x * 0.041 + seed_v)
-	if kind == "hills":
-		return 0.5 + 0.35 * sin(x * 0.0031 + seed_v) + 0.15 * sin(x * 0.0087 + seed_v * 1.7)
-	return 0.5 + 0.3 * sin(x * 0.006 + seed_v) + 0.2 * sin(x * 0.017 + seed_v * 2.3)
+		var a = abs(sin(x * 0.0021 + sd)) * 0.55 + abs(sin(x * 0.0053 + sd * 2.1)) * 0.3 + sin(x * 0.013 + sd * 3.7) * 0.08
+		return a + 0.07 * sin(x * 0.041 + sd)
+	if kind == "ridge":
+		return 0.5 + 0.35 * sin(x * 0.0031 + sd) + 0.15 * sin(x * 0.0087 + sd * 1.7) + 0.06 * abs(sin(x * 0.019 + sd))
+	return 0.5 + 0.3 * sin(x * 0.006 + sd) + 0.2 * sin(x * 0.017 + sd * 2.3)
 
 
-func _layer(v: Rect2, L: Array) -> void:
-	var f: float = L[0]
-	var base: float = L[1]
-	var amp: float = L[2]
-	var kind: String = L[3]
-	var col: Color = L[4]
-	var xf = _xf(f)
+func _ridge_y(i: int, x: float) -> float:
+	var L = LAYERS[i]
+	return anchor.y - L["base"] - _relief(x, L["f"] * 13.7, L["kind"]) * L["amp"]
+
+
+func _layer(v: Rect2, i: int) -> void:
+	var L = LAYERS[i]
+	var xf = _xf(L["f"])
 	var s: float = xf[0]
 	var off: Vector2 = xf[1]
 	var p0 = (v.position.x - off.x) / s - 60.0
 	var p1 = (v.end.x - off.x) / s + 60.0
-	var bottom = (v.end.y - off.y) / s + 40.0
-	var seed_v = f * 13.7
-	var step = 18.0 if kind != "peaks" else 24.0
-	# near layers loosely follow the real terrain so they sit behind the ground
-	var follow = 0.0 if f < 0.5 else (f - 0.4) * 1.4
-	draw_set_transform(off, 0.0, Vector2(s, s))
+	var tr = Transform2D(Vector2(s, 0), Vector2(0, s), off)
+	for ci in range(int(floor(p0 / CW)), int(floor(p1 / CW)) + 1):
+		var key = "%d:%d" % [i, ci]
+		var m = _cache.get(key)
+		if m == null:
+			if _budget <= 0:
+				continue
+			_budget -= 1
+			m = _build(i, ci)
+			_cache[key] = m
+		if m is Mesh:
+			draw_mesh(m, null, null, tr)
+	if _cache.size() > 160:
+		_cache.clear()
+
+
+func _build(i: int, ci: int):
+	var L = LAYERS[i]
+	var kind: String = L["kind"]
+	var col: Color = L["col"]
+	var hz: float = L["hz"]
+	var mk = MK.new()
+	var x0 = ci * CW
+	var step = 24.0 if kind == "peaks" else 16.0
+	var n = int(CW / step)
+	var bot = anchor.y + BOTTOM
+	var c_bot = col.linear_interpolate(HAZE, hz + 0.3)
 	var pts := PoolVector2Array()
-	var x = floor(p0 / step) * step
-	while x <= p1:
-		var gy = 0.0
-		if follow > 0.0 and grid != null:
-			var wx = off.x + s * x
-			gy = (_ground_px(wx) - anchor.y) * follow / s
-		pts.append(Vector2(x, anchor.y - base - _h(x, seed_v, kind) * amp + gy))
-		x += step
-	if pts.size() < 2:
-		return
-	var poly := PoolVector2Array(pts)
-	poly.append(Vector2(pts[pts.size() - 1].x, max(bottom, anchor.y + 2000.0)))
-	poly.append(Vector2(pts[0].x, max(bottom, anchor.y + 2000.0)))
-	draw_colored_polygon(poly, col)
-	# light rim on the ridge, darker body lower down (aerial perspective)
-	draw_polyline(pts, col.lightened(0.18), 3.0 / s, true)
-	if kind == "peaks":
-		# snow caps hug the ridge on both sides of each high peak
-		for i in range(1, pts.size() - 1):
-			if pts[i].y < pts[i - 1].y and pts[i].y <= pts[i + 1].y and _h(pts[i].x, seed_v, kind) > 0.6:
-				var tip = pts[i]
-				var l = tip.linear_interpolate(pts[i - 1], 0.55)
-				var r = tip.linear_interpolate(pts[i + 1], 0.55)
-				var mid = tip.linear_interpolate((l + r) * 0.5, 0.7)
-				draw_colored_polygon(PoolVector2Array([tip, r, mid, l]),
-					Color("#eef4f5") if f < 0.1 else Color("#dde9ec"))
-	elif kind == "forest" or kind == "bushes":
-		var r0 = 26.0 if kind == "forest" else 15.0
-		var shade = col.darkened(0.12)
-		var lite = col.lightened(0.1)
-		for i in pts.size():
-			var p = pts[i]
-			var hh = fmod(abs(sin(p.x * 12.9898 + seed_v) * 43758.5453), 1.0)
-			var r = r0 * (0.7 + 0.6 * hh)
-			draw_circle(p + Vector2(0, r * 0.35), r, shade)
-			draw_circle(p + Vector2(-r * 0.15, r * 0.2), r * 0.82, col)
-			draw_circle(p + Vector2(-r * 0.3, 0), r * 0.35, lite)
-	# haze over the lower part of far layers
-	if f < 0.4:
-		var hz = Color("#f3e3c2")
-		var y0 = anchor.y - base * 0.4
-		var y1 = anchor.y + 60.0
-		draw_polygon(PoolVector2Array([Vector2(p0, y0), Vector2(p1, y0), Vector2(p1, y1), Vector2(p0, y1)]),
-			PoolColorArray([Color(hz.r, hz.g, hz.b, 0.0), Color(hz.r, hz.g, hz.b, 0.0), Color(hz.r, hz.g, hz.b, 0.55), Color(hz.r, hz.g, hz.b, 0.55)]))
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	for k in n + 1:
+		var x = x0 + k * step
+		pts.append(Vector2(x, _ridge_y(i, x)))
+	var base_c = col.linear_interpolate(HAZE, hz * 0.25)
+	var zone = 60.0 + float(L["amp"]) * 0.45       # facet lighting only reaches this far below the ridge
+	for k in n:
+		# facets: slopes facing the sun (up and to the right) read lighter, the others darker
+		var sl = (pts[k + 1].y - pts[k].y) / step
+		var shade = clamp(sl * 0.9, -0.5, 0.5) if kind == "peaks" or kind == "ridge" else 0.0
+		var ct = col.lightened(shade * 0.28) if shade > 0.0 else col.darkened(-shade * 0.28)
+		ct = ct.linear_interpolate(HAZE, hz * 0.25)
+		var za = Vector2(pts[k].x, pts[k].y + zone)
+		var zb = Vector2(pts[k + 1].x, pts[k + 1].y + zone)
+		mk.quad_c(pts[k], ct, pts[k + 1], ct, zb, base_c, za, base_c)
+		mk.quad_c(za, base_c, zb, base_c, Vector2(pts[k + 1].x, bot), c_bot, Vector2(pts[k].x, bot), c_bot)
+	var line = col.lightened(0.16).linear_interpolate(HAZE, hz * 0.3)
+	var wk := PoolRealArray()
+	for k in n + 1:
+		wk.append(3.0)
+	mk.ribbon(pts, wk, Color(line.r, line.g, line.b, 0.7))
+	match kind:
+		"peaks":
+			_snow(mk, pts, step, i, x0)
+			_strata(mk, pts, col, i, x0)
+		"ridge":
+			_pines(mk, i, x0, 20.0, 34.0, 62.0, 0.5, col.darkened(0.12))
+		"fields":
+			_fields(mk, pts, i, x0, step, col)
+		"pines":
+			_pines(mk, i, x0, 16.0, 52.0, 96.0, 0.9, col)
+		"forest":
+			_leafy(mk, i, x0, 30.0, 58.0, 100.0, col)
+		"hedge":
+			_hedge(mk, i, x0, col)
+	return mk.build()
 
 
-func _ground_px(wx: float) -> float:
-	var c = int(floor(wx / grid.CELL))
-	var acc := 0.0
-	for k in [-60, -30, 0, 30, 60]:
-		acc += grid.surf_y(c + k)
-	return acc / 5.0 * grid.CELL
+func _snow(mk, pts: PoolVector2Array, step: float, i: int, x0: float) -> void:
+	var L = LAYERS[i]
+	var thresh = anchor.y - L["base"] - L["amp"] * 0.66
+	var white = Color("#f1f6f8").linear_interpolate(HAZE, L["hz"] * 0.35)
+	var blue = Color("#cfdde6").linear_interpolate(HAZE, L["hz"] * 0.35)
+	for k in range(0, pts.size() - 1):
+		var a = pts[k]
+		var b = pts[k + 1]
+		if a.y > thresh and b.y > thresh:
+			continue
+		var da = clamp((thresh - a.y) * 0.6 + 6.0, 0.0, 70.0) if a.y < thresh else 0.0
+		var db = clamp((thresh - b.y) * 0.6 + 6.0, 0.0, 70.0) if b.y < thresh else 0.0
+		var j1 = 0.7 + 0.6 * _hh(x0 + k, 3.0)
+		var j2 = 0.7 + 0.6 * _hh(x0 + k + 1, 3.0)
+		var lit = b.y > a.y   # descending to the right = facing the sun
+		var c = white if lit else blue
+		mk.quad(a, b, b + Vector2(0, db * j2), a + Vector2(0, da * j1), c)
 
 
-func _clouds(v: Rect2) -> void:
-	var xf = _xf(0.12)
+func _strata(mk, pts: PoolVector2Array, col: Color, i: int, x0: float) -> void:
+	# a few darker gullies running down from the ridge give the slopes some body
+	var dark = col.darkened(0.16).linear_interpolate(HAZE, LAYERS[i]["hz"] * 0.3)
+	for k in range(2, pts.size() - 2, 3):
+		if _hh(x0 + k, 5.0) > 0.55:
+			continue
+		var a = pts[k]
+		var ln = 40.0 + 90.0 * _hh(x0 + k, 6.0)
+		mk.tri(a + Vector2(-5, 4), a + Vector2(5, 4), a + Vector2(-8.0 + 16.0 * _hh(x0 + k, 7.0), ln), Color(dark.r, dark.g, dark.b, 0.55))
+
+
+func _pines(mk, i: int, x0: float, spacing: float, hmin: float, hmax: float, density: float, col: Color) -> void:
+	var hz: float = LAYERS[i]["hz"]
+	var dark = col.darkened(0.2).linear_interpolate(HAZE, hz * 0.3)
+	var lite = col.lightened(0.1).linear_interpolate(HAZE, hz * 0.3)
+	var trunk = Color("#4a3a2c").linear_interpolate(HAZE, hz)
+	var k = 0
+	var x = x0 + 4.0
+	while x < x0 + CW:
+		var h1 = _hh(x * 0.37, 11.0 + i)
+		if h1 < density:
+			var hh = hmin + (hmax - hmin) * _hh(x * 0.21, 12.0 + i)
+			var b = Vector2(x, _ridge_y(i, x) + 6.0)
+			var w = hh * 0.3
+			mk.quad(b + Vector2(-hh * 0.025, 0), b + Vector2(hh * 0.025, 0), b + Vector2(hh * 0.02, -hh * 0.2), b + Vector2(-hh * 0.02, -hh * 0.2), trunk)
+			for t in 3:
+				var y0 = -hh * (0.14 + 0.24 * t)
+				var wt = w * (1.0 - 0.27 * t)
+				var tip = b + Vector2(0, y0 - hh * 0.34)
+				mk.tri(b + Vector2(-wt, y0), b + Vector2(0, y0), tip, dark)
+				mk.tri(b + Vector2(0, y0), b + Vector2(wt, y0), tip, lite)
+		x += spacing * (0.75 + 0.6 * _hh(x, 13.0))
+		k += 1
+
+
+func _leafy(mk, i: int, x0: float, spacing: float, hmin: float, hmax: float, col: Color) -> void:
+	var hz: float = LAYERS[i]["hz"]
+	var dark = col.darkened(0.22).linear_interpolate(HAZE, hz * 0.3)
+	var mid = col.linear_interpolate(HAZE, hz * 0.3)
+	var lite = col.lightened(0.16).linear_interpolate(HAZE, hz * 0.3)
+	var trunk = Color("#5a4230").linear_interpolate(HAZE, hz)
+	var x = x0 + 6.0
+	while x < x0 + CW:
+		var hh = hmin + (hmax - hmin) * _hh(x * 0.19, 21.0)
+		var b = Vector2(x, _ridge_y(i, x) + 8.0)
+		var tw = hh * 0.055
+		mk.quad(b + Vector2(-tw, 0), b + Vector2(tw, 0), b + Vector2(tw * 0.6, -hh * 0.5), b + Vector2(-tw * 0.6, -hh * 0.5), trunk)
+		var cc = b + Vector2(0, -hh * 0.68)
+		var r = hh * 0.34
+		mk.blob(cc + Vector2(-r * 0.2, r * 0.2), r * 1.05, r * 0.85, x, 0.1, dark, 10)
+		mk.blob(cc + Vector2(r * 0.55, r * 0.1), r * 0.8, r * 0.7, x + 1.0, 0.1, dark, 9)
+		mk.blob(cc + Vector2(-r * 0.55, r * 0.1), r * 0.8, r * 0.7, x + 2.0, 0.1, dark, 9)
+		mk.blob(cc + Vector2(0, 0), r * 0.92, r * 0.74, x + 3.0, 0.1, mid, 10)
+		mk.blob(cc + Vector2(r * 0.25, -r * 0.2), r * 0.52, r * 0.42, x + 4.0, 0.12, lite, 8)
+		x += spacing * (0.7 + 0.7 * _hh(x, 22.0))
+
+
+func _hedge(mk, i: int, x0: float, col: Color) -> void:
+	var hz: float = LAYERS[i]["hz"]
+	var dark = col.darkened(0.2)
+	var lite = col.lightened(0.14)
+	var x = x0
+	while x < x0 + CW:
+		var h1 = _hh(x, 31.0)
+		var r = 18.0 + 14.0 * h1
+		var b = Vector2(x, _ridge_y(i, x) + 10.0)
+		mk.blob(b + Vector2(0, -r * 0.2), r, r * 0.85, x, 0.1, dark, 9)
+		mk.blob(b + Vector2(-r * 0.1, -r * 0.35), r * 0.82, r * 0.7, x + 1.0, 0.1, col, 9)
+		mk.blob(b + Vector2(-r * 0.3, -r * 0.55), r * 0.36, r * 0.3, x + 2.0, 0.1, lite, 7)
+		if _hh(x, 32.0) > 0.78:
+			for k in 3:
+				mk.ellipse(b + Vector2((k - 1) * r * 0.5, -r * (0.2 + 0.35 * _hh(x, 33.0 + k))), 2.6, 2.6, Color("#d8473b") if _hh(x, 34.0) > 0.5 else Color("#f3d34a"), 6)
+		x += 22.0 + 12.0 * _hh(x, 35.0)
+
+
+func _fields(mk, pts: PoolVector2Array, i: int, x0: float, step: float, col: Color) -> void:
+	var hz: float = LAYERS[i]["hz"]
+	var tones = [Color("#a9cc7e"), Color("#d6cf7a"), Color("#8fb86a"), Color("#c7b872"), Color("#b4d086")]
+	var n = pts.size() - 1
+	var k = 0
+	while k < n:
+		var run = 3 + int(_hh(x0 + k, 41.0) * 5.0)
+		var tc = tones[int(_hh(x0 + k, 42.0) * 4.99)].linear_interpolate(HAZE, hz)
+		var k2 = min(n, k + run)
+		for j in range(k, k2):
+			var a = pts[j]
+			var b = pts[j + 1]
+			var d = 70.0
+			mk.quad_c(a, tc.lightened(0.04), b, tc.lightened(0.04), b + Vector2(0, d), tc.darkened(0.06), a + Vector2(0, d), tc.darkened(0.06))
+		var mid = pts[(k + k2) / 2]
+		var r = _hh(x0 + k, 43.0)
+		if r > 0.86:
+			# a small red barn with a pitched roof
+			var bw = 22.0
+			var bh = 15.0
+			var bc = Color("#b6483c").linear_interpolate(HAZE, hz)
+			mk.quad(mid + Vector2(-bw * 0.5, 4), mid + Vector2(bw * 0.5, 4), mid + Vector2(bw * 0.5, 4 - bh), mid + Vector2(-bw * 0.5, 4 - bh), bc)
+			mk.tri(mid + Vector2(-bw * 0.6, 4 - bh), mid + Vector2(bw * 0.6, 4 - bh), mid + Vector2(0, 4 - bh - 11), Color("#6b3a2e").linear_interpolate(HAZE, hz))
+		elif r < 0.07:
+			# a windmill
+			var tc2 = Color("#e9e3d6").linear_interpolate(HAZE, hz)
+			mk.quad(mid + Vector2(-5, 4), mid + Vector2(5, 4), mid + Vector2(3, -34), mid + Vector2(-3, -34), tc2)
+			var hub = mid + Vector2(0, -34)
+			for bl in 4:
+				var a2 = PI * 0.25 + PI * 0.5 * bl
+				var dir = Vector2(cos(a2), sin(a2))
+				var nn = Vector2(-dir.y, dir.x)
+				mk.quad(hub + dir * 4.0 + nn * 1.5, hub + dir * 26.0 + nn * 4.0, hub + dir * 26.0 - nn * 1.0, hub + dir * 4.0 - nn * 1.5, Color("#f3efe4").linear_interpolate(HAZE, hz))
+		k = k2
+
+
+# ---------------------------------------------------------------- clouds and birds
+func _cloud_mesh(sd: float, wisp: bool) -> ArrayMesh:
+	var mk = MK.new()
+	var white = Color(1, 1, 1, 0.9)
+	var under = Color(0.84, 0.89, 0.95, 0.92)
+	if wisp:
+		for k in 7:
+			var x = (k - 3) * 70.0 + (_hh(sd, k) - 0.5) * 30.0
+			mk.ellipse(Vector2(x, (_hh(sd, k + 9.0) - 0.5) * 18.0), 90.0 + 50.0 * _hh(sd, k + 3.0), 7.0 + 4.0 * _hh(sd, k + 5.0), Color(1, 1, 1, 0.32), 12)
+		return mk.build()
+	var n = 7 + int(_hh(sd, 1.0) * 4.0)
+	for k in n:
+		var u = float(k) / (n - 1) - 0.5
+		var r = 26.0 + 22.0 * (1.0 - abs(u) * 1.6) * (0.6 + 0.6 * _hh(sd, k + 2.0))
+		mk.blob(Vector2(u * 190.0, 6.0 - r * 0.5 + (_hh(sd, k + 7.0) - 0.5) * 14.0), r, r * 0.8, sd + k, 0.08, under, 12)
+	for k in n:
+		var u2 = float(k) / (n - 1) - 0.5
+		var r2 = 24.0 + 22.0 * (1.0 - abs(u2) * 1.6) * (0.6 + 0.6 * _hh(sd, k + 2.0))
+		mk.blob(Vector2(u2 * 190.0, -r2 * 0.62 + (_hh(sd, k + 7.0) - 0.5) * 14.0), r2, r2 * 0.78, sd + k + 4.0, 0.08, white, 12)
+	for k in 4:
+		mk.blob(Vector2((k - 1.5) * 52.0, -44.0 - 10.0 * _hh(sd, k)), 22.0, 14.0, sd + k * 2.0, 0.1, Color(1, 1, 1, 0.95), 9)
+	return mk.build()
+
+
+func _cloud_layer(v: Rect2, f: float, meshes: Array, alpha: float, span: float, high: float, size: float, speed: float) -> void:
+	var xf = _xf(f)
+	var s: float = xf[0]
+	var off: Vector2 = xf[1]
+	var p0 = (v.position.x - off.x) / s - 300.0
+	var p1 = (v.end.x - off.x) / s + 300.0
+	var i0 = int(floor((p0 - _t * speed) / span))
+	var i1 = int(ceil((p1 - _t * speed) / span))
+	for i in range(i0, i1 + 1):
+		var hh = _hh(i * 91.7, f * 10.0)
+		if hh < 0.3:
+			continue
+		var sc = size * (0.7 + 0.8 * fmod(hh * 7.3, 1.0))
+		var pos = Vector2(i * span + _t * speed + hh * span * 0.4, anchor.y - high - hh * 260.0 * size)
+		var tr = Transform2D(Vector2(s * sc, 0), Vector2(0, s * sc), off + pos * s)     # layer-space position, own size
+		draw_mesh(meshes[int(hh * 97.0) % meshes.size()], null, null, tr, Color(1, 1, 1, alpha))
+
+
+func _birds(v: Rect2) -> void:
+	var xf = _xf(0.16)
 	var s: float = xf[0]
 	var off: Vector2 = xf[1]
 	draw_set_transform(off, 0.0, Vector2(s, s))
-	var p0 = (v.position.x - off.x) / s - 300.0
-	var p1 = (v.end.x - off.x) / s + 300.0
-	var span = 520.0
-	var i0 = int(floor((p0 - _t * 9.0) / span))
-	var i1 = int(ceil((p1 - _t * 9.0) / span))
+	var span = 2400.0
+	var p0 = (v.position.x - off.x) / s - 400.0
+	var p1 = (v.end.x - off.x) / s + 400.0
+	var i0 = int(floor((p0 - _t * 22.0) / span))
+	var i1 = int(ceil((p1 - _t * 22.0) / span))
 	for i in range(i0, i1 + 1):
-		var hh = fmod(abs(sin(i * 91.7) * 43758.5453), 1.0)
-		if hh < 0.35:
+		if _hh(i * 17.3, 5.0) < 0.45:
 			continue
-		var p = Vector2(i * span + _t * 9.0 + hh * 200.0, anchor.y - 430.0 - hh * 260.0)
-		var sc = 0.7 + 0.8 * fmod(hh * 7.3, 1.0)
-		for k in [[Vector2(-26, 4), 20], [Vector2(0, -6), 26], [Vector2(26, 4), 19], [Vector2(8, 8), 20]]:
-			draw_circle(p + k[0] * sc, (k[1] + 3) * sc, Color(1, 1, 1, 0.4))
-		for k in [[Vector2(-26, 4), 20], [Vector2(0, -6), 26], [Vector2(26, 4), 19], [Vector2(8, 8), 20]]:
-			draw_circle(p + k[0] * sc, k[1] * sc, Color(1, 1, 1, 0.88))
-		draw_circle(p + Vector2(-8, 10) * sc, 16.0 * sc, Color(0.86, 0.9, 0.95, 0.9))
+		var n = 4 + int(_hh(i * 3.1, 6.0) * 5.0)
+		var cx = i * span + _t * 22.0 + _hh(i, 7.0) * span * 0.5
+		var cy = anchor.y - 470.0 - _hh(i, 8.0) * 190.0
+		for k in n:
+			var bx = cx + (k % 3) * 34.0 - (k / 3) * 26.0
+			var by = cy + (k % 3) * 9.0 + (k / 3) * 14.0 + sin(_t * 0.7 + k) * 5.0
+			var fl = sin(_t * 8.0 + k * 1.9 + i)
+			var col = Color(0.16, 0.18, 0.24, 0.8)
+			draw_polyline(PoolVector2Array([Vector2(bx - 9, by - 3.5 * fl), Vector2(bx - 3, by - 1), Vector2(bx, by), Vector2(bx + 3, by - 1), Vector2(bx + 9, by - 3.5 * fl)]), col, 2.2, true)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 

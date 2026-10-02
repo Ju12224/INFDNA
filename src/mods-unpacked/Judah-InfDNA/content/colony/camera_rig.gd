@@ -12,8 +12,9 @@ var _shake := 0.0
 func setup(ws: Vector2) -> void:
 	world_size = ws
 	var vp = get_viewport_rect().size
-	max_zoom = max(ws.x / vp.x, (ws.y + 300.0) / vp.y) * 1.25
-	zoom = Vector2.ONE * max_zoom * 0.62
+	var base_max = max(ws.x / vp.x, (ws.y + 300.0) / vp.y) * 1.25
+	max_zoom = base_max * 1.7              # far enough out to see whole giant trees
+	zoom = Vector2.ONE * base_max * 0.62
 	position = Vector2(ws.x * 0.5, ws.y * 0.42)
 	current = true
 
@@ -61,4 +62,4 @@ func _zoom_at(screen_pos: Vector2, f: float) -> void:
 
 
 func _clamp() -> void:
-	position.y = clamp(position.y, -420.0, world_size.y)
+	position.y = clamp(position.y, -1700.0, world_size.y)

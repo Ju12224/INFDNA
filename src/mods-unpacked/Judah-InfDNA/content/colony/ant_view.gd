@@ -6,6 +6,8 @@ extends Node2D
 const INK = Color("#15121a")
 const ANT_SCALE = 0.24
 const WorldView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/world_view.gd")
+const GroundView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ground_view.gd")
+const EnemyDefs = preload("res://mods-unpacked/Judah-InfDNA/core/enemy_defs.gd")
 
 const CASTE_COLORS = [Color("#6cc644"), Color("#c9863b"), Color("#e8483b")]
 const CASTE_ICONS = ["res://items/all/fruit_basket/fruit_basket_icon.png", "res://items/all/improved_tools/improved_tools_icon.png",
@@ -14,6 +16,7 @@ const CASTE_ICONS = ["res://items/all/fruit_basket/fruit_basket_icon.png", "res:
 var sim
 var baker
 var enemy_view
+var ground
 var cam
 var show_castes := true
 var selected = null
@@ -78,12 +81,12 @@ func _depth(key: int, lane: float) -> Array:
 	var f = _surf_k.get(key, 0.0)
 	var bk = _back_k.get(key, 0.0)
 	var hk = _hid_k.get(key, 0.0)
-	var sc = lerp(1.0, 0.74 + 0.26 * lane, f) * lerp(1.0, BACK_SCALE, bk)
-	var sh = lerp(1.0, 0.66 + 0.34 * lane, f) * lerp(1.0, BACK_SHADE, bk) * lerp(1.0, 0.7, hk)
-	return [-(1.0 - lane) * WorldView.DEPTH * 0.9 * f, sc, sh, 1.0 - 0.45 * hk]
+	var sc = lerp(1.0, GroundView.persp(lane), f) * lerp(1.0, BACK_SCALE, bk)
+	var sh = lerp(1.0, 0.7 + 0.3 * lane, f) * lerp(1.0, BACK_SHADE, bk) * lerp(1.0, 0.7, hk)
+	return [-(1.0 - lane) * GroundView.DEPTH * GroundView.LANE_K * f, sc, sh, 1.0 - 0.45 * hk]
 
 
-const BUCKETS = 36
+const BUCKETS = 48
 
 
 func _view_rect() -> Rect2:
@@ -96,7 +99,7 @@ func _view_rect() -> Rect2:
 
 
 func _bucket(key: float) -> int:
-	return int(clamp((key + 2.0) / 3.01 * BUCKETS, 0.0, BUCKETS - 1.0))
+	return int(clamp((key + 2.0) / 3.2 * BUCKETS, 0.0, BUCKETS - 1.0))
 
 
 func _draw() -> void:
@@ -107,6 +110,10 @@ func _draw() -> void:
 	var buckets := []
 	for i in BUCKETS:
 		buckets.append([])
+	if ground != null:
+		for sl in ground.visible_slices():
+			var sk = 1.1 if sl == GroundView.SLICES else float(sl) / GroundView.SLICES
+			buckets[_bucket(sk)].append([sk, 2, sl])
 	for a in sim.ants:
 		var px = (a.x + 0.5) * C0
 		var py = (a.y + 0.5) * C0
@@ -130,9 +137,12 @@ func _draw() -> void:
 	for e3 in sim.enemies:
 		if e3.state != 2:
 			_foes.append(sim.enemy_pos(e3))
+	_draw_shadows(items)
 	for it in items:
 		if it[1] == 0:
 			_draw_ant(it[2])
+		elif it[1] == 2:
+			ground.draw_slice(self, it[2])
 		elif enemy_view != null:
 			var e = it[2]
 			var d = _depth(-e.id, e.lane)
@@ -144,6 +154,68 @@ func _draw() -> void:
 		if it[1] == 0 and show_castes:
 			_draw_caste_badge(it[2])
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+# Ground slope (radians) at a world x, from the cached ground heights.
+func _slope(wx: float) -> float:
+	if ground == null:
+		return 0.0
+	var C = sim.grid.CELL
+	var c = int(floor(wx / C))
+	return atan2(ground.smooth_px(c + 2) - ground.smooth_px(c - 2), 4.0 * C)
+
+
+# Soft shadows for everything standing on the surface, all drawn before any unit so a shadow never
+# covers another ant. The sun is up and to the right, so shadows lean left; they tilt with the slope.
+func _draw_shadows(items: Array) -> void:
+	var C = sim.grid.CELL
+	for it in items:
+		if it[1] == 2:
+			continue
+		var u = it[2]
+		var key = u.id if it[1] == 0 else -u.id
+		var sk = _surf_k.get(key, 0.0)
+		if sk < 0.35:
+			continue
+		var d = _depth(key, u.lane)
+		var pos: Vector2
+		var rx: float
+		var air := 0.0
+		if it[1] == 0:
+			pos = sim.ant_pos(u) + Vector2(0, C * 0.5 + d[0])
+			rx = (13.0 + u.ph["size"] * 0.14) * d[1] * CASTE_SCALE[u.caste]
+			air = _air(u)
+		else:
+			pos = sim.enemy_pos(u) + Vector2(0, C * 0.5 + d[0])
+			rx = EnemyDefs.HEIGHT[u.cls] * 0.36 * d[1]
+		var a = sk * d[3] * (1.0 - 0.5 * air)
+		draw_set_transform(pos + Vector2(-rx * 0.3 - air * 14.0, 0), _slope(pos.x), Vector2(1.0, 0.3))
+		draw_circle(Vector2.ZERO, rx * 1.15 * (1.0 + 0.2 * air), Color(0.05, 0.1, 0.03, 0.09 * a))
+		draw_circle(Vector2.ZERO, rx * 0.85, Color(0.05, 0.1, 0.03, 0.12 * a))
+		draw_circle(Vector2(rx * 0.1, 0), rx * 0.5, Color(0.05, 0.1, 0.03, 0.15 * a))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+# Height above the ground of a flying (winged) ant, 0..1; 0 for everyone else. (filled in by the flight pass)
+func _air(a) -> float:
+	return 0.0
+
+
+# The ant under a click, judged by where it is DRAWN (lanes lift ants off their sim position).
+func pick(world_pos: Vector2, radius: float = 30.0):
+	var best = null
+	var bd = 1e18
+	var C = sim.grid.CELL
+	for a in sim.ants:
+		var d = _depth(a.id, a.lane)
+		var n = Vector2(-sin(a.rot), cos(a.rot))
+		var mid = sim.ant_pos(a) + Vector2(0, d[0]) + n * C * 0.5 - n * 15.0 * d[1]
+		var q = mid.distance_squared_to(world_pos)
+		var r = radius * max(d[1], 0.75)
+		if q < r * r and q < bd:
+			bd = q
+			best = a
+	return best
 
 
 # Caste badge above the ant: coloured disc + icon (forager basket, digger tool,
@@ -363,12 +435,7 @@ func _draw_ant(a) -> void:
 		draw_arc(feet - n * 10.0, pr, _t * 1.5, _t * 1.5 + TAU * 0.8, 28, Color.white, 3.0, true)
 	var frame = int(_t * a.ph["speed"] * 1.3 + a.id) % baker.FRAMES if moving else 0
 	var tex = baker.get_texture(a.genome, 1.0, frame)
-	# contact shadow: every ant visibly stands on something
 	var sk = _surf_k.get(a.id, 0.0)
-	if sk > 0.5:
-		var sw = (10.0 + a.ph["size"] * 0.14) * d[1]
-		draw_set_transform(pos + Vector2(0, C * 0.5), 0.0, Vector2(1.0, 0.3))
-		draw_circle(Vector2.ZERO, sw, Color(0.08, 0.12, 0.03, 0.28 * sk))
 	if moving and sk > 0.5:
 		# little dust kicked up behind a running ant
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

@@ -62,8 +62,6 @@ func draw_enemy(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade: flo
 	var bob = sin(_t * (12.0 if moving else 4.0) + e.id) * (0.06 if moving else 0.025)
 	var mod = Color(1, 0.5, 0.5) if e.flash > 0.0 else Color.white
 	mod = Color(mod.r * shade, mod.g * shade, mod.b * shade, (0.75 if e.state == 2 else 1.0) * alpha)
-	ci.draw_set_transform(feet, 0.0, Vector2(1.0, 0.3))
-	ci.draw_circle(Vector2.ZERO, h * 0.35, Color(0, 0, 0, 0.25))
 	if tex != null:
 		var s = h / tex.get_height()
 		ci.draw_set_transform(feet, 0.0, Vector2(e.facing * s, s * (1.0 + bob)))

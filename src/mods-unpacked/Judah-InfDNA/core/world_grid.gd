@@ -74,6 +74,7 @@ var dist_exit := PoolIntArray()
 var nav_dirty := true
 var layout := 0                 # bumps whenever the sim arrays are reallocated
 var dirty_chunks := {}          # chunk index -> true: the view must refetch chunk_images()
+var surf_dirty := {}            # column -> true: the surface height changed (the view rebuilds its cached ground meshes)
 
 var _noise: OpenSimplexNoise
 var _big: OpenSimplexNoise
@@ -204,6 +205,7 @@ func mound_h(x: int) -> int:
 
 func _set_surf(x: int, v: int) -> void:
 	base_y(x)
+	surf_dirty[x] = true
 	if x >= 0:
 		_prof_r[x] = v
 	else:
@@ -763,6 +765,7 @@ func _raise(x: int) -> void:
 	ensure_cols(x - 2, x + 2)
 	var y = surf_y(x) - 1
 	_mound[x] = _mound.get(x, 0) + 1
+	surf_dirty[x] = true
 	var j = y * W + (x - ox)
 	solid[j] = 1
 	solid[WH + j] = 1
@@ -776,6 +779,7 @@ func _raise(x: int) -> void:
 			while _mound.get(c, 0) < target:
 				var cy = surf_y(c) - 1
 				_mound[c] = _mound.get(c, 0) + 1
+				surf_dirty[c] = true
 				var jc = cy * W + (c - ox)
 				solid[jc] = 0
 				solid[WH + jc] = 1

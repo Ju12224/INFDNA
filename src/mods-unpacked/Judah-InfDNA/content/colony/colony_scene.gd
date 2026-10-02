@@ -68,6 +68,7 @@ func _ready() -> void:
 	add_child(cam)
 	cam.setup(world_view.world_size())
 	ant_view.cam = cam
+	ant_view.ground = world_view.ground
 	world_view.cam = cam
 
 	layers_view = LayersView.new()     # fight / task / health marks, above the ants and raiders
@@ -140,7 +141,7 @@ func _draw_overlay() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == BUTTON_LEFT:
-		selected = sim.ant_at(get_global_mouse_position(), 28.0)
+		selected = ant_view.pick(get_global_mouse_position(), 30.0)
 	elif event is InputEventKey and event.pressed and not event.echo:
 		match event.scancode:
 			KEY_ESCAPE:
