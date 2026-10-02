@@ -40,6 +40,10 @@ const RANGE_MAX = 1500           # farthest a trip may reach (cells; 1 cell = 6 
 const SURFACE_K = 3.0            # ants run this much faster over open ground than their tunnel speed (v0.23: long expeditions)
 const LEG_MEAN = 70.0            # mean length of a straight scouting leg (cells)
 const DEFEND_WEIGHT = {"small": 0.5, "burrower": 1.0, "brute": 2.0, "elite": 4.0, "boss": 8.0}
+const RAID_SIZE_REF = 90.0         # colony size at which a raid is its normal size
+const RAID_LATE = 0.09             # extra raid size per raid after the sixth
+const RAID_HP_LATE = 0.02          # raiders toughen faster after raid 8 (quadratic), so a thriving colony is eventually outgrown
+const RAID_BITE_LATE = 0.015
 const PHER_TAU = 50.0            # trail half-life scale (s): long routes need trails that last
 const TRAIL_BOOST = 0.25         # ants run up to 25% faster on a well-used trail
 const FIRST_RAID = 180.0
@@ -1924,6 +1928,8 @@ func _launch_raid() -> void:
 	var rr = sub_rng("raid", raid_n)
 	var side = -1 if rr.randf() < 0.5 else 1
 	var budget = (3.0 + 5.5 * pow(raid_n - 1, 0.8)) * max(0.3, 1.0 + mod("raid_size"))
+	# a strong colony draws a bigger raid, and the later raids keep climbing, so a healthy colony is tested rather than coasting
+	budget *= clamp(ants.size() / RAID_SIZE_REF, 0.85, 1.7) * (1.0 + RAID_LATE * max(0, raid_n - 6))
 	var pool = EnemyDefs.SMALL.duplicate()
 	pool += EnemyDefs.SMALL      # tunnel raiders stay common so the queen feels pressure
 	if raid_n >= 2:
@@ -1954,8 +1960,14 @@ func _launch_raid() -> void:
 			if EnemyDefs.ELITE.has(k):
 				n_elite += 1
 	_raid_active = true
+	# Raiders arrive in waves, not one every 0.9 s: a trickle was killed one by one as it came, so even a 70-raider raid
+	# never put more than ~15 on the field and a big colony coasted. A wave walks in together and has to be fought as a mass.
+	var wave = int(max(5.0, ceil(kinds.size() / 5.0)))
 	for i in kinds.size():
-		raid_queue.append({"kind": kinds[i], "side": side, "delay": i * 0.9})
+		var dly = i * 0.9                                                      # small raids keep the old trickle
+		if kinds.size() > 10:
+			dly = (i / wave) * 7.0 + (i % wave) * 0.25
+		raid_queue.append({"kind": kinds[i], "side": side, "delay": dly})
 	banner = "Raid %d  -  %d raiders from the %s" % [raid_n, kinds.size(), "west" if side < 0 else "east"]
 	if borers > 0:
 		banner += "  -  %d BORING toward the queen!" % borers
@@ -2008,7 +2020,7 @@ func _spawn_enemy(kind: String, side: int) -> void:
 	e.y = grid.surf_y(e.x) - 1
 	e.tx = e.x
 	e.ty = e.y
-	e.max_hp = d["hp"] * (1.0 + (0.06 if d["cls"] == "burrower" else 0.095) * (raid_n - 1)) * fate.raider_hp_mult
+	e.max_hp = d["hp"] * (1.0 + (0.06 if d["cls"] == "burrower" else 0.095) * (raid_n - 1) + RAID_HP_LATE * pow(max(0, raid_n - 8), 2.0)) * fate.raider_hp_mult
 	if d["cls"] == "burrower":
 		if borer_lever >= 2:
 			# lever 2: borer HP follows colony size both ways (small colony: weak borer,
@@ -2231,7 +2243,7 @@ func _nearest_surface_enemy(x: int, max_d: int):
 
 
 func _combat(dt: float) -> void:
-	var scale = 1.0 + 0.065 * (raid_n - 1)
+	var scale = 1.0 + 0.065 * (raid_n - 1) + RAID_BITE_LATE * pow(max(0, raid_n - 8), 2.0)
 	var queen_hit := false
 	_update_rally()
 	# ant positions once per tick (was recomputed for every raider x ant pair); `apos` stays
