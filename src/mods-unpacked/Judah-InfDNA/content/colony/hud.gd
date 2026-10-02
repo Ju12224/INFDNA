@@ -356,7 +356,7 @@ func _build_bar() -> void:
 	hint.margin_left = 22
 	hint.margin_bottom = -96
 	hint.modulate = Color(1, 1, 1, 0.55)
-	hint.text = hint.text.replace("U nest   Esc menu", "U nest   V watch mode   Esc menu")
+	hint.text = hint.text.replace("U nest   Esc menu", "U nest   N new strain   V watch mode   Esc menu")
 	_hint = hint
 	_build_layers()
 	_build_minimap()

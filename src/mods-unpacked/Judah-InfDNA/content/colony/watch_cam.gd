@@ -23,6 +23,7 @@ var _target := Vector2.ZERO
 var _zoom := 0.7
 var _unit = null              # ant the shot follows, or null
 var _next := 0
+var _strain_done := -1.0    # newest strain event already shown
 
 
 func set_active(on: bool) -> void:
@@ -61,6 +62,13 @@ func _process(delta: float) -> void:
 	_left -= delta
 	_since_cut += delta
 	var fight = _fight_focus()
+	if fight == null and _kind != "strain" and _since_cut > 4.0:
+		var sa = scene.newest_strain_ant(_strain_done)
+		if sa != null:
+			_strain_done = sim.time
+			_cut("strain")
+			_unit = sa
+			_left = 9.0
 	if fight != null:
 		_quiet = 0.0
 		if _kind != "fight" and _since_cut > 2.0:
@@ -153,6 +161,8 @@ func _cut(kind: String) -> void:
 		"fight":
 			_zoom = 0.62
 			_left = 30.0
+		"strain":
+			_zoom = 0.45
 		"far":
 			_unit = _far_forager()
 			_zoom = 0.72

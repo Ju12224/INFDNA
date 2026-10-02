@@ -64,6 +64,9 @@ func _idle(_delta):
 		s.cam.position = Vector2(sim.grid.entrance.x * 6.0 + 20000.0, 200.0)   # raiders now off screen: arrows get drawn
 	elif frames == 130:
 		# watch mode (V): HUD hidden, busy layers off, camera directed; leaving restores everything
+		sim.strain_events.append({"uid": sim.ants[0].genome.uid, "text": "test strain", "t": sim.time})
+		s.show_new_strain()
+		_check(s.selected != null and s.selected.genome.uid == sim.ants[0].genome.uid, "N jumps to the newest strain's ant")
 		var saved = s.layer_state.duplicate()
 		var bar_was = s.hud._bar_panel.visible
 		s.set_watch(true)

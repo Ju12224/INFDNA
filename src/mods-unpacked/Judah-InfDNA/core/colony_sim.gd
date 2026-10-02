@@ -360,6 +360,44 @@ func register_genome(g, gen: int = -1) -> void:
 			g.born_gen = gen
 		if fate != null:
 			fate.on_new_genome(self, g)
+		_note_strain(g)
+
+
+# Evolution spotlight: a body plan the colony has never had before is announced (toast + `strain_events`, which
+# the N key and watch mode use to look at the first ant that wears it). Rate-limited, and quiet while the
+# founders are still settling.
+var strain_seen := {}
+var strain_events: Array = []     # [{"uid", "text", "t"}], newest last
+var _strain_t := -99.0
+
+
+func _note_strain(g) -> void:
+	var d = g.describe()
+	if strain_seen.has(d):
+		return
+	strain_seen[d] = true
+	var notable = false
+	for w in ["winged", "stinger", "acid", "glowing", "big-headed", "replete", "camouflaged"]:
+		if d.find(w) >= 0:
+			notable = true
+	# a new limb count is worth a toast now and then; a new ability or organ is worth one soon
+	if time < 40.0 or time - _strain_t < (12.0 if notable else 35.0):
+		return
+	_strain_t = time
+	var parts = d.split(", ")
+	var feats := []
+	for i in range(parts.size() - 1, 0, -1):         # abilities and organs come last in describe()
+		if parts[i].ends_with(" jaw") and parts[i] == "mandible jaw":
+			continue                                  # every ant has one
+		feats.append(parts[i])
+		if feats.size() == 3:
+			break
+	feats.invert()
+	var txt = PoolStringArray(feats).join(", ") if not feats.empty() else d
+	strain_events.append({"uid": g.uid, "text": txt, "t": time})
+	if strain_events.size() > 12:
+		strain_events.pop_front()
+	toasts.append({"text": "New strain: %s   (N to look)" % txt, "t": 7.0})
 
 
 func rule(key: String, default_value = 0.0):

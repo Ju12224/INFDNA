@@ -92,8 +92,8 @@ ambience, back-wall depth layers. Open: light-green stair dashes on the mound's 
 edge (seen in screenshots, source not yet found), caste badges crowd the main shaft at
 mid zoom (consider default off in a watch mode), VRAM of 1.6x bakes (~1.3 MB per body
 plan) unmeasured on a laptop GPU.
-Next ideas for watching: a "tank mode" (hide HUD, slow auto-camera that follows
-interesting events), ants carrying food visibly down to granaries, day/night light.
+Done in v0.25: watch mode (`V`, auto-camera), day/night light, new-strain spotlight, ants no longer dither,
+Fights layer lightened. Still open for watching: ants carrying food visibly down to granaries.
 
 ### Underground city (v0.16.0)
 Done: 8 levels, workshops (armory, cistern, venom, sting battery, architects), outposts,
@@ -134,4 +134,4 @@ a throne room that upgrades the queen, workshops visibly staffed by ants.
 - Aphid ranching on roots (honeydew), seed granaries, honeypot repletes as living storage.
 
 ## M6 - Run structure + polish   (brief step 4)
-- Run goals, queen unlocks, save/load; HUD pass at 1280x720; surface life (day/night).
+- Run goals, queen unlocks, save/load; HUD pass at 1280x720 (v0.25: HUD scales below 1080p); surface life (day/night: done in v0.25, next: night raids, nocturnal prey).

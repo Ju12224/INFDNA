@@ -198,6 +198,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		match event.scancode:
 			KEY_V:
 				set_watch(not watch_mode)
+			KEY_N:
+				show_new_strain()
 			KEY_ESCAPE:
 				if watch_mode:
 					set_watch(false)
@@ -255,6 +257,32 @@ func open_shop() -> void:
 func close_shop() -> void:
 	shop_open = false
 	hud.show_shop(false)
+
+
+# The first living ant of the newest new body plan (see colony_sim._note_strain), or null.
+func newest_strain_ant(newer_than: float = -1.0):
+	for i in range(sim.strain_events.size() - 1, -1, -1):
+		var ev = sim.strain_events[i]
+		if ev["t"] <= newer_than or sim.time - ev["t"] > 150.0:
+			break
+		for a in sim.ants:
+			if a.genome.uid == ev["uid"]:
+				return a
+	return null
+
+
+# N: select the newest strain's ant and bring the camera to it.
+func show_new_strain() -> void:
+	var a = newest_strain_ant()
+	if a == null:
+		sim.toasts.append({"text": "No new strain to look at right now.", "t": 3.0})
+		return
+	selected = a
+	var d = ant_view._depth(a.id, ant_view.lane_of(a, a.id))
+	cam.position = sim.ant_pos(a) + Vector2(0, d[0] - 30.0)
+	cam.zoom = Vector2.ONE * clamp(0.5, cam.min_zoom, cam.max_zoom)
+	if watch_mode:
+		watch.follow(a)
 
 
 # Watch mode (V): hide the HUD, switch the busy layers off and let the camera direct itself.

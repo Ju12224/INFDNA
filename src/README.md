@@ -1,4 +1,36 @@
-# InfDNA (Brotato mod) - v0.24.0
+# InfDNA (Brotato mod) - v0.25.0
+
+## v0.25.0 - watch mode, calmer ants, day and night, new-strain spotlight
+Compile-checked, rendered headless under Xvfb (software GL), fuzzed 8 sim-minutes with watch mode and random time of day (no
+script errors), balance-probed (6 seeds x 25 min: all survive, pop curve unchanged), `src/tests-v023/layers_smoke.gd` 15/15;
+NOT playtested in Brotato.
+- **Watch mode (`V`, or Esc to leave).** Hides the HUD panels, the nest gauge and the busy layers (badges, tasks, health, follow) and
+  leaves a one-line status (`88 ants - gen 5 - night - raid 1`) plus any toasts. `watch_cam.gd` is a slow self-directing camera that
+  cuts between shots: a fight at the nest (always wins), a new strain, the farthest forager on its expedition, the traffic at the
+  hole, a single ant, a digger underground, the queen's chamber. Any pan key, wheel, drag, jump key or click on an ant hands the camera
+  back for ~6 s (a click follows that ant). Leaving restores every layer and panel exactly as they were.
+- **Ants stopped looking weird (the "dithering" fix).** Measured on the sim: foragers reversed direction on almost every hop (hops are
+  1/18 s), which showed as constant squash-turns. Causes fixed: re-deciding at the edge of the danger zone in front of a raider (now
+  they run for 10 hops), a coin-flip turn per hop during the area search (now short sweeps), stepping back and forth on top of prey (now
+  they stand and fight), and facing flipping on vertical steps up the mound and at the shaft mouth (now left/right follows the screen on
+  open ground). Rapid direction flips per 5 sim-minutes: 3416 -> 455. Surface ants also tilt to a smoothed hill slope instead of the
+  6 px stair steps of the grid (big rotation jumps 10392 -> 757).
+- **Lanes without shimmer.** An ant's drawn lane is smoothed over time (the sim's per-hop lane jitter never shows) and pulled onto the
+  nest mouth's lane near the hole and the pile's lane at food, so nobody reaches into the hole from a different depth; fighters converge
+  on their raider's lane faster. Big boulders no longer stand beside the nest and sit toward the back lanes (so does every giant tree),
+  so a fight is never hidden behind a rock.
+- **Lighter Fights layer:** thin ground rings under raiders (a faint one for wandering small ones, a soft pulse for those fighting), no
+  lines between bodies, and a small health bar only on a fighter that is hurt.
+- **Day and night (`day_cycle.gd`, `light_view.gd`).** A 7-minute day driven by the colony clock: warm sunrise and sunset, moonlit blue
+  night (dark but readable), sun and moon arcs, stars, a glowing nest mouth and fireflies after dark, shadows fade with the sun, the
+  HUD shows Dawn/Day/Dusk/Night. One multiply-blend pass lights everything above the ground line, so the tunnels keep their own warm
+  light and the cost is a few polygons (GLES2 ignores `draw_mesh`'s modulate for vertex-coloured meshes, so a per-mesh tint was not
+  possible). Purely visual.
+- **New-strain spotlight.** A body plan the colony has never had (new limb count, ability or organ) is announced with a toast; `N` jumps
+  the camera to the first ant wearing it, and watch mode cuts to it by itself.
+- **HUD scales down below 1080p** (the layout is built for 1920x1080) instead of overlapping at 1280x720.
+- Not checked in the real game: everything above in real Brotato (fonts, GPU frame rate, HUD scaling inside Brotato's own viewport
+  stretch), how the multiply-blend light looks on every GPU.
 
 ## v0.24.0 - optimizer, real walking, better trees, a layered nest, exploration
 Compile-checked, rendered headless under Xvfb (software GL), fuzzed (raids with the new creatures, optimizer tier changes,
