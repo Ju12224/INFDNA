@@ -105,6 +105,42 @@ func _idle(_delta):
 			sim._step_bird(0.1)
 		_check(sim.bird == null or sim.bird["t"] < 20.0, "the bird hunts and gives up without errors")
 		sim.bird = null
+	elif frames == 126:
+		# the director's items: Will regeneration and cap, command cost / recharge / strength
+		var ex2 = int(sim.grid.entrance.x)
+		var saved = sim.mods.duplicate()
+		_check(abs(sim.cmd_cost("rally") - float(sim.COMMANDS["rally"]["cost"]) * max(0.4, 1.0 + saved.get("cmd_cost", 0.0))) < 0.01, "commands cost their base price (less any items)")
+		sim.mods["will_regen"] = 1.0
+		sim.mods["will_max"] = 50.0
+		sim.mods["cmd_cost"] = -0.2
+		sim.mods["cmd_cd"] = -0.25
+		sim.mods["surge_power"] = 0.5
+		sim.mods["breed_power"] = 4.0
+		sim.mods["rally_power"] = 0.5
+		sim.mods["bird_ward"] = 0.5
+		_check(abs(sim.will_max() - (sim.WILL_MAX + 50.0)) < 0.01, "Deep Reserve raises the Will cap")
+		sim.will = 60.0
+		sim._step_director(1.0)
+		_check(abs(sim.will - (60.0 + sim.WILL_REGEN * 2.0)) < 0.01, "Queen's Whisper speeds up Will regeneration")
+		sim.will = 100.0
+		sim.cmd_cd.clear()
+		var w0 = sim.will
+		_check(sim.cast("surge") and abs((w0 - sim.will) - 25.0 * 0.8) < 0.01, "Frugal Orders cut a command's cost")
+		_check(abs(sim.cmd_cd["surge"] - 30.0 * 0.75) < 0.01, "Pheromone Choir shortens the recharge")
+		_check(abs(sim.surge_t - 15.0) < 0.01, "Adrenal Glands lengthen Surge")
+		sim.will = 100.0
+		sim.cmd_cd.clear()
+		_check(sim.cast("breed", 0, sim.ants[0]) and sim.blessed_left == 12, "Stud Book adds eggs to Breed")
+		if sim._inside_n == 0:
+			sim.will = 100.0
+			sim.cmd_cd.clear()
+			_check(sim.cast("rally", ex2 + 20) and abs(sim.rally_t - sim.RALLY_LEN * 1.5) < 0.01, "War Standard lengthens Rally")
+		sim.mods = saved
+		sim.surge_t = 0.0
+		sim.rally_t = 0.0
+		sim.blessed_left = 0
+		sim.will = 50.0
+		sim.cmd_cd.clear()
 	elif frames == 130:
 		# watch mode (V): HUD hidden, busy layers off, camera directed; leaving restores everything
 		sim.strain_events.append({"uid": sim.ants[0].genome.uid, "text": "test strain", "t": sim.time})

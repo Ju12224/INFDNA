@@ -590,18 +590,20 @@ func _on_caste(i: int) -> void:
 
 func _refresh_director() -> void:
 	var sim = scene.sim
-	_will_bar.set_values(sim.will, Sim.WILL_MAX, "Will  %d" % int(sim.will))
+	_will_bar.set_values(sim.will, sim.will_max(), "Will  %d" % int(sim.will))
 	for id in _dir_btns.keys():
 		var c = Sim.COMMANDS[id]
 		var cd = sim.cmd_cd.get(id, 0.0)
-		var ready = cd <= 0.0 and sim.will >= c["cost"]
+		var cost = sim.cmd_cost(id)
+		var ready = cd <= 0.0 and sim.will >= cost
 		var armed = scene.armed == id
-		var sig = "%d|%d|%s" % [int(ceil(cd)), int(sim.will >= c["cost"]), str(armed)]
+		var sig = "%d|%d|%s|%d|%d" % [int(ceil(cd)), int(sim.will >= cost), str(armed), int(ceil(cost)), int(sim.cmd_recharge(id))]
 		var b: Button = _dir_btns[id]
 		if _dir_sig.get(id, "") != sig:
 			_dir_sig[id] = sig
-			var tail = ("%ds" % int(ceil(cd))) if cd > 0.0 else ("%d" % int(c["cost"]))
+			var tail = ("%ds" % int(ceil(cd))) if cd > 0.0 else ("%d" % int(ceil(cost)))
 			b.text = "%s  (%s)    %s" % [c["name"], c["key"], tail]
+			b.hint_tooltip = "%s (%s): %s. Costs %d Will, recharges in %d s." % [c["name"], c["key"], c["tip"], int(ceil(cost)), int(round(sim.cmd_recharge(id)))]
 			b.modulate = Color(1, 1, 1, 1.0 if ready else 0.5)
 		b.pressed = armed
 	_dir_hint.visible = scene.armed != "" and not scene.watch_mode

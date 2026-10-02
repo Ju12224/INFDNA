@@ -736,6 +736,19 @@ func place_beacon(x: int) -> bool:
 	return true
 
 
+# What the director's items do to the Will meter and the commands (the base numbers live in COMMANDS).
+func will_max() -> float:
+	return WILL_MAX + mod("will_max")
+
+
+func cmd_cost(id: String) -> float:
+	return float(COMMANDS[id]["cost"]) * max(0.4, 1.0 + mod("cmd_cost"))
+
+
+func cmd_recharge(id: String) -> float:
+	return float(COMMANDS[id]["cd"]) * max(0.3, 1.0 + mod("cmd_cd"))
+
+
 # The director's voice. `x` is the world column the cursor is over (rally, harvest), `sel` the selected ant (breed).
 # Returns true if the command went out.
 func cast(id: String, x: int = 0, sel = null) -> bool:
@@ -745,8 +758,9 @@ func cast(id: String, x: int = 0, sel = null) -> bool:
 	if cmd_cd.get(id, 0.0) > 0.0:
 		toasts.append({"text": "%s is recharging (%d s)." % [c["name"], int(ceil(cmd_cd[id]))], "t": 2.0})
 		return false
-	if will < c["cost"]:
-		toasts.append({"text": "Not enough Will for %s (%d needed)." % [c["name"], int(c["cost"])], "t": 2.0})
+	var cost = cmd_cost(id)
+	if will < cost:
+		toasts.append({"text": "Not enough Will for %s (%d needed)." % [c["name"], int(ceil(cost))], "t": 2.0})
 		return false
 	var ex = int(grid.entrance.x)
 	x = int(clamp(x, ex - RANGE_MAX + 20, ex + RANGE_MAX - 20))
@@ -756,7 +770,7 @@ func cast(id: String, x: int = 0, sel = null) -> bool:
 				toasts.append({"text": "Raiders are inside the nest: the colony will not leave it to rally.", "t": 3.0})
 				return false
 			rally_x = x
-			rally_t = RALLY_LEN
+			rally_t = RALLY_LEN * (1.0 + mod("rally_power"))
 			# call up to ~45% of the colony: soldiers first, then idle hands; never an ant carrying food
 			var want = int(ants.size() * 0.45)
 			var order := []
@@ -790,7 +804,7 @@ func cast(id: String, x: int = 0, sel = null) -> bool:
 				toasts.append({"text": "No pile near the cursor: put it over a food pile (they show on the minimap).", "t": 3.0})
 				return false
 			harvest_x = best["x"]
-			harvest_t = HARVEST_LEN
+			harvest_t = HARVEST_LEN * (1.0 + mod("harvest_power"))
 			best["found"] = true
 			var sent := 0
 			for a in ants:
@@ -814,20 +828,22 @@ func cast(id: String, x: int = 0, sel = null) -> bool:
 			banner = "Recall: the colony runs for home"
 			banner_t = 3.0
 		"surge":
-			surge_t = 10.0
+			surge_t = 10.0 * (1.0 + mod("surge_power"))
 			fx.append({"kind": "ring", "pos": grid.center(ex, grid.surf_y(ex) - 3), "t": 0.0, "color": Color("#7fe0c4")})
-			toasts.append({"text": "Surge: surface ants sprint for 10 s.", "t": 3.0})
+			toasts.append({"text": "Surge: surface ants sprint for %d s." % int(round(surge_t)), "t": 3.0})
 		"breed":
 			if sel != null and ants.has(sel):
+				var nb = 8 + int(mod("breed_power"))
 				blessed = sel.genome
-				blessed_left = 8
+				blessed_left = nb
 				fx.append({"kind": "ring", "pos": ant_pos(sel), "t": 0.0, "color": Color("#b58cff")})
-				toasts.append({"text": "Breed: the next 8 eggs come from the selected ant, each with a fresh mutation.", "t": 5.0})
+				toasts.append({"text": "Breed: the next %d eggs come from the selected ant, each with a fresh mutation." % nb, "t": 5.0})
 			else:
-				fate.ray_eggs += 8
-				toasts.append({"text": "Breed: the next 8 eggs mutate hard. (Select an ant first to breed from it.)", "t": 5.0})
-	will -= c["cost"]
-	cmd_cd[id] = c["cd"]
+				var nb2 = 8 + int(mod("breed_power"))
+				fate.ray_eggs += nb2
+				toasts.append({"text": "Breed: the next %d eggs mutate hard. (Select an ant first to breed from it.)" % nb2, "t": 5.0})
+	will -= cost
+	cmd_cd[id] = cmd_recharge(id)
 	return true
 
 
@@ -852,7 +868,7 @@ func _step_bird(dt: float) -> void:
 					far.append(a)
 			if far.size() >= 6:
 				var t = far[rng.randi_range(0, far.size() - 1)]
-				bird = {"x": float(t.x) + rng.randf_range(-60.0, 60.0), "t": BIRD_LEN * clamp(ants.size() / 120.0, 0.5, 1.0), "cd": 2.0, "dive": 0.0, "alt": 1.0, "face": 1, "kills": 0}
+				bird = {"x": float(t.x) + rng.randf_range(-60.0, 60.0), "t": BIRD_LEN * clamp(ants.size() / 120.0, 0.5, 1.0) * max(0.3, 1.0 - 0.5 * mod("bird_ward")), "cd": 2.0, "dive": 0.0, "alt": 1.0, "face": 1, "kills": 0}
 				bird["x"] = clamp(bird["x"], float(ex - RANGE_MAX + 20), float(ex + RANGE_MAX - 20))
 				banner = "A bird is hunting over the %s meadow!  (Recall brings the foragers home)" % ("west" if bird["x"] < ex else "east")
 				banner_t = 5.0
@@ -874,7 +890,7 @@ func _step_bird(dt: float) -> void:
 	if target == null or bd > 500.0 or bird["t"] <= 0.0:
 		toasts.append({"text": "The bird flies off.", "t": 3.0})
 		bird = null
-		_bird_timer = rng.randf_range(150.0, 260.0)
+		_bird_timer = rng.randf_range(150.0, 260.0) * (1.0 + 0.8 * mod("bird_ward"))
 		return
 	var dir = 1.0 if target.x > bird["x"] else -1.0
 	var alt_goal = 1.0 if bird["dive"] > 0.2 else clamp(bd / 55.0, 0.08, 1.0)      # stoops as it closes in, climbs away after a strike
@@ -906,7 +922,7 @@ func _rally_order(a, b) -> bool:
 
 func _step_director(dt: float) -> void:
 	_step_bird(dt)
-	will = min(WILL_MAX, will + WILL_REGEN * dt)
+	will = min(will_max(), will + WILL_REGEN * (1.0 + mod("will_regen")) * dt)
 	for k in cmd_cd.keys():
 		cmd_cd[k] = max(0.0, cmd_cd[k] - dt)
 	rally_t = max(0.0, rally_t - dt)
@@ -1206,7 +1222,7 @@ func _step_ant(a, dt: float) -> void:
 		var und = grid.is_under(a.x, a.y)
 		var sp = a.ph["speed"] * (a.ph["tunnel_mult"] if und else SURFACE_K)
 		if surge_t > 0.0 and not und:
-			sp *= 1.45
+			sp *= 1.45 + 0.3 * mod("surge_power")
 		if not und and a.task == Task.FORAGE:
 			sp *= 1.0 + TRAIL_BOOST * min(1.0, grid.pher_at(a.x) / 1.2)   # ants run faster on a used trail
 		a.t += sp * dt / dist
@@ -1379,7 +1395,7 @@ func _forage(a) -> void:
 			p["amount"] -= take
 			# far piles are richer: seeds, honeydew, whole carcasses. The load is worth more the farther it came
 			# from (up to x2.2 past 720 cells), which pays for the long walk home.
-			a.carry = take * (1.0 + clamp(abs(p["x"] - ex) / 600.0, 0.0, 1.2)) * (1.3 if (harvest_t > 0.0 and p["x"] == harvest_x) else 1.0)
+			a.carry = take * (1.0 + clamp(abs(p["x"] - ex) / 600.0, 0.0, 1.2)) * ((1.3 + 0.6 * mod("harvest_power")) if (harvest_t > 0.0 and p["x"] == harvest_x) else 1.0)
 			a.site = p["x"]          # route memory: it will come straight back here
 			a.empty_trips = 0
 			if not p.get("found", false):
@@ -2614,7 +2630,7 @@ func _update_rally() -> void:
 	var src := []
 	var any_e = not enemies.empty()
 	for a in ants:
-		a.rally_k = 1.35 if (rally_t > 0.0 and abs(a.x - rally_x) <= 16) else 1.0
+		a.rally_k = (1.35 + 0.2 * mod("rally_power")) if (rally_t > 0.0 and abs(a.x - rally_x) <= 16) else 1.0
 		if any_e and src.size() < 24 and a.ph.get("rally", 0.0) > 0.0 and (a.task == Task.DEFEND or a.hurt > 0.0):
 			src.append(a)
 	if src.empty():

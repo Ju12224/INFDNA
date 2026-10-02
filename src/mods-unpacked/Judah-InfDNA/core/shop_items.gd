@@ -12,6 +12,8 @@ extends Reference
 #            hp attack speed carry upkeep life dig thorns (multipliers, +x = +x*100%)
 #            sense armor regen defend_attack pile_rich pile_near siege_dmg
 #            tunnel_dmg interest price_disc reroll_disc corpse_food kill_food raid_size
+#            the director's: will_regen (+x = +x*100%) will_max (+flat) cmd_cd cmd_cost (multipliers, -x = x*100% less)
+#            rally_power harvest_power surge_power (+x = +x*100% longer, a little stronger) breed_power (+eggs) bird_ward
 # Tiers follow Brotato: 1 common, 2 uncommon, 3 rare, 4 legendary.
 
 const ICON = "res://items/all/%s/%s_icon.png"
@@ -72,6 +74,17 @@ const ITEMS = {
 	"meat": {"name": "Hunters", "icon": "fresh_meat", "tier": 1, "price": 30, "desc": "Raiders drop 30% more food.", "mods": {"kill_food": 0.3}},
 	"coupon": {"name": "Coupon", "icon": "coupon", "tier": 2, "price": 40, "desc": "Lab prices are 10% lower.", "mods": {"price_disc": 0.1}, "max": 3},
 	"token": {"name": "Gambler's Gland", "icon": "gambling_token", "tier": 1, "price": 25, "desc": "Rerolls cost 2 less.", "mods": {"reroll_disc": 2.0}, "max": 2},
+	# ---- the director's items (v0.29): they feed the Will meter and the five commands
+	"whisper": {"name": "Queen's Whisper", "icon": "lure", "tier": 1, "price": 35, "desc": "Your Will regenerates 30% faster.", "mods": {"will_regen": 0.3}, "max": 3},
+	"reserve": {"name": "Deep Reserve", "icon": "piggy_bank", "tier": 2, "price": 45, "desc": "Your Will bar holds 40 more.", "mods": {"will_max": 40.0}, "max": 2},
+	"choir": {"name": "Pheromone Choir", "icon": "peaceful_bee", "tier": 2, "price": 50, "desc": "Every command recharges 25% faster.", "mods": {"cmd_cd": -0.25}, "max": 2},
+	"frugal": {"name": "Frugal Orders", "icon": "coupon", "tier": 2, "price": 45, "desc": "Every command costs 20% less Will.", "mods": {"cmd_cost": -0.2}, "max": 2},
+	"standard": {"name": "War Standard", "icon": "warrior_helmet", "tier": 2, "price": 45, "desc": "Rally lasts 50% longer and rallied ants bite 10% harder.", "mods": {"rally_power": 0.5}, "max": 2},
+	"trail_honey": {"name": "Honey Trail", "icon": "honey", "tier": 2, "price": 45, "desc": "Harvest lasts 50% longer and the ants it sends carry 30% more.", "mods": {"harvest_power": 0.5}, "max": 2},
+	"scarecrow": {"name": "Scarecrow", "icon": "lumberjack_shirt", "tier": 2, "price": 45, "desc": "Birds come 40% less often and leave sooner.", "mods": {"bird_ward": 0.5}, "max": 2},
+	"adrenal": {"name": "Adrenal Glands", "icon": "injection", "tier": 2, "price": 45, "desc": "Surge lasts 50% longer and runs 15% faster.", "mods": {"surge_power": 0.5}, "max": 2},
+	"studbook": {"name": "Stud Book", "icon": "pile_of_books", "tier": 2, "price": 50, "desc": "Breed steers 4 more eggs.", "mods": {"breed_power": 4.0}, "max": 2},
+	"hivevoice": {"name": "Hive Voice", "icon": "triangle_of_power", "tier": 4, "price": 150, "desc": "The colony hangs on your word: +50% Will regeneration, commands recharge 20% faster, +30 Will.", "mods": {"will_regen": 0.5, "cmd_cd": -0.2, "will_max": 30.0}, "max": 1},
 	# ---- defenses
 	"barricade": {"name": "Thorn Barricade", "icon": "barricade", "tier": 2, "price": 50, "desc": "Raiders sieging the entrance take 4 damage per second.", "mods": {"siege_dmg": 4.0}},
 	"landmines": {"name": "Tunnel Traps", "icon": "landmines", "tier": 2, "price": 50, "desc": "Raiders inside the tunnels take 5 damage per second.", "mods": {"tunnel_dmg": 5.0}},
@@ -107,6 +120,8 @@ const ITEMS = {
 			{"food": 120.0, "text": "a hidden stash (+120 food)"},
 			{"mods": {"speed": 0.2, "carry": 0.2}, "text": "a runner strain (+20% speed and carry)"},
 		]},
+	"puppet": {"name": "Puppet Strings", "icon": "ritual", "tier": 2, "price": 40, "desc": "Your Will regenerates 60% faster.", "mods": {"will_regen": 0.6},
+		"hidden": {"mods": {"upkeep": 0.2}}, "hidden_desc": "ants that wait for orders burn 20% more food.", "rumor": "an ant waiting for orders is an ant that is eating.", "reveal": 90.0, "max": 1},
 	"antidote": {"name": "Antidote", "icon": "celery_tea", "tier": 2, "price": 45, "desc": "Cures the side effect of one cursed item you own whose effect you have discovered. Refunds 20 food if there is nothing to cure.", "cleanse": true},
 	# ---- colony
 	"mutagen": {"name": "Mutagen", "icon": "mutation", "tier": 2, "price": 55, "desc": "+10% chance that each egg mutates.", "colony": {"mutation": 0.10}},
