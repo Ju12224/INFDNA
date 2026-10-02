@@ -13,6 +13,7 @@ const MK = preload("res://mods-unpacked/Judah-InfDNA/content/colony/mesh_kit.gd"
 var cam
 var grid
 var perf             # perf.gd (optional): backdrop detail level
+var day              # day_cycle.gd (optional): sun, moon, stars and the colour of the light
 var anchor := Vector2()      # world point where every layer lines up (colony entrance)
 var _t := 0.0
 var _cache := {}             # "layer:chunk" -> ArrayMesh
@@ -23,6 +24,8 @@ var _budget := 3
 const CW = 1200.0            # layer-space chunk width
 const BOTTOM = 700.0         # layers hang this far below the anchor so no sky shows under them
 const HAZE = Color("#f0e4c8")
+const NIGHT_STOPS = [Color("#060a22"), Color("#0d1744"), Color("#1a2a5e"), Color("#2b3a6c"), Color("#41507d")]
+const DUSK_STOPS = [Color("#43478a"), Color("#8a69a2"), Color("#e8957c"), Color("#f6ad79"), Color("#ffc98a")]
 const SKY_STOPS = [[-2200.0, Color("#5c9ccb")], [-1100.0, Color("#86bee0")], [-500.0, Color("#bcdbe0")], [-180.0, Color("#e8e6cf")], [-40.0, Color("#f6e6c0")]]
 
 # f = parallax; base = px above the anchor (clear of the 128 px ground band); amp = relief
@@ -71,9 +74,15 @@ func _draw() -> void:
 	var v = _view()
 	var bd = perf.backdrop if perf != null else 3
 	var first = [5, 3, 1, 0][bd]            # lower quality drops the far layers first
+	var dn = day.night if day != null else 0.0
 	_sky(v)
+	if dn > 0.04 and bd >= 1:
+		_stars(v, dn)
 	if bd >= 2:
-		_sun(v, bd >= 3)
+		if day == null or day.elev > -0.25:
+			_sun(v, bd >= 3 and dn < 0.5)
+		if dn > 0.04:
+			_moon(v, dn)
 	if bd >= 3:
 		_cloud_layer(v, 0.05, _wisps, 0.55, 900.0, 640.0, 1.6, 4.0)
 	if bd >= 2:
@@ -82,12 +91,12 @@ func _draw() -> void:
 		if i < first:
 			continue
 		_layer(v, i)
-		if i == 2 and bd >= 3:
+		if i == 2 and bd >= 3 and dn < 0.7:
 			_birds(v)
 		if i == 3 and bd >= 2:
 			_cloud_layer(v, 0.26, _clouds, 0.8, 760.0, 250.0, 0.55, 14.0)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	if bd >= 3:
+	if bd >= 3 and dn < 0.6:
 		_pollen(v)
 	_bedrock(v)
 
@@ -97,22 +106,76 @@ func _sky(v: Rect2) -> void:
 	var x1 = v.end.x + 10
 	var top = v.position.y - 10
 	var prev_y = top
-	var prev_c = SKY_STOPS[0][1]
-	for st in SKY_STOPS:
+	var prev_c = _stop_col(0)
+	for si in SKY_STOPS.size():
+		var st = SKY_STOPS[si]
+		var sc = _stop_col(si)
 		var y = anchor.y + st[0] * 0.8 + (v.position.y + v.size.y * 0.5 - anchor.y) * 0.35
 		if y > prev_y:
 			draw_polygon(PoolVector2Array([Vector2(x0, prev_y), Vector2(x1, prev_y), Vector2(x1, y), Vector2(x0, y)]),
-				PoolColorArray([prev_c, prev_c, st[1], st[1]]))
+				PoolColorArray([prev_c, prev_c, sc, sc]))
 		prev_y = max(prev_y, y)
-		prev_c = st[1]
+		prev_c = sc
 	if prev_y < v.end.y:
 		draw_rect(Rect2(x0, prev_y, x1 - x0, v.end.y - prev_y + 10), prev_c)
+
+
+# Sky colour of one gradient stop: warmed toward dusk colours at sunrise and sunset, then toward night.
+func _stop_col(i: int) -> Color:
+	var c: Color = SKY_STOPS[i][1]
+	if day == null:
+		return c
+	if day.warm > 0.01:
+		c = c.linear_interpolate(DUSK_STOPS[i], day.warm * 0.8)
+	if day.night > 0.01:
+		c = c.linear_interpolate(NIGHT_STOPS[i], day.night)
+	# light_view.gd multiplies everything on screen by the light colour afterwards: pre-divide so the sky lands on its palette
+	var t = day.tint
+	return Color(min(c.r / max(t.r, 0.2), 1.0), min(c.g / max(t.g, 0.2), 1.0), min(c.b / max(t.b, 0.2), 1.0), 1.0)
+
+
+func _arc(u: float) -> Vector2:
+	return anchor + Vector2(lerp(-720.0, 720.0, u), -140.0 - 640.0 * sin(clamp(u, 0.0, 1.0) * PI))
+
+
+func _stars(v: Rect2, night: float) -> void:
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	var z = cam.zoom.x
+	for k in 90:
+		var hx = _hh(k * 1.37, 61.0)
+		var hy = _hh(k * 2.11, 62.0)
+		var p = Vector2(v.position.x + hx * v.size.x, v.position.y + hy * v.size.y * 0.62)
+		var tw = 0.55 + 0.45 * sin(_t * (1.2 + hx * 2.0) + k * 3.1)
+		var r = (0.7 + 1.4 * _hh(k * 0.77, 63.0)) * z
+		draw_circle(p, r, Color(0.92, 0.95, 1.0, night * tw * 0.9))
+
+
+func _moon(v: Rect2, night: float) -> void:
+	var nt = (day.ph - 0.75 if day.ph >= 0.75 else day.ph + 0.25) / 0.5 if day != null else 0.5
+	var xf = _xf(0.03)
+	draw_set_transform(xf[1], 0.0, Vector2(xf[0], xf[0]))
+	var p = _arc(nt)
+	var a = night
+	draw_circle(p, 170.0, Color(0.7, 0.8, 1.0, 0.07 * a))
+	draw_circle(p, 105.0, Color(0.75, 0.85, 1.0, 0.13 * a))
+	draw_circle(p, 56.0, Color(0.93, 0.95, 0.98, a))
+	draw_circle(p + Vector2(18, -10), 11.0, Color(0.78, 0.82, 0.9, a))
+	draw_circle(p + Vector2(-16, 14), 8.0, Color(0.8, 0.84, 0.92, a))
+	draw_circle(p + Vector2(8, 22), 5.0, Color(0.8, 0.84, 0.92, a))
+	draw_circle(p + Vector2(-22, -16), 6.0, Color(0.82, 0.86, 0.93, a))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _sun(v: Rect2, rays: bool = true) -> void:
 	var xf = _xf(0.03)
 	draw_set_transform(xf[1], 0.0, Vector2(xf[0], xf[0]))
 	var p = anchor + Vector2(560, -640)
+	var warm_k = 0.0
+	var vis = 1.0
+	if day != null:
+		p = _arc(clamp((day.ph - 0.25) / 0.5, 0.0, 1.0))
+		warm_k = day.warm
+		vis = 1.0 - day.night
 	var pulse = 1.0 + 0.02 * sin(_t * 0.8)
 	# slow rays
 	for k in (9 if rays else 0):
@@ -120,11 +183,13 @@ func _sun(v: Rect2, rays: bool = true) -> void:
 		var d = Vector2(cos(a), sin(a))
 		var n = Vector2(-d.y, d.x)
 		draw_polygon(PoolVector2Array([p + d * 70.0 + n * 12.0, p + d * 560.0 + n * 70.0, p + d * 560.0 - n * 70.0, p + d * 70.0 - n * 12.0]),
-			PoolColorArray([Color(1.0, 0.96, 0.78, 0.07), Color(1.0, 0.96, 0.78, 0.0), Color(1.0, 0.96, 0.78, 0.0), Color(1.0, 0.96, 0.78, 0.07)]))
-	draw_circle(p, 150.0 * pulse, Color(1.0, 0.95, 0.75, 0.14))
-	draw_circle(p, 96.0 * pulse, Color(1.0, 0.93, 0.7, 0.30))
-	draw_circle(p, 58.0, Color("#fff4cf"))
-	draw_circle(p, 48.0, Color("#ffe08a"))
+			PoolColorArray([Color(1.0, 0.96, 0.78, 0.07 * vis), Color(1.0, 0.96, 0.78, 0.0), Color(1.0, 0.96, 0.78, 0.0), Color(1.0, 0.96, 0.78, 0.07 * vis)]))
+	var g1 = Color(1.0, 0.95, 0.75).linear_interpolate(Color(1.0, 0.66, 0.4), warm_k)
+	var g2 = Color(1.0, 0.93, 0.7).linear_interpolate(Color(1.0, 0.6, 0.35), warm_k)
+	draw_circle(p, 150.0 * pulse * (1.0 + 0.3 * warm_k), Color(g1.r, g1.g, g1.b, 0.14 * vis))
+	draw_circle(p, 96.0 * pulse, Color(g2.r, g2.g, g2.b, 0.30 * vis))
+	draw_circle(p, 58.0, Color("#fff4cf").linear_interpolate(Color("#ffc58a"), warm_k) * Color(1, 1, 1, vis))
+	draw_circle(p, 48.0, Color("#ffe08a").linear_interpolate(Color("#ff9a4a"), warm_k) * Color(1, 1, 1, vis))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 

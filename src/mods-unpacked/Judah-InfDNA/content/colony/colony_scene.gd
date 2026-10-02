@@ -14,6 +14,8 @@ const UndergroundUI = preload("res://mods-unpacked/Judah-InfDNA/content/colony/u
 const Sfx = preload("res://mods-unpacked/Judah-InfDNA/content/colony/sfx.gd")
 const CameraRig = preload("res://mods-unpacked/Judah-InfDNA/content/colony/camera_rig.gd")
 const Hud = preload("res://mods-unpacked/Judah-InfDNA/content/colony/hud.gd")
+const LightView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/light_view.gd")
+const DayCycle = preload("res://mods-unpacked/Judah-InfDNA/content/colony/day_cycle.gd")
 const WatchCam = preload("res://mods-unpacked/Judah-InfDNA/content/colony/watch_cam.gd")
 const SELECT_SCENE = "res://mods-unpacked/Judah-InfDNA/content/colony/queen_select.tscn"
 const TITLE_SCENE = "res://ui/menus/title_screen/title_screen.tscn"
@@ -29,6 +31,7 @@ var ant_view
 var enemy_view
 var layers_view
 var perf               # the optimizer (perf.gd): adaptive quality
+var day                # day_cycle.gd: sun, moon and the colour of the surface light
 var cam
 var hud
 var selected = null
@@ -53,6 +56,8 @@ func _ready() -> void:
 	sim = Sim.new(0, qid)
 	perf = Perf.new()
 	perf.scene = self
+	day = DayCycle.new()
+	day.update(sim.time)
 	baker = Baker.new()
 	add_child(baker)
 
@@ -62,6 +67,7 @@ func _ready() -> void:
 	add_child(world_view)
 	world_view.sky.perf = perf
 	world_view.ground.perf = perf
+	world_view.sky.day = day
 
 	_overlay = Node2D.new()     # food, trails, eggs, queen: above the dirt
 	_overlay.connect("draw", self, "_draw_overlay")
@@ -71,6 +77,7 @@ func _ready() -> void:
 	ant_view.sim = sim
 	ant_view.baker = baker
 	ant_view.perf = perf
+	ant_view.day = day
 	add_child(ant_view)
 
 	enemy_view = EnemyView.new()
@@ -86,6 +93,13 @@ func _ready() -> void:
 	ant_view.ground = world_view.ground
 	world_view.cam = cam
 
+	var light = LightView.new()        # the colour of the surface light, multiplied over sky, ground and units
+	light.sim = sim
+	light.cam = cam
+	light.ground = world_view.ground
+	light.day = day
+	add_child(light)
+
 	layers_view = LayersView.new()     # fight / task / health marks, above the ants and raiders
 	layers_view.sim = sim
 	layers_view.cam = cam
@@ -100,6 +114,7 @@ func _ready() -> void:
 	ambient.cam = cam
 	ambient.ground = world_view.ground
 	ambient.perf = perf
+	ambient.day = day
 	add_child(ambient)
 
 	sfx = Sfx.new()
@@ -119,6 +134,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	day.update(sim.time)
 	if sim.shop_pending and not shop_open and not sim.collapsed:
 		open_shop()
 	# Fixed-budget stepping: simulate what the speed asks for, but never spend more than BUDGET_US

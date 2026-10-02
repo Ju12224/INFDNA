@@ -1326,8 +1326,7 @@ func _refresh_watch_info(sim) -> void:
 	var gen := 0
 	for a in sim.ants:
 		gen = int(max(gen, a.gen))
-	var tm = int(sim.time)
-	_watch_info.text = "%d ants   ·   gen %d   ·   %d:%02d   ·   %s" % [sim.ants.size(), gen, tm / 60, tm % 60,
+	_watch_info.text = "%d ants   ·   gen %d   ·   day %d %s   ·   %s" % [sim.ants.size(), gen, scene.day.day_n, scene.day.label(),
 		("raid %d" % sim.raid_n) if sim.raid_n > 0 else "calm"]
 
 

@@ -19,6 +19,7 @@ var baker
 var enemy_view
 var ground
 var perf             # perf.gd (optional): shadow and animation detail
+var day              # day_cycle.gd (optional): shadows fade with the sun (the colour of the light is light_view.gd)
 var cam
 var show_castes := true
 var selected = null
@@ -256,7 +257,7 @@ func _draw_shadows(items: Array) -> void:
 			pos = sim.enemy_pos(u) + Vector2(0, C * 0.5 + d[0])
 			rx = EnemyDefs.HEIGHT[u.cls] * 0.36 * d[1]
 			air = sk if u.def.get("fly", false) else 0.0
-		var a = sk * d[3] * (1.0 - 0.5 * air)
+		var a = sk * d[3] * (1.0 - 0.5 * air) * (1.0 - 0.8 * (day.night if day != null else 0.0))     # no sun, no shadows
 		if q == 1:
 			draw_set_transform(pos + Vector2(-rx * 0.3 - air * 14.0, 0), 0.0, Vector2(1.0, 0.3))
 			draw_circle(Vector2.ZERO, rx, Color(0.05, 0.1, 0.03, 0.2 * a))
