@@ -1,8 +1,8 @@
-# InfDNA (Brotato mod) - v0.25.0
+# InfDNA (Brotato mod) - v0.26.0
 
-## v0.25.0 - watch mode, calmer ants, day and night, new-strain spotlight
+## v0.26.0 - watch mode, calmer ants and raiders, day/night and rain, recruitment, strain spotlight, run summary
 Compile-checked, rendered headless under Xvfb (software GL), fuzzed 8 sim-minutes with watch mode and random time of day (no
-script errors), balance-probed (6 seeds x 25 min: all survive, pop curve unchanged), `src/tests-v023/layers_smoke.gd` 15/15;
+script errors), balance-probed (8 seeds x 25 min: all survive), `src/tests-v023/layers_smoke.gd` all pass;
 NOT playtested in Brotato.
 - **Watch mode (`V`, or Esc to leave).** Hides the HUD panels, the nest gauge and the busy layers (badges, tasks, health, follow) and
   leaves a one-line status (`88 ants - gen 5 - night - raid 1`) plus any toasts. `watch_cam.gd` is a slow self-directing camera that
