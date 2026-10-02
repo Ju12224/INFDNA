@@ -230,7 +230,7 @@ func _apply_pose(a, raw: Vector2, moving: bool) -> void:
 	_p_face = a.facing
 	var an = _anim.get(a.id)
 	if an == null:
-		an = {"carry": a.carry, "hop": 0.0, "grab": 0.0, "groom": 0.0, "next": randf_range(2.0, 10.0)}
+		an = {"carry": a.carry, "hop": 0.0, "grab": 0.0, "groom": 0.0, "next": rand_range(2.0, 10.0)}
 		_anim[a.id] = an
 	if a.carry > 0.0 and an["carry"] <= 0.0:
 		an["grab"] = 0.4
@@ -280,7 +280,7 @@ func _apply_pose(a, raw: Vector2, moving: bool) -> void:
 			_p_off.y += 1.5 * dip
 		elif an["next"] <= 0.0:
 			an["groom"] = 1.1
-			an["next"] = randf_range(6.0, 15.0)
+			an["next"] = rand_range(6.0, 15.0)
 		_p_sy *= 1.0 + 0.022 * sin(_t * 2.4 + a.id)
 		_p_sx *= 1.0 - 0.01 * sin(_t * 2.4 + a.id)
 	# overlays that stack on any pose

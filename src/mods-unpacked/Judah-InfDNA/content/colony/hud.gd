@@ -8,10 +8,11 @@ const KBar = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ui_bar.gd"
 const KNum = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ui_num.gd")
 const ShopItems = preload("res://mods-unpacked/Judah-InfDNA/core/shop_items.gd")
 const Queens = preload("res://mods-unpacked/Judah-InfDNA/core/queens.gd")
+const LayersView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/layers_view.gd")
 
-# task order in the sim: NURSE, FORAGE, DIG, HOME, DEFEND
-const TASK_COLORS = [Color("#5aa9e6"), Color("#7ed957"), Color("#c9863b"), Color("#8a8a9a"), Color("#e8483b")]
-const TASK_LABELS = ["Nursing", "Foraging", "Digging", "Returning", "Defending"]
+# task order in the sim: NURSE, FORAGE, DIG, HOME, DEFEND (shared with the Tasks layer so the legend matches)
+const TASK_COLORS = LayersView.TASK_COLORS
+const TASK_LABELS = LayersView.TASK_LABELS
 
 var scene            # colony_scene.gd
 var _f_s: Font
@@ -56,6 +57,9 @@ var _toasts: VBoxContainer
 var _toast_nodes := {}
 var _pause_chip: PanelContainer
 var _speed_btns := []
+var _layers_panel: PanelContainer
+var _layer_btns := {}
+var _task_legend: HBoxContainer
 const SPEED_LABELS = ["||", "1x", "2x", "4x", "10x"]
 var _vig: Control
 var _vig_a := 0.0
@@ -310,21 +314,69 @@ func _build_bar() -> void:
 	_speed_btns = _group(bar, "Speed", [["||", ""], ["1x", ""], ["2x", ""], ["4x", ""], ["10x", ""]], 1, "_on_speed",
 		["Pause (Space)", "1x (key 1)", "2x (key 2)", "4x (key 3)", "10x (key 4). If the colony is too big for 10x, the readout shows the speed you actually get."])
 	_sep(bar)
-	var trails = _btn(bar, "Trails", "")
-	trails.toggle_mode = true
-	trails.pressed = true
-	trails.connect("toggled", self, "_on_trails")
+	var layers = _btn(bar, "Layers", "sense")
+	layers.toggle_mode = true
+	layers.pressed = true
+	layers.hint_tooltip = "Show or hide the layer buttons (trails, badges, fights, tasks, health)"
+	layers.connect("toggled", self, "_on_layers_panel")
 	_btn(bar, "Lineage", "power").connect("pressed", self, "toggle_evolution")
 	_btn(bar, "Lab", "luck").connect("pressed", scene, "open_shop")
 	_btn(bar, "Menu", "exit").connect("pressed", scene, "go_to_menu")
 
-	var hint = Kit.label(root, "WASD / right-drag pan   Wheel zoom   Click an ant   Space pause   C badges   L lineage   Esc menu", _f_s)
+	var hint = Kit.label(root, "WASD / right-drag pan   Wheel zoom   Click an ant   Space pause   P trails   C badges   F fights   T tasks   H health   L lineage   Esc menu", _f_s)
 	hint.anchor_top = 1.0
 	hint.anchor_bottom = 1.0
 	hint.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	hint.margin_left = 22
 	hint.margin_bottom = -96
 	hint.modulate = Color(1, 1, 1, 0.55)
+	_build_layers()
+
+
+# View layers: toggles above the lever bar (same state as the P / C / F / T / H keys), plus a legend
+# for the task colours while the Tasks layer is on.
+func _build_layers() -> void:
+	_layers_panel = PanelContainer.new()
+	_layers_panel.add_stylebox_override("panel", Kit.panel(Color(0.3, 0.28, 0.38), 0.92, 4.0))
+	_layers_panel.anchor_left = 0.5
+	_layers_panel.anchor_right = 0.5
+	_layers_panel.anchor_top = 1.0
+	_layers_panel.anchor_bottom = 1.0
+	_layers_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_layers_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_layers_panel.margin_bottom = -130     # above the lever bar and its key hint
+	root.add_child(_layers_panel)
+	var v = VBoxContainer.new()
+	v.add_constant_override("separation", 6)
+	_layers_panel.add_child(v)
+	var row = HBoxContainer.new()
+	row.add_constant_override("separation", 8)
+	v.add_child(row)
+	var l = Kit.label(row, "Layers", _f_s)
+	l.valign = Label.VALIGN_CENTER
+	l.modulate = Color(1, 1, 1, 0.7)
+	for it in [["trails", "Trails (P)", "sense", "Food scent trails on the ground"],
+			["castes", "Badges (C)", "soldier", "Caste badge over each ant"],
+			["fights", "Fights (F)", "attack", "Rings under raiders, links to the ants hitting them, health on fighters, arrows to off-screen raiders"],
+			["tasks", "Tasks (T)", "balanced", "Colour halo on every ant for what it is doing right now"],
+			["health", "Health (H)", "hp", "Health bar over every ant"]]:
+		var b = _btn(row, it[1], it[2], Color("#f2c14e"), 20)
+		b.toggle_mode = true
+		b.pressed = scene.layer_state[it[0]]
+		b.hint_tooltip = it[3]
+		b.connect("toggled", self, "_on_layer_toggled", [it[0]])
+		_layer_btns[it[0]] = b
+	_task_legend = HBoxContainer.new()
+	_task_legend.add_constant_override("separation", 14)
+	_task_legend.alignment = BoxContainer.ALIGN_CENTER
+	v.add_child(_task_legend)
+	for i in TASK_COLORS.size():
+		var sw = PanelContainer.new()
+		sw.add_stylebox_override("panel", Kit.flat(TASK_COLORS[i], Kit.INK, 4, 2, 0.0, 0))
+		sw.rect_min_size = Vector2(16, 16)
+		_task_legend.add_child(sw)
+		Kit.label(_task_legend, TASK_LABELS[i], _f_s)
+	_task_legend.visible = scene.layer_state["tasks"]
 
 
 # ================================================================== build: inspector
@@ -1103,14 +1155,26 @@ func sync_speed(s: float) -> void:
 		_speed_btns[i].pressed = i == idx
 
 
-func _on_trails(on: bool) -> void:
-	scene.world_view.show_trails = on
+func _on_layers_panel(on: bool) -> void:
+	_layers_panel.visible = on
+
+
+func _on_layer_toggled(on: bool, key: String) -> void:
+	scene.set_layer(key, on)
+
+
+# Keep the buttons in step with the P / C / F / T / H hotkeys.
+func sync_layer(key: String, on: bool) -> void:
+	if _layer_btns.has(key):
+		_layer_btns[key].pressed = on
+	if key == "tasks":
+		_task_legend.visible = on
 
 
 # ================================================================== builders
-func _btn(parent: Node, text: String, key: String, col: Color = Color("#f2c14e")) -> Button:
+func _btn(parent: Node, text: String, key: String, col: Color = Color("#f2c14e"), size: int = 24) -> Button:
 	var b = KBtn.new()
-	b.setup(text, key, col)
+	b.setup(text, key, col, size)
 	parent.add_child(b)
 	return b
 

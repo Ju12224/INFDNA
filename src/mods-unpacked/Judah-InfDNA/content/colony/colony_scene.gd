@@ -7,6 +7,7 @@ const Baker = preload("res://mods-unpacked/Judah-InfDNA/content/colony/sprite_ba
 const WorldView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/world_view.gd")
 const AntView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ant_view.gd")
 const EnemyView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/enemy_view.gd")
+const LayersView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/layers_view.gd")
 const Sfx = preload("res://mods-unpacked/Judah-InfDNA/content/colony/sfx.gd")
 const CameraRig = preload("res://mods-unpacked/Judah-InfDNA/content/colony/camera_rig.gd")
 const Hud = preload("res://mods-unpacked/Judah-InfDNA/content/colony/hud.gd")
@@ -22,6 +23,7 @@ var baker
 var world_view
 var ant_view
 var enemy_view
+var layers_view
 var cam
 var hud
 var selected = null
@@ -32,6 +34,8 @@ var _prune_timer := 10.0
 var _overlay: Node2D
 var shop_open := false
 var sfx
+# view layers (HUD "Layers" panel and the P/C/F/T/H keys); see set_layer
+var layer_state := {"trails": true, "castes": true, "fights": true, "tasks": false, "health": false}
 
 
 func _ready() -> void:
@@ -65,6 +69,15 @@ func _ready() -> void:
 	cam.setup(world_view.world_size())
 	ant_view.cam = cam
 	world_view.cam = cam
+
+	layers_view = LayersView.new()     # fight / task / health marks, above the ants and raiders
+	layers_view.sim = sim
+	layers_view.cam = cam
+	layers_view.ant_view = ant_view
+	layers_view.show_fights = layer_state["fights"]
+	layers_view.show_tasks = layer_state["tasks"]
+	layers_view.show_health = layer_state["health"]
+	add_child(layers_view)
 
 	sfx = Sfx.new()
 	sfx.sim = sim
@@ -158,9 +171,15 @@ func _unhandled_input(event: InputEvent) -> void:
 						shown += 1
 						sim.toasts.append({"text": "Goal: %s (+%d food)" % [g["name"], g["food"]], "t": 6.0})
 			KEY_P:
-				world_view.show_trails = not world_view.show_trails
+				toggle_layer("trails")
 			KEY_C:
-				ant_view.show_castes = not ant_view.show_castes
+				toggle_layer("castes")
+			KEY_F:
+				toggle_layer("fights")
+			KEY_T:
+				toggle_layer("tasks")
+			KEY_H:
+				toggle_layer("health")
 			KEY_L:
 				hud.toggle_evolution()
 
@@ -177,6 +196,25 @@ func open_shop() -> void:
 func close_shop() -> void:
 	shop_open = false
 	hud.show_shop(false)
+
+
+func toggle_layer(key: String) -> void:
+	set_layer(key, not layer_state[key])
+
+
+func set_layer(key: String, on: bool) -> void:
+	if not layer_state.has(key) or layer_state[key] == on:
+		return
+	layer_state[key] = on
+	match key:
+		"trails":
+			world_view.show_trails = on
+		"castes":
+			ant_view.show_castes = on
+		_:
+			layers_view.set_layer(key, on)
+	if hud != null:
+		hud.sync_layer(key, on)
 
 
 func set_speed(s: float) -> void:

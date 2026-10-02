@@ -1,5 +1,21 @@
 # InfDNA (Brotato mod) - v0.22.0
 
+## Unreleased - view layers + startup fix (compile-checked, headless smoke run; NOT playtested, NOT looked at in the real game)
+- **Startup fix (ant_view.gd):** two bare `randf_range(...)` calls (Godot 4 only) stopped ant_view.gd, and so the whole
+  colony scene, from compiling in Godot 3.5. Now `rand_range`. Found by running `tests-v022/compile.gd` on Godot 3.5.3.
+- **View layers (content/colony/layers_view.gd, drawn above ants and raiders; purely visual, the sim is untouched):**
+  - `Fights` (F, on by default): ring under each raider (colour by class, pulses while it fights), a line from every ant
+    in reach to the raider it is hitting (same reach rule as `_combat`, at most 8 per raider), mini health bars on
+    fighting or wounded ants, and edge arrows (with a count) toward raiders that are off screen.
+  - `Tasks` (T): coloured halo on every ant for what it is doing now (the legend shows in the panel).
+  - `Health` (H): health bar over every ant.
+  - `Trails` (P) and `Badges` (C) already existed; they now live in the same bottom `Layers` panel (the old Trails button
+    became the `Layers` button that shows or hides the panel). colony_scene.gd `set_layer` keeps keys and buttons in sync.
+  - Marks are sized in screen pixels, so they hold when zoomed out. Headless cost at ~90 ants, all layers on: ~1.1 ms of
+    draw script per frame next to ~2.9 ms for ant_view; fight pairing ~0.4 ms every 0.08 s (GDScript time only, no GPU).
+  - Not checked in the real game: panel placement (it sits above the key hint, bottom centre), how the edge arrows sit
+    against the HUD cards, readability of the halos in a 150-ant raid. `tests-v023/layers_smoke.gd` drives the layers headless.
+
 ## v0.22.0 - speed, long-range foraging, a play layer (compile-checked + 10 sim-minute smoke run; NOT playtested, NOT A/B measured)
 - **Speed bug fixed (core/colony_sim.gd `_step_ant`, `_step_enemy`):** the leftover distance of a hop was thrown away on
   arrival, so ants walked at 5.55 / 4.75 / 4.50 cells/s at 1x-frame / 0.05 / 0.1 s steps (nominal 6.10). The overshoot now
