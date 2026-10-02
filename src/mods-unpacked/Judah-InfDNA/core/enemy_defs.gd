@@ -30,14 +30,19 @@ const DEFS = {
 	"butcher": {"name": "Butcher", "hp": 700.0, "dmg": 15.0, "speed": 1.7, "cls": "boss", "food": 140.0, "cost": 18,
 		"tex": ["res://entities/units/enemies/butcher/butcher.png"]},
 
+	# v0.23 wildlife: drawn procedurally (content/colony/creature_art.gd), so no textures needed
+	"spider": {"name": "Spider", "hp": 170.0, "dmg": 5.5, "speed": 3.0, "cls": "brute", "food": 24.0, "cost": 3, "tex": [], "art": "spider"},
+	"bee": {"name": "Bee", "hp": 22.0, "dmg": 1.7, "speed": 5.8, "cls": "small", "food": 5.0, "cost": 1, "tex": [], "art": "bee", "fly": true},
+	"hornet": {"name": "Hornet", "hp": 300.0, "dmg": 7.0, "speed": 4.6, "cls": "elite", "food": 46.0, "cost": 7, "tex": [], "art": "hornet", "fly": true},
+
 	# passive prey (not raiders): wanders the surface, flees ants, big food when hunted
 	"looter": {"name": "Looter", "hp": 45.0, "dmg": 0.0, "speed": 3.0, "cls": "prey", "food": 24.0, "cost": 0,
 		"tex": ["res://dlcs/dlc_1/enemies/looting_pig/looting_pig.png", "res://entities/units/enemies/looter/looter.png"]},
 }
 
-const SMALL = ["baby", "fly", "shrimp"]
-const BRUTE = ["charger", "helmet", "crab"]
-const ELITE = ["bruiser", "isopod"]
+const SMALL = ["baby", "fly", "shrimp", "bee"]
+const BRUTE = ["charger", "helmet", "crab", "spider"]
+const ELITE = ["bruiser", "isopod", "hornet"]
 
 # Reach in cells, by class
 const REACH = {"small": 1.6, "burrower": 1.9, "brute": 2.4, "elite": 3.0, "boss": 3.6, "prey": 1.8}

@@ -35,7 +35,7 @@ var _overlay: Node2D
 var shop_open := false
 var sfx
 # view layers (HUD "Layers" panel and the P/C/F/T/H keys); see set_layer
-var layer_state := {"trails": true, "castes": true, "fights": true, "tasks": false, "health": false}
+var layer_state := {"trails": true, "castes": true, "fights": true, "tasks": false, "health": false, "follow": false}
 
 
 func _ready() -> void:
@@ -114,6 +114,9 @@ func _process(delta: float) -> void:
 	if sim.shake > 0.0:
 		cam.kick(sim.shake)
 		sim.shake = 0.0
+	if layer_state["follow"] and selected != null and sim.ants.has(selected):
+		var d = ant_view._depth(selected.id, selected.lane)
+		cam.position = cam.position.linear_interpolate(sim.ant_pos(selected) + Vector2(0, d[0] - 30.0), clamp(delta * 5.0, 0.0, 1.0))
 	_overlay.update()
 	ant_view.selected = selected
 	_prune_timer -= delta
@@ -181,6 +184,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				toggle_layer("tasks")
 			KEY_H:
 				toggle_layer("health")
+			KEY_X:
+				toggle_layer("follow")
 			KEY_L:
 				hud.toggle_evolution()
 
@@ -212,6 +217,8 @@ func set_layer(key: String, on: bool) -> void:
 			world_view.show_trails = on
 		"castes":
 			ant_view.show_castes = on
+		"follow":
+			pass          # read in _process
 		_:
 			layers_view.set_layer(key, on)
 	if hud != null:

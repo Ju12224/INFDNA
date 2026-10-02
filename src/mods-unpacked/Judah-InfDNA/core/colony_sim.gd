@@ -19,6 +19,7 @@ const Fate = preload("res://mods-unpacked/Judah-InfDNA/core/fate.gd")
 const City = preload("res://mods-unpacked/Judah-InfDNA/core/city.gd")
 const NestPlanner = preload("res://mods-unpacked/Judah-InfDNA/core/nest_planner.gd")
 const Queens = preload("res://mods-unpacked/Judah-InfDNA/core/queens.gd")
+const WF = preload("res://mods-unpacked/Judah-InfDNA/core/world_features.gd")
 
 enum Task { NURSE, FORAGE, DIG, HOME, DEFEND }
 enum Focus { FORAGE, BALANCED, DIG, DEFEND }
@@ -29,13 +30,14 @@ const CASTES = ["Forager", "Digger", "Soldier"]
 const EGG_COST = 6.0
 const HATCH_TIME = 14.0
 const MAX_ANTS = 350
-const MUTATION_CHANCE = 0.35
+const MUTATION_CHANCE = 0.55
 const MAX_PILES = 7
 # --- foraging (v0.22): route memory, trails, scouting legs, long range
 const NO_SITE = -999999
-const RANGE_BASE = 90            # first search radius of a trip (cells from the nest)
-const RANGE_GROW = 1.45          # radius multiplier after each empty-handed trip
-const RANGE_MAX = 520            # the world is pre-grown to cover nest +- this
+const RANGE_BASE = 110           # first search radius of a trip (cells from the nest)
+const RANGE_GROW = 1.7           # radius multiplier after each empty-handed trip
+const RANGE_MAX = 1500           # farthest a trip may reach (cells; 1 cell = 6 px, an ant is ~7 cells long)
+const SURFACE_K = 3.0            # ants run this much faster over open ground than their tunnel speed (v0.23: long expeditions)
 const LEG_MEAN = 70.0            # mean length of a straight scouting leg (cells)
 const PHER_TAU = 50.0            # trail half-life scale (s): long routes need trails that last
 const TRAIL_BOOST = 0.25         # ants run up to 25% faster on a well-used trail
@@ -214,6 +216,10 @@ var _stim_defend := 0.0
 # shop / Evolution Lab
 var owned := {}
 var mut_bias := {}
+# v0.23 directed adaptation: when the colony is tested, the caste that was tested breeds a run of eggs
+# whose mutations lean toward what helped. caste -> {"left": eggs still to breed, "bias": mutation weights}
+var adapt := {}
+var _adapt_cd := 0.0
 var trait_bias := {}
 var mutation_chance := MUTATION_CHANCE
 var egg_cost := EGG_COST
@@ -223,7 +229,7 @@ var tournament := 4
 var city = City.new()               # workshops, reach, outposts (city.gd)
 var fate = Fate.new()               # hidden side effects, synergies, events (fate.gd)
 var mods := {}                   # stacking modifiers from the Lab (see shop_items.gd)
-var double_mut := 0.25
+var double_mut := 0.4
 var sfx: Array = []              # sound events for the view: "hit", "ant_die", "kill", ...
 var shop_pending := false
 var offers: Array = []
@@ -331,12 +337,7 @@ func _init(seed_value: int = 0, queen_id: String = "well_rounded") -> void:
 	planner = NestPlanner.new(grid, rng)
 	_apply_queen()
 	var ex = int(grid.entrance.x)
-	for i in 5:
-		var tx = rng.randi_range(grid.arena_l + 8, grid.arena_r - 8)
-		if abs(tx - ex) > 14:
-			trees.append({"x": tx, "lane": rng.randf_range(0.0, 0.25), "t": rng.randf_range(5.0, 25.0)})
-	for i in 14:
-		rocks.append({"x": rng.randi_range(grid.arena_l + 3, grid.arena_r - 3), "lane": rng.randf(), "s": rng.randf_range(0.2, 0.4)})
+	_sync_trees(0.0, true)
 	# the founding dig (queen chamber + shaft) already left a small mound
 	for i in 8:
 		grid.deposit(ex + (i % 2 * 2 - 1) * rng.randi_range(2, 5), grid.open_under * SPOIL_KEEP / 8.0, rng)
@@ -542,6 +543,7 @@ func _step_extras(dt: float) -> void:
 		_trail_t = 1.0
 		_update_trails()
 	_beacon_cd = max(0.0, _beacon_cd - dt)
+	_adapt_cd = max(0.0, _adapt_cd - dt)
 	for b in beacons.duplicate():
 		b["t"] -= dt
 		if b["t"] <= 0.0:
@@ -886,7 +888,7 @@ func _step_ant(a, dt: float) -> void:
 		a.t = 1.0
 	else:
 		var und = grid.is_under(a.x, a.y)
-		var sp = a.ph["speed"] * (a.ph["tunnel_mult"] if und else 1.0)
+		var sp = a.ph["speed"] * (a.ph["tunnel_mult"] if und else SURFACE_K)
 		if not und and a.task == Task.FORAGE:
 			sp *= 1.0 + TRAIL_BOOST * min(1.0, grid.pher_at(a.x) / 1.2)   # ants run faster on a used trail
 		a.t += sp * dt / dist
@@ -1003,6 +1005,10 @@ func _forage(a) -> void:
 			var fb = 0 if a.far < 100 else (1 if a.far < 250 else (2 if a.far < 400 else 3))
 			stat_deliv[fb] += a.carry
 			stat_far = int(max(stat_far, a.far))
+			if a.far >= 350 and _adapt_cd <= 0.0:
+				_adapt_cd = 90.0
+				adapt[0] = {"left": 8, "bias": {"leg": 1.6, "morph": 0.8, "eyes": 0.6, "size": 0.3}}
+				toasts.append({"text": "The long expeditions favour fast, long-legged scouts.", "t": 6.0})
 			if a.jack:
 				jackpot_hauled += a.carry
 			a.carry = 0.0
@@ -1040,7 +1046,9 @@ func _forage(a) -> void:
 			a.rich = clamp(p["amount"] / max(1.0, p["max"]), 0.0, 1.0)
 			a.jack = p.get("kind", "") == "jackpot"
 			p["amount"] -= take
-			a.carry = take
+			# far piles are richer: seeds, honeydew, whole carcasses. The load is worth more the farther it came
+			# from (up to x2.2 past 720 cells), which pays for the long walk home.
+			a.carry = take * (1.0 + clamp(abs(p["x"] - ex) / 600.0, 0.0, 1.2))
 			a.site = p["x"]          # route memory: it will come straight back here
 			a.empty_trips = 0
 			if not p.get("found", false):
@@ -1109,11 +1117,11 @@ func _search(a, ex: int, off: int) -> bool:
 # for somewhere it cannot get back from.
 func _range_cap(a) -> int:
 	var left = max(0.0, a.life - a.age)
-	return int(min(a.search_r, max(40.0, 0.4 * a.ph["speed"] * left)))
+	return int(min(a.search_r, max(40.0, 0.4 * a.ph["speed"] * SURFACE_K * left)))
 
 
 func _trip_limit(a) -> float:
-	return 40.0 + 2.4 * min(a.search_r, RANGE_MAX) / max(2.0, a.ph["speed"])
+	return 40.0 + 2.4 * min(a.search_r, RANGE_MAX) / max(2.0, a.ph["speed"] * SURFACE_K)
 
 
 func _start_trip(a) -> void:
@@ -1131,7 +1139,7 @@ func _start_trip(a) -> void:
 		a.heading = _pick_heading(a)
 		if _scouting:
 			# scouts range far whether or not nearer food exists: long-tailed radius, 150..RANGE_MAX
-			a.search_r = int(min(RANGE_MAX, max(a.search_r, 150 + int(-log(max(0.001, rng.randf())) * 170.0))))
+			a.search_r = int(min(RANGE_MAX, max(a.search_r, 150 + int(-log(max(0.001, rng.randf())) * 420.0))))
 
 
 func _pher_at(x: int) -> float:
@@ -1400,6 +1408,14 @@ func _lay_egg() -> void:
 		for i in 4:
 			g = g.mutated(rng, mut_bias)
 		register_genome(g, gen)
+	elif adapt.has(caste) and adapt[caste]["left"] > 0:
+		var ad = adapt[caste]
+		ad["left"] -= 1
+		var b2 = mut_bias.duplicate()
+		for k in ad["bias"].keys():
+			b2[k] = b2.get(k, 0.0) + ad["bias"][k]
+		g = g.mutated(rng, b2)
+		register_genome(g, gen)
 	elif rng.randf() < mutation_chance:
 		g = g.mutated(rng, mut_bias)
 		if rng.randf() < double_mut:
@@ -1530,19 +1546,20 @@ func _step_food(dt: float) -> void:
 		_pile_timer = rng.randf_range(8.0, 20.0)
 
 
-# Food ecology: half the piles are near the nest, a third mid-range, the rest far out and rich.
+# Food ecology: new piles appear at least `lo` cells out, and `lo` grows with time and colony size (up to RANGE_MAX).
 # Near piles get eaten down, so a growing colony has to send ants farther.
 func _pile_distance(near: int) -> int:
 	if piles.size() < 3 or time < 90.0:
-		return rng.randi_range(near, 110)    # an early colony must be able to find its first meals
-	var r = rng.randf()
+		return rng.randi_range(near, 130)    # an early colony must be able to find its first meals
+	# The near ground has been picked over: after the first minutes new food only appears beyond a minimum
+	# distance that keeps growing, so the colony has to send ants on longer and longer expeditions.
+	var lo = int(clamp(60.0 + 0.9 * time + 0.5 * ants.size(), 60.0, 1000.0))
 	if mod("pile_near") > 0.0:
-		r *= 0.55
-	if r < 0.5:
-		return rng.randi_range(near, 140)
-	if r < 0.82:
-		return rng.randi_range(140, 300)
-	return rng.randi_range(300, RANGE_MAX - 40)
+		lo = int(lo * 0.6)
+	var hi = int(min(RANGE_MAX - 60, lo + 450))
+	if rng.randf() < 0.2:
+		hi = RANGE_MAX - 60                  # now and then a very far pile
+	return rng.randi_range(min(lo, hi - 40), hi)
 
 
 func _spawn_pile() -> void:
@@ -1574,7 +1591,7 @@ func _spawn_jackpot() -> void:
 			return
 	var ex = int(grid.entrance.x)
 	var side = -1 if rng.randf() < 0.5 else 1
-	var d = rng.randi_range(300, RANGE_MAX - 40)
+	var d = rng.randi_range(600, RANGE_MAX - 60)
 	var amount = (110.0 + d * 0.9) * (1.0 + mod("pile_rich"))
 	piles.append({"x": ex + side * d, "amount": amount, "max": amount, "kind": "jackpot"})
 	toasts.append({"text": "JACKPOT: about %d food, %d cells %s of the nest. Press B over it to send scouts." % [int(amount), d, "west" if side < 0 else "east"], "t": 10.0})
@@ -1750,6 +1767,8 @@ func _step_raids(dt: float) -> void:
 		banner = "Raid %d repelled" % raid_n
 		banner_t = 3.0
 		raids_repelled += 1
+		adapt[2] = {"left": 8, "bias": {"armor": 1.6, "spike": 1.0, "claw": 1.2, "size": 1.0}}
+		toasts.append({"text": "The survivors breed hardier soldiers: armor, spikes, claws.", "t": 6.0})
 		if raids_repelled % 2 == 0 and mutagen < 3:
 			mutagen += 1
 			toasts.append({"text": "Mutagen +1 (%d). Select an ant and press G." % mutagen, "t": 6.0})
@@ -2582,19 +2601,38 @@ func _step_economy(dt: float) -> void:
 	farm_rate = farms * 0.14 * float(rule("farm_boost", 1.0)) * (0.5 + 0.5 * min(1.0, nurses / max(1.0, farms * 3.0))) + rot_rate * (0.4 if farms > 0 else 0.0)
 	food += farm_rate * dt
 	ledger["farm"] += farm_rate * dt
+	_sync_trees(dt)
 	for tr in trees:
 		tr["t"] -= dt * float(rule("fruit_boost", 1.0))
 		if tr["t"] <= 0.0:
-			tr["t"] = rng.randf_range(20.0, 32.0)
+			tr["t"] = rng.randf_range(22.0, 34.0)       # the giant fruit trees are the landscape's oases (a few feed a small colony; a big one must range)
 			_drop_fruit(tr["x"])
+
+
+# The giant trees of the landscape (world_features.gd) are the fruit sources, everywhere out to RANGE_MAX.
+var _tree_ids := {}
+var _tree_sync := 0.0
+
+
+func _sync_trees(dt: float, force: bool = false) -> void:
+	_tree_sync -= dt
+	if _tree_sync > 0.0 and not force:
+		return
+	_tree_sync = 5.0
+	var ex = int(grid.entrance.x)
+	for f in WF.in_range(seed_base, ex - RANGE_MAX, ex + RANGE_MAX, ex):
+		if f["kind"] != "tree" or abs(f["x"] - ex) > RANGE_MAX - 30 or _tree_ids.has(f["id"]):
+			continue
+		_tree_ids[f["id"]] = true
+		trees.append({"x": f["x"], "lane": f["lane"], "t": rng.randf_range(5.0, 25.0), "id": f["id"]})
 
 
 func _drop_fruit(x: int) -> void:
 	for p in piles:
 		if p.get("kind", "") == "fruit" and abs(p["x"] - x) <= 2:
-			p["amount"] = min(p["amount"] + 10.0, 50.0)
+			p["amount"] = min(p["amount"] + 9.0, 36.0)
 			return
-	piles.append({"x": x, "amount": 10.0, "max": 50.0, "kind": "fruit"})
+	piles.append({"x": x, "amount": 9.0, "max": 36.0, "kind": "fruit"})
 
 
 func _step_prey(dt: float) -> void:

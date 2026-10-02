@@ -8,6 +8,7 @@ const ANT_SCALE = 0.24
 const WorldView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/world_view.gd")
 const GroundView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ground_view.gd")
 const EnemyDefs = preload("res://mods-unpacked/Judah-InfDNA/core/enemy_defs.gd")
+const Sim = preload("res://mods-unpacked/Judah-InfDNA/core/colony_sim.gd")
 
 const CASTE_COLORS = [Color("#6cc644"), Color("#c9863b"), Color("#e8483b")]
 const CASTE_ICONS = ["res://items/all/fruit_basket/fruit_basket_icon.png", "res://items/all/improved_tools/improved_tools_icon.png",
@@ -24,6 +25,8 @@ var _caste_tex := []
 var _t := 0.0
 var _surf_k := {}   # smoothed surface factor per unit (0 underground, 1 surface)
 var _back_k := {}   # smoothed tunnel-plane factor (0 front plane, 1 back plane)
+var _air_k := {}    # smoothed flight factor of winged ants (0 on the ground, 1 airborne)
+var _gait_ph := {}  # walk-cycle phase per ant, advanced by its real ground speed so the legs never skate
 var _hid_k := {}    # 1 while a back-plane unit is behind front dirt (crossing under)
 const BACK_SCALE = 0.8
 const CASTE_SCALE = [0.94, 1.0, 1.12]   # forager, digger, soldier
@@ -51,7 +54,7 @@ func _process(delta: float) -> void:
 			alive[a2.id] = true
 		for e2 in sim.enemies:
 			alive[-e2.id] = true
-		for dct in [_anim, _surf_k, _back_k, _hid_k]:
+		for dct in [_anim, _surf_k, _back_k, _hid_k, _air_k, _gait_ph]:
 			for kk in dct.keys():
 				if not alive.has(kk):
 					dct.erase(kk)
@@ -61,6 +64,13 @@ func _process(delta: float) -> void:
 		var target = 1.0 if g.is_surface_cell(a.tx, a.ty) else 0.0
 		_surf_k[a.id] = lerp(_surf_k.get(a.id, target), target, k)
 		_track_plane(a.id, a, g, k)
+		if a.tx != a.x or a.ty != a.y:
+			var gm = lerp(a.ph.get("tunnel_mult", 1.0), Sim.SURFACE_K, _surf_k[a.id])
+			_gait_ph[a.id] = _gait_ph.get(a.id, a.id * 0.37) + delta * a.ph["speed"] * 1.3 * gm
+		# winged ants take off to cross open ground and land again at the pile or the nest
+		var fly = 1.0 if (a.ph.get("wings", 0) == 1 and target > 0.5 and (a.tx != a.x or a.ty != a.y) and a.curl_t <= 0.0) else 0.0
+		if fly > 0.0 or _air_k.has(a.id):
+			_air_k[a.id] = lerp(_air_k.get(a.id, 0.0), fly, clamp(delta * 3.5, 0.0, 1.0))
 	for e in sim.enemies:
 		var key = -e.id
 		var target2 = 1.0 if g.is_surface_cell(e.tx, e.ty) else 0.0
@@ -147,7 +157,8 @@ func _draw() -> void:
 			var e = it[2]
 			var d = _depth(-e.id, e.lane)
 			var feet = sim.enemy_pos(e) + Vector2(0, sim.grid.CELL * 0.5 + d[0])
-			enemy_view.draw_enemy(self, e, feet, d[1], d[2], d[3])
+			var fa = _surf_k.get(-e.id, 0.0) if e.def.get("fly", false) else 0.0
+			enemy_view.draw_enemy(self, e, feet, d[1], d[2], d[3], fa)
 	_draw_corpses(vr)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	for it in items:
@@ -188,6 +199,7 @@ func _draw_shadows(items: Array) -> void:
 		else:
 			pos = sim.enemy_pos(u) + Vector2(0, C * 0.5 + d[0])
 			rx = EnemyDefs.HEIGHT[u.cls] * 0.36 * d[1]
+			air = sk if u.def.get("fly", false) else 0.0
 		var a = sk * d[3] * (1.0 - 0.5 * air)
 		draw_set_transform(pos + Vector2(-rx * 0.3 - air * 14.0, 0), _slope(pos.x), Vector2(1.0, 0.3))
 		draw_circle(Vector2.ZERO, rx * 1.15 * (1.0 + 0.2 * air), Color(0.05, 0.1, 0.03, 0.09 * a))
@@ -196,9 +208,9 @@ func _draw_shadows(items: Array) -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
-# Height above the ground of a flying (winged) ant, 0..1; 0 for everyone else. (filled in by the flight pass)
+# Height above the ground of a flying (winged) ant, 0..1; 0 for everyone else.
 func _air(a) -> float:
-	return 0.0
+	return _air_k.get(a.id, 0.0)
 
 
 # The ant under a click, judged by where it is DRAWN (lanes lift ants off their sim position).
@@ -377,6 +389,25 @@ func _apply_pose(a, raw: Vector2, moving: bool) -> void:
 		_p_rot += a.facing * 0.07                               # leaning into the load
 
 
+# Beating wings of an airborne alate, in sprite pixels (the ant's own folded wings stay under them).
+func _draw_flap(air: float, al: float, id: int) -> void:
+	var root = Vector2(6.0, -46.0)
+	var beat = sin(_t * 44.0 + id * 1.3)
+	for w in 2:
+		var ang = lerp(-2.55 + w * 0.5, -1.35 + w * 0.45, 0.5 + 0.5 * beat)
+		var ln = 98.0 - w * 18.0
+		var tip = root + Vector2(cos(ang), sin(ang)) * ln
+		var mid = (root + tip) * 0.5
+		var nrm = Vector2(-sin(ang), cos(ang))
+		var pts := PoolVector2Array()
+		for q in 14:
+			var t2 = TAU * q / 14.0
+			pts.append(mid + Vector2(cos(ang), sin(ang)) * cos(t2) * ln * 0.5 + nrm * sin(t2) * (13.0 - w * 3.0))
+		draw_colored_polygon(pts, Color(0.88, 0.94, 1.0, 0.42 * air * al))
+		pts.append(pts[0])
+		draw_polyline(pts, Color(INK.r, INK.g, INK.b, 0.55 * air * al), 3.0, true)
+
+
 # A fallen ant: knocked up, tips over and fades. Old-age deaths just curl and settle.
 func _draw_corpses(vr: Rect2) -> void:
 	for f in sim.fx:
@@ -422,8 +453,13 @@ func _draw_ant(a) -> void:
 	var pos = raw + Vector2(0, d[0])
 	var n = Vector2(-sin(a.rot), cos(a.rot))
 	var feet = pos + n * C * 0.5
+	var air = _air(a)
+	if air > 0.01:
+		feet += Vector2(0, -air * (30.0 + 5.0 * sin(_t * 3.0 + a.id)) * d[1])      # hover; the shadow stays on the ground
 	var moving = a.tx != a.x or a.ty != a.y
 	_apply_pose(a, raw, moving)
+	if air > 0.01:
+		_p_rot -= air * 0.14 * a.facing                                              # nose up, wings beating
 	var bob = sin(_t * 16.0 + a.id) * (0.09 if a.carry > 0.0 else 0.06) if moving else 0.0   # laden ants strain
 	# caste reads at a glance even with badges faded: soldiers bulk up, foragers run lean
 	var s = ANT_SCALE * d[1] * _pop(a.age) * CASTE_SCALE[a.caste]   # caste is fixed at birth
@@ -433,7 +469,7 @@ func _draw_ant(a) -> void:
 		var pr = 26.0 + sin(_t * 6.0) * 2.5
 		draw_circle(feet - n * 10.0, pr, Color(1, 1, 1, 0.18))
 		draw_arc(feet - n * 10.0, pr, _t * 1.5, _t * 1.5 + TAU * 0.8, 28, Color.white, 3.0, true)
-	var frame = int(_t * a.ph["speed"] * 1.3 + a.id) % baker.FRAMES if moving else 0
+	var frame = int(_gait_ph.get(a.id, 0.0)) % baker.FRAMES if moving else 0
 	var tex = baker.get_texture(a.genome, 1.0, frame)
 	var sk = _surf_k.get(a.id, 0.0)
 	if moving and sk > 0.5:
@@ -472,6 +508,8 @@ func _draw_ant(a) -> void:
 			draw_arc(Vector2(0, -rr), rr + 14.0, 0.0, TAU, 32, Color(0.55, 1.0, 0.6, 0.6 * alpha), 4.0, true)
 	elif tex != null:
 		draw_texture_rect(tex, Rect2(-baker.FEET, baker.SIZE), false, tint)
+	if air > 0.05:
+		_draw_flap(air, alpha * shade, a.id)
 	var gm = Color(shade, shade, shade, alpha)
 	if a.carry > 0.0:
 		WorldView.draw_gem(self, Vector2(72, -26), 2.0, a.id % 5, gm)   # held in the mandibles

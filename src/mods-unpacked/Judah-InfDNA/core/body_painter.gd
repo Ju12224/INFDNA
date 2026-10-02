@@ -124,12 +124,26 @@ func _draw() -> void:
 		elif i == ns - 2:
 			x += neck
 
+	# v0.23: the body is not rigid. The mesosoma bobs with every tripod step, the gaster counter-swings
+	# and the head nods, so the legs, antennae, mandibles and trunk all move on their own beat.
+	for i in ns:
+		var bob = sin(gait * TAU * 2.0 + i * 0.5) * 1.8
+		var dx = 0.0
+		var da = 0.0
+		if kind[i] == "gaster":
+			dx = sin(gait * TAU + 0.6) * 2.2
+			da = sin(gait * TAU * 2.0 + 1.2) * 0.04
+		elif kind[i] == "head":
+			dx = sin(gait * TAU + 2.0) * 0.9
+			da = sin(gait * TAU * 2.0 + 2.2) * 0.06
+		pos[i] = pos[i] + Vector2(dx, bob)
+		ang[i] = ang[i] + da
+
 	var k = min(1.0, 310.0 / (total + 120.0)) * paint_scale
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(k, k))
 
-	# ground shadow (drawn directly, under everything)
-	draw_colored_polygon(_ellipse(Vector2(0, 2), min(150.0, total * 0.58), 10.0), Color(0, 0, 0, 0.3))
-	draw_colored_polygon(_ellipse(Vector2(0, 1), min(110.0, total * 0.38), 5.5), Color(0, 0, 0, 0.22))
+	# (no baked ground shadow: ant_view draws a proper one per unit, tilted to the slope and kept
+	# on the ground when the ant flies; a shadow baked into the sprite tilted with it and doubled up)
 
 	# --- limbs: far side behind the body, near side in front ---
 	var leg_front := -1

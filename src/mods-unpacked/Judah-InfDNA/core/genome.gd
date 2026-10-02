@@ -4,7 +4,7 @@ extends Reference
 # Behavior: response thresholds and digging tendencies that drive task choice.
 
 const SELF_PATH = "res://mods-unpacked/Judah-InfDNA/core/genome.gd"
-const PALETTE = ["#8a4b2e", "#6b5a8e", "#a8322d", "#3d6b3a", "#c9a13b", "#2f5f7a", "#7a3d6b"]
+const PALETTE = ["#8a4b2e", "#6b5a8e", "#a8322d", "#3d6b3a", "#c9a13b", "#2f5f7a", "#7a3d6b", "#d9772b", "#2a9d8f", "#e0c341", "#d94f8a", "#4a6fd6", "#25201f", "#b8b0a2", "#6fbf4a"]
 const MAX_SEGMENTS = 5
 # Anatomy genes (M4). Bools are 0/1, the rest 0..1. Every gain has a cost in phenotype.gd.
 const MORPH_DEFAULT = {
@@ -20,6 +20,7 @@ const MORPH_DEFAULT = {
 	"camo": 0.0,      # mottled drab colouring: harder to hit
 	"phero": 0.0,     # pheromone strength: trails pull harder
 }
+const MACRO_CHANCE = 0.06    # chance a mutation is a macro-mutation (three changes at once)
 const MORPH_BOOL = ["stinger", "acid", "wings", "glow"]
 # Part forms (v0.20): a subtype inside an existing part family. 0 = the classic form.
 # A form gene can sit hidden in a line that lacks the organ and shows once the organ
@@ -176,7 +177,13 @@ func head() -> Dictionary:
 # Returns a mutated copy (uid 0 until the colony assigns one).
 # bias: {"leg","claw","tentacle","armor","spike","eyes","size","segment"} -> weight
 # boosts from the shop; each shifts odds, never guarantees an outcome.
-func mutated(rng: RandomNumberGenerator, bias: Dictionary = {}):
+func mutated(rng: RandomNumberGenerator, bias: Dictionary = {}, macro_depth: int = 0):
+	# v0.23: now and then a macro-mutation changes three things at once (a new body plan in one
+	# generation), so lineages can jump instead of only creeping.
+	if macro_depth == 0 and rng.randf() < MACRO_CHANCE:
+		var mm = mutated(rng, bias, 1)
+		mm = mm.mutated(rng, bias, 1)
+		return mm.mutated(rng, bias, 1)
 	var g = copy()
 	# Lineage link. An unregistered intermediate (first half of a double mutation)
 	# never becomes a node: its change is folded into the final plan's note.
@@ -186,10 +193,10 @@ func mutated(rng: RandomNumberGenerator, bias: Dictionary = {}):
 		link_parent = parent
 		carried = note
 	var what := ""
-	if rng.randf() < 0.3:
+	if rng.randf() < 0.2:
 		var keys = g.traits.keys()
 		var k = keys[rng.randi_range(0, keys.size() - 1)]
-		g.traits[k] = clamp(g.traits[k] + rng.randf_range(-0.18, 0.18), 0.02, 1.0)
+		g.traits[k] = clamp(g.traits[k] + rng.randf_range(-0.28, 0.28), 0.02, 1.0)
 		g._set_link(link_parent, carried, what)
 		return g
 
@@ -197,11 +204,11 @@ func mutated(rng: RandomNumberGenerator, bias: Dictionary = {}):
 	var s: Dictionary = segs[rng.randi_range(0, segs.size() - 1)]
 	var b_limb = bias.get("leg", 0.0) + bias.get("claw", 0.0) + bias.get("tentacle", 0.0)
 	var ops = ["dup", "loss", "limb", "tune", "armor", "spikes", "size", "head", "color", "morph", "form", "organ"]
-	var w = [10.0 * (1.0 + bias.get("segment", 0.0)), 4.0, 28.0 * (1.0 + b_limb * 0.5), 10.0,
-		10.0 * (1.0 + bias.get("armor", 0.0)), 8.0 * (1.0 + bias.get("spike", 0.0)),
-		14.0 * (1.0 + bias.get("size", 0.0) * 0.5), 9.0 * (1.0 + bias.get("eyes", 0.0)), 7.0,
-		22.0 * (1.0 + bias.get("morph", 0.0)), 7.0 * (1.0 + 0.3 * _form_bias_sum(bias)),
-		12.0 * (1.0 + bias.get("organ", 0.0))]
+	var w = [10.0 * (1.0 + bias.get("segment", 0.0)), 4.0, 28.0 * (1.0 + b_limb * 0.5), 9.0,
+		11.0 * (1.0 + bias.get("armor", 0.0)), 9.0 * (1.0 + bias.get("spike", 0.0)),
+		20.0 * (1.0 + bias.get("size", 0.0) * 0.5), 11.0 * (1.0 + bias.get("eyes", 0.0)), 16.0,
+		26.0 * (1.0 + bias.get("morph", 0.0)), 12.0 * (1.0 + 0.3 * _form_bias_sum(bias)),
+		15.0 * (1.0 + bias.get("organ", 0.0))]
 	match _pick(rng, ops, w):
 		"form":
 			what = g._mutate_form(rng, bias)
@@ -248,8 +255,8 @@ func mutated(rng: RandomNumberGenerator, bias: Dictionary = {}):
 			if s["spikes"] != s0:
 				what = "more spikes" if s["spikes"] > s0 else "fewer spikes"
 		"size":
-			var lo = -7.0 + 4.0 * bias.get("size", 0.0)
-			s["r"] = clamp(s["r"] + rng.randf_range(lo, 8.0), 12.0, 46.0)
+			var lo = -9.0 + 4.0 * bias.get("size", 0.0)
+			s["r"] = clamp(s["r"] + rng.randf_range(lo, 11.0), 12.0, 50.0)
 		"head":
 			var h = g.head()
 			if rng.randf() < 0.5 + 0.2 * bias.get("eyes", 0.0):
@@ -265,11 +272,19 @@ func mutated(rng: RandomNumberGenerator, bias: Dictionary = {}):
 				if h["jaw"] != j0:
 					what = (h["jaw"] + " jaw") if h["jaw"] != "" else "lost its jaw"
 		"color":
-			if rng.randf() < 0.7:
-				g.color = g.color.lightened(0.12) if rng.randf() < 0.5 else g.color.darkened(0.12)
+			if rng.randf() < 0.45:
+				g.color = g.color.lightened(0.16) if rng.randf() < 0.5 else g.color.darkened(0.16)
 			else:
 				g.color = Color(PALETTE[rng.randi_range(0, PALETTE.size() - 1)])
 				what = "new colour"
+	# v0.23 slow drift: nearly every lineage shifts a little in hue and size each generation, so a colony
+	# visibly diversifies and, given time, looks nothing like its founders
+	if rng.randf() < 0.55:
+		g.color = Color.from_hsv(fposmod(g.color.h + rng.randf_range(-0.045, 0.045), 1.0),
+			clamp(g.color.s + rng.randf_range(-0.06, 0.06), 0.1, 0.95), clamp(g.color.v + rng.randf_range(-0.05, 0.05), 0.2, 0.95))
+	if rng.randf() < 0.4:
+		var sg: Dictionary = g.segments[rng.randi_range(0, g.segments.size() - 1)]
+		sg["r"] = clamp(sg["r"] * rng.randf_range(0.9, 1.12), 12.0, 50.0)
 	g._set_link(link_parent, carried, what)
 	return g
 

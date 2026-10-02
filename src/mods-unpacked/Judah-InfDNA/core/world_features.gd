@@ -7,7 +7,7 @@ extends Reference
 # is several ants wide at the trunk and many hundreds of ants tall.
 
 const SLOT = 64          # columns per generation slot
-const CLEAR = 55         # columns around the nest entrance kept free of trees
+const CLEAR = 90         # columns around the nest entrance kept free of trees (a short walk is not an expedition)
 
 static func _h(a: float, b: float = 0.0) -> float:
 	return fmod(abs(sin(a * 12.9898 + b * 78.233) * 43758.5453), 1.0)

@@ -3,6 +3,7 @@ extends Node2D
 # hit flash, HP bars. Plus combat effects (puffs, floating numbers).
 
 const EnemyDefs = preload("res://mods-unpacked/Judah-InfDNA/core/enemy_defs.gd")
+const CreatureArt = preload("res://mods-unpacked/Judah-InfDNA/content/colony/creature_art.gd")
 const INK = Color("#15121a")
 const FONT_PATH = "res://resources/fonts/raw/Anybody-Medium.ttf"
 
@@ -55,14 +56,21 @@ func _process(delta: float) -> void:
 	update()
 
 
-func draw_enemy(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade: float, alpha: float = 1.0) -> void:
+func draw_enemy(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade: float, alpha: float = 1.0, air: float = 0.0) -> void:
 	var h = EnemyDefs.HEIGHT[e.cls] * depth_scale
 	var tex = _tex.get(e.kind)
 	var moving = e.tx != e.x or e.ty != e.y
 	var bob = sin(_t * (12.0 if moving else 4.0) + e.id) * (0.06 if moving else 0.025)
 	var mod = Color(1, 0.5, 0.5) if e.flash > 0.0 else Color.white
 	mod = Color(mod.r * shade, mod.g * shade, mod.b * shade, (0.75 if e.state == 2 else 1.0) * alpha)
-	if tex != null:
+	var art = e.def.get("art", "")
+	if art != "":
+		var fly = e.def.get("fly", false)
+		var lift = 6.0 + 22.0 * air if fly else 0.0
+		CreatureArt.draw(art, ci, feet, depth_scale, shade, alpha * (0.75 if e.state == 2 else 1.0), _t, e.facing, e.id, moving, e.flash > 0.0, lift)
+		if fly:
+			feet = feet - Vector2(0, (lift + 14.0) * depth_scale)     # marks and bars ride with the flyer
+	elif tex != null:
 		var s = h / tex.get_height()
 		ci.draw_set_transform(feet, 0.0, Vector2(e.facing * s, s * (1.0 + bob)))
 		ci.draw_texture(tex, Vector2(-tex.get_width() * 0.5, -tex.get_height()), mod)

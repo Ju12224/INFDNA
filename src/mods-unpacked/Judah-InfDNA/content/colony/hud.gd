@@ -9,6 +9,7 @@ const KNum = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ui_num.gd"
 const ShopItems = preload("res://mods-unpacked/Judah-InfDNA/core/shop_items.gd")
 const Queens = preload("res://mods-unpacked/Judah-InfDNA/core/queens.gd")
 const LayersView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/layers_view.gd")
+const Sim = preload("res://mods-unpacked/Judah-InfDNA/core/colony_sim.gd")
 
 # task order in the sim: NURSE, FORAGE, DIG, HOME, DEFEND (shared with the Tasks layer so the legend matches)
 const TASK_COLORS = LayersView.TASK_COLORS
@@ -60,6 +61,10 @@ var _speed_btns := []
 var _layers_panel: PanelContainer
 var _layer_btns := {}
 var _task_legend: HBoxContainer
+var _mm: Control
+var _mm_font: Font
+const MM_W = 640.0
+const MM_H = 44.0
 const SPEED_LABELS = ["||", "1x", "2x", "4x", "10x"]
 var _vig: Control
 var _vig_a := 0.0
@@ -323,7 +328,7 @@ func _build_bar() -> void:
 	_btn(bar, "Lab", "luck").connect("pressed", scene, "open_shop")
 	_btn(bar, "Menu", "exit").connect("pressed", scene, "go_to_menu")
 
-	var hint = Kit.label(root, "WASD / right-drag pan   Wheel zoom   Click an ant   Space pause   P trails   C badges   F fights   T tasks   H health   L lineage   Esc menu", _f_s)
+	var hint = Kit.label(root, "WASD / right-drag pan   Wheel zoom   Click an ant   Space pause   P trails   C badges   F fights   T tasks   H health   X follow   L lineage   Esc menu", _f_s)
 	hint.anchor_top = 1.0
 	hint.anchor_bottom = 1.0
 	hint.grow_vertical = Control.GROW_DIRECTION_BEGIN
@@ -331,6 +336,88 @@ func _build_bar() -> void:
 	hint.margin_bottom = -96
 	hint.modulate = Color(1, 1, 1, 0.55)
 	_build_layers()
+	_build_minimap()
+
+
+# World strip across the top: the nest in the middle, out to the farthest a trip can reach. Piles, fruit
+# trees, ants, raiders and the camera view are marked, so the long expeditions can be followed. Click or
+# drag to jump the camera along the world.
+func _build_minimap() -> void:
+	_mm_font = Kit.font(15, 2)
+	var pc = PanelContainer.new()
+	pc.add_stylebox_override("panel", Kit.flat(Color(0.12, 0.11, 0.15, 0.9), Kit.INK, 8, 3, 3.0, 3))
+	pc.anchor_left = 0.5
+	pc.anchor_right = 0.5
+	pc.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	pc.margin_top = 12
+	root.add_child(pc)
+	_mm = Control.new()
+	_mm.rect_min_size = Vector2(MM_W, MM_H)
+	_mm.mouse_filter = Control.MOUSE_FILTER_STOP
+	_mm.hint_tooltip = "World map: click or drag to jump along the world"
+	_mm.connect("draw", self, "_draw_minimap")
+	_mm.connect("gui_input", self, "_on_mm_input")
+	pc.add_child(_mm)
+
+
+func _mm_scale() -> float:
+	return MM_W / (2.0 * Sim.RANGE_MAX)
+
+
+func _draw_minimap() -> void:
+	var sim = scene.sim
+	var g = sim.grid
+	var ex = int(g.entrance.x)
+	var sc = _mm_scale()
+	var cy = MM_H * 0.5
+	_mm.draw_rect(Rect2(0, 0, MM_W, MM_H), Color(0.45, 0.62, 0.78, 0.45))
+	_mm.draw_rect(Rect2(0, cy + 6.0, MM_W, MM_H - cy - 6.0), Color(0.42, 0.3, 0.2, 0.85))
+	_mm.draw_rect(Rect2(0, cy + 4.0, MM_W, 3.0), Color(0.45, 0.7, 0.3))
+	for km in [-1500, -1000, -500, 500, 1000, 1500]:
+		var tx = MM_W * 0.5 + km * sc
+		_mm.draw_line(Vector2(tx, cy + 2.0), Vector2(tx, cy + 9.0), Color(1, 1, 1, 0.5), 1.0)
+		_mm.draw_string(_mm_font, Vector2(tx - 12.0, MM_H - 2.0), str(abs(km)), Color(1, 1, 1, 0.55))
+	for tr in sim.trees:
+		var x = MM_W * 0.5 + (tr["x"] - ex) * sc
+		_mm.draw_rect(Rect2(x - 1.5, cy - 9.0, 3.0, 13.0), Color("#3f7a34"))
+		_mm.draw_circle(Vector2(x, cy - 10.0), 3.4, Color("#5fa046"))
+	for p in sim.piles:
+		var x2 = MM_W * 0.5 + (p["x"] - ex) * sc
+		var k = p.get("kind", "")
+		var col = Color("#ffd86b") if k == "jackpot" else (Color("#f0a233") if k == "fruit" else Color("#9bf06a"))
+		_mm.draw_circle(Vector2(x2, cy + 1.0), 3.2 if k == "jackpot" else 2.2, col)
+	for b in sim.beacons:
+		var x3 = MM_W * 0.5 + (b["x"] - ex) * sc
+		_mm.draw_line(Vector2(x3, cy + 4.0), Vector2(x3, cy - 12.0), Color("#7ed957"), 2.0)
+	var far = 0
+	for a in sim.ants:
+		var x4 = MM_W * 0.5 + (a.x - ex) * sc
+		far = max(far, abs(a.x - ex))
+		_mm.draw_rect(Rect2(x4 - 1.0, cy - 1.0 - (3.0 if a.carry > 0.0 else 0.0), 2.0, 2.0), TASK_COLORS[int(clamp(a.task, 0, 4))])
+	for e in sim.enemies:
+		var x5 = MM_W * 0.5 + (e.x - ex) * sc
+		_mm.draw_circle(Vector2(x5, cy - 3.0), 2.8 if e.cls == "prey" else 3.6, Color("#9fe3a8") if e.cls == "prey" else Color("#ff4a3d"))
+	# nest
+	_mm.draw_colored_polygon(PoolVector2Array([Vector2(MM_W * 0.5 - 5.0, cy + 6.0), Vector2(MM_W * 0.5 + 5.0, cy + 6.0), Vector2(MM_W * 0.5, cy - 7.0)]), Kit.GOLD)
+	# the camera's view
+	if scene.cam != null:
+		var vp = get_viewport().size
+		var half = vp.x * scene.cam.zoom.x * 0.5 / g.CELL
+		var cx = scene.cam.get_camera_screen_center().x / g.CELL
+		var x6 = MM_W * 0.5 + (cx - ex - half) * sc
+		_mm.draw_rect(Rect2(x6, 1.0, max(3.0, half * 2.0 * sc), MM_H - 2.0), Color(1, 1, 1, 0.9), false, 1.5)
+	_mm.draw_string(_mm_font, Vector2(6.0, 14.0), "farthest ant: %d cells" % far, Color(1, 1, 1, 0.85))
+
+
+func _on_mm_input(ev: InputEvent) -> void:
+	var down = (ev is InputEventMouseButton and ev.pressed and ev.button_index == BUTTON_LEFT) or (ev is InputEventMouseMotion and (ev.button_mask & BUTTON_MASK_LEFT) != 0)
+	if not down:
+		return
+	var g = scene.sim.grid
+	var cell = int(g.entrance.x) + (ev.position.x - MM_W * 0.5) / _mm_scale()
+	scene.set_layer("follow", false)
+	scene.cam.position.x = cell * g.CELL
+	scene.cam.position.y = g.surf_y(int(cell)) * g.CELL - 140.0
 
 
 # View layers: toggles above the lever bar (same state as the P / C / F / T / H keys), plus a legend
@@ -359,7 +446,8 @@ func _build_layers() -> void:
 			["castes", "Badges (C)", "soldier", "Caste badge over each ant"],
 			["fights", "Fights (F)", "attack", "Rings under raiders, links to the ants hitting them, health on fighters, arrows to off-screen raiders"],
 			["tasks", "Tasks (T)", "balanced", "Colour halo on every ant for what it is doing right now"],
-			["health", "Health (H)", "hp", "Health bar over every ant"]]:
+			["health", "Health (H)", "hp", "Health bar over every ant"],
+			["follow", "Follow (X)", "ant", "The camera follows the selected ant (click an ant first)"]]:
 		var b = _btn(row, it[1], it[2], Color("#f2c14e"), 20)
 		b.toggle_mode = true
 		b.pressed = scene.layer_state[it[0]]
@@ -436,7 +524,7 @@ func _build_overlays() -> void:
 	_pause_chip.anchor_left = 0.5
 	_pause_chip.anchor_right = 0.5
 	_pause_chip.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_pause_chip.margin_top = 18
+	_pause_chip.margin_top = 84
 	root.add_child(_pause_chip)
 	Kit.label(_pause_chip, "PAUSED", _f_m, Kit.GOLD)
 	_pause_chip.visible = false
@@ -631,6 +719,7 @@ func _process(delta: float) -> void:
 		_refresh_evolution()
 	_graph.update()
 	_task_bar.update()
+	_mm.update()
 
 
 func _refresh_stats(sim) -> void:

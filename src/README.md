@@ -1,20 +1,42 @@
-# InfDNA (Brotato mod) - v0.22.0
+# InfDNA (Brotato mod) - v0.22.0 (+ v0.23.0 work in progress, see below)
 
-## Unreleased - view layers + startup fix (compile-checked, headless smoke run; NOT playtested, NOT looked at in the real game)
-- **Startup fix (ant_view.gd):** two bare `randf_range(...)` calls (Godot 4 only) stopped ant_view.gd, and so the whole
-  colony scene, from compiling in Godot 3.5. Now `rand_range`. Found by running `tests-v022/compile.gd` on Godot 3.5.3.
-- **View layers (content/colony/layers_view.gd, drawn above ants and raiders; purely visual, the sim is untouched):**
-  - `Fights` (F, on by default): ring under each raider (colour by class, pulses while it fights), a line from every ant
-    in reach to the raider it is hitting (same reach rule as `_combat`, at most 8 per raider), mini health bars on
-    fighting or wounded ants, and edge arrows (with a count) toward raiders that are off screen.
-  - `Tasks` (T): coloured halo on every ant for what it is doing now (the legend shows in the panel).
-  - `Health` (H): health bar over every ant.
-  - `Trails` (P) and `Badges` (C) already existed; they now live in the same bottom `Layers` panel (the old Trails button
-    became the `Layers` button that shows or hides the panel). colony_scene.gd `set_layer` keeps keys and buttons in sync.
-  - Marks are sized in screen pixels, so they hold when zoomed out. Headless cost at ~90 ants, all layers on: ~1.1 ms of
-    draw script per frame next to ~2.9 ms for ant_view; fight pairing ~0.4 ms every 0.08 s (GDScript time only, no GPU).
-  - Not checked in the real game: panel placement (it sits above the key hint, bottom centre), how the edge arrows sit
-    against the HUD cards, readability of the halos in a 150-ant raid. `tests-v023/layers_smoke.gd` drives the layers headless.
+## v0.23.0 (unreleased) - a living world: deep ground, giant trees, creatures, far expeditions, bolder evolution
+Compile-checked, rendered headless under Xvfb (software GL) and balance-probed on 4-6 seeds; NOT playtested in Brotato.
+- **Startup fix (ant_view.gd):** two bare `randf_range(...)` calls (Godot 4 only) stopped the colony scene from compiling in Godot 3.5.
+- **Ground and backdrop rebuilt as cached meshes** (`mesh_kit.gd`, `ground_view.gd`, `sky_layers.gd`). The old per-frame
+  ground band cost 12-20 ms; static scenery is now built once per 48-column chunk and drawn with a few `draw_mesh` calls.
+  - **Many walking lanes:** the walkable band is 128 px deep (was 46) with nine visible turf rows, lane perspective
+    (back ants smaller and hazier) and 14 lane slices plus a foreground slice. Scenery is interleaved with the units, so an ant
+    in a back lane walks behind a flower and one in a front lane walks in front of it; tall foreground grass covers every ant.
+  - **Scenery:** tufts, flowers, clover, pebbles, mushrooms, berry bushes, ferns, leaf litter, soft baked shadows, wind sway.
+  - **Natural landmarks** (`core/world_features.gd`, deterministic along the endless surface): giant trees (trunks 150-260 px,
+    up to 1900 px tall, roots, branches, three-tone canopy, fruit), boulders with moss and cracks, cliffs with cave mouths.
+    Cliffs never wall in the start. The camera can zoom out ~1.7x further and look much higher to see them.
+  - **Backdrop:** 7 parallax layers (faceted snowy peaks, ridge with pines, farmland with barns and a windmill, pine forest,
+    leafy forest with trunks, hedge with berries), three cloud depths, birds, slow sun rays.
+- **Shadows:** a per-unit shadow pass before the units (soft, leans away from the sun, tilts with the slope, shrinks and stays on
+  the ground when an ant flies). The shadow baked into every ant sprite by the painter is gone (it tilted with the ant and doubled up).
+- **Click picking** now uses where an ant is drawn (lanes lift ants up to 115 px off their sim position).
+- **Flying ants:** winged ants lift off over open ground with beating wings and land at the pile or the nest.
+- **Spiders, bees, hornets** (`creature_art.gd`, procedural, animated: gait, wing blur, hover): `spider` is a brute, `bee` a small
+  runner, `hornet` an elite; they join the raid rosters. Flyers hover above the ground on the surface and walk in tunnels.
+- **Walk animation:** the whole body moves (thorax bob per step, gaster counter-swing, head nod), 6 baked frames (was 4), and
+  the leg cycle is driven by the ant's real ground speed so legs no longer skate.
+- **Expeditions:** ants run 3.0x faster over open ground (`SURFACE_K`), `RANGE_MAX` 520 -> 1500 cells, the food frontier moves out as the
+  colony grows (`_pile_distance`), search radius grows faster, scouts range further, and far loads are worth up to 2.2x (so the
+  walk pays). The giant trees are the fruit sources (`_sync_trees`), a few near oases that a big colony outgrows.
+  A **world minimap** (top centre) shows nest, piles, trees, ants, raiders and your view; click or drag it to jump along the world.
+  `X` follows the selected ant. Balance probe, 12 min, seeds 11/22/33/66: final pop 74/47/116/62 (mean 75) vs 97/43/47/118 (mean 76)
+  before. Seed 22 at 8 min: ants reach ~530 cells (3,200 px) and ~310 food-units come from beyond 400 cells (none before).
+  New food only appears beyond a minimum distance that grows with time and colony size (`_pile_distance`).
+- **Evolution:** mutation chance 0.35 -> 0.55, double mutation 0.25 -> 0.4, bolder size/colour steps, 15 colours (was 7), rare
+  macro-mutations (6%: three changes at once), per-generation hue and size drift, and **directed adaptation**: a repelled raid
+  breeds eight hardier soldiers (armor, spikes, claws), a far expedition breeds eight long-legged scouts. Before/after lineups
+  of 10 min runs: the old colony is almost all one brown ant; the new one shows blue and purple lines, stingers, horns, wings,
+  and body-plan changes.
+- **View layers** (previous round): `Fights` (F), `Tasks` (T), `Health` (H), `Trails` (P), `Badges` (C), `Follow` (X) in the bottom Layers panel.
+- Not checked in the real game: HUD placement (minimap top centre, Layers panel above the bar), how the new scenery reads next to
+  Brotato's own UI, frame rate on a real GPU, balance beyond the probed seeds, raids with the new creatures.
 
 ## v0.22.0 - speed, long-range foraging, a play layer (compile-checked + 10 sim-minute smoke run; NOT playtested, NOT A/B measured)
 - **Speed bug fixed (core/colony_sim.gd `_step_ant`, `_step_enemy`):** the leftover distance of a hop was thrown away on
