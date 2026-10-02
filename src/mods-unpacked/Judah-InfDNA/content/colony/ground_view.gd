@@ -502,6 +502,41 @@ func _tree(f: Dictionary) -> Dictionary:
 			rwi.append(w * 0.46 * pow(1.0 - u, 0.8) + 11.0)
 		mk.ribbon(rp, rwi, INK)
 		mk.ribbon(rp, rw, bark_m, bark_d)
+	# branches go behind the trunk, so they grow out of its sides instead of being drawn across it
+	var ends := []
+	for k in 7:
+		var t0 = 0.4 + 0.08 * k
+		var idx = int(t0 * n)
+		var dir = 1.0 if k % 2 == 0 else -1.0
+		var ln = h * (0.13 + 0.14 * MK.hash1(sd + k * 5.0))
+		var ang = -PI * 0.5 + dir * (0.5 + 0.55 * MK.hash1(sd + k * 7.0))
+		var bp := PoolVector2Array()
+		var bw := PoolRealArray()
+		var bwi := PoolRealArray()
+		for j in 7:
+			var u2 = float(j) / 6.0
+			var bend = sin(u2 * 2.6 + k) * ln * 0.07
+			bp.append(pts[idx] + Vector2(cos(ang), sin(ang)) * ln * u2 + Vector2(dir * ln * 0.12 * u2 + bend, -ln * 0.28 * u2 * u2))
+			bw.append(wid[idx] * 0.52 * pow(1.0 - u2, 0.9) + 5.0)
+			bwi.append(wid[idx] * 0.52 * pow(1.0 - u2, 0.9) + 12.0)
+		mk.ribbon(bp, bwi, INK)
+		mk.ribbon(bp, bw, bark_m, bark_d)
+		mk.ribbon(bp, PoolRealArray([bw[0] * 0.3, bw[1] * 0.3, bw[2] * 0.3, bw[3] * 0.3, bw[4] * 0.3, bw[5] * 0.3, bw[6] * 0.3]), Color(bark_h.r, bark_h.g, bark_h.b, 0.4))
+		ends.append(bp[6])
+		for q in 2:
+			var sp = bp[3 + q]
+			var sa = ang + (0.7 if q == 0 else -0.8) * dir
+			var tp := PoolVector2Array()
+			var tw := PoolRealArray()
+			var twi := PoolRealArray()
+			for j in 4:
+				var u3 = float(j) / 3.0
+				tp.append(sp + Vector2(cos(sa), sin(sa)) * ln * 0.34 * u3 + Vector2(0, -ln * 0.06 * u3))
+				tw.append(bw[3] * 0.5 * (1.0 - u3) + 3.0)
+				twi.append(bw[3] * 0.5 * (1.0 - u3) + 9.0)
+			mk.ribbon(tp, twi, INK)
+			mk.ribbon(tp, tw, bark_m, bark_d)
+			ends.append(tp[3])
 	mk.ribbon(pts, wink, INK)
 	# the trunk in five vertical bands, shaded left to right (the sun is on the right)
 	var band_cols = [bark_d, bark_m, bark, bark_l, bark_h]
@@ -539,41 +574,6 @@ func _tree(f: Dictionary) -> Dictionary:
 			mk.ribbon(rr, PoolRealArray([2.5, 3.2, 2.5]), Color(0.1, 0.07, 0.05, 0.4))
 	mk.blob(b + Vector2(-w * 0.28, -w * 0.5), w * 0.22, w * 0.4, sd + 6.0, 0.18, hz(Color("#5b8f3a"), lane), 10)
 	mk.blob(b + Vector2(-w * 0.12, -w * 1.1), w * 0.12, w * 0.2, sd + 7.0, 0.2, hz(Color("#6aa23c"), lane), 8)
-	# branches: thick, curving up into the crown, each with a twig or two
-	var ends := []
-	for k in 7:
-		var t0 = 0.4 + 0.08 * k
-		var idx = int(t0 * n)
-		var dir = 1.0 if k % 2 == 0 else -1.0
-		var ln = h * (0.13 + 0.14 * MK.hash1(sd + k * 5.0))
-		var ang = -PI * 0.5 + dir * (0.5 + 0.55 * MK.hash1(sd + k * 7.0))
-		var bp := PoolVector2Array()
-		var bw := PoolRealArray()
-		var bwi := PoolRealArray()
-		for j in 7:
-			var u2 = float(j) / 6.0
-			var bend = sin(u2 * 2.6 + k) * ln * 0.07
-			bp.append(pts[idx] + Vector2(cos(ang), sin(ang)) * ln * u2 + Vector2(dir * ln * 0.12 * u2 + bend, -ln * 0.28 * u2 * u2))
-			bw.append(wid[idx] * 0.52 * pow(1.0 - u2, 0.9) + 5.0)
-			bwi.append(wid[idx] * 0.52 * pow(1.0 - u2, 0.9) + 12.0)
-		mk.ribbon(bp, bwi, INK)
-		mk.ribbon(bp, bw, bark_m, bark_d)
-		mk.ribbon(bp, PoolRealArray([bw[0] * 0.3, bw[1] * 0.3, bw[2] * 0.3, bw[3] * 0.3, bw[4] * 0.3, bw[5] * 0.3, bw[6] * 0.3]), Color(bark_h.r, bark_h.g, bark_h.b, 0.4))
-		ends.append(bp[6])
-		for q in 2:
-			var sp = bp[3 + q]
-			var sa = ang + (0.7 if q == 0 else -0.8) * dir
-			var tp := PoolVector2Array()
-			var tw := PoolRealArray()
-			var twi := PoolRealArray()
-			for j in 4:
-				var u3 = float(j) / 3.0
-				tp.append(sp + Vector2(cos(sa), sin(sa)) * ln * 0.34 * u3 + Vector2(0, -ln * 0.06 * u3))
-				tw.append(bw[3] * 0.5 * (1.0 - u3) + 3.0)
-				twi.append(bw[3] * 0.5 * (1.0 - u3) + 9.0)
-			mk.ribbon(tp, twi, INK)
-			mk.ribbon(tp, tw, bark_m, bark_d)
-			ends.append(tp[3])
 	# crown: a wide canopy of many round leaf clusters, dark under, light on top (sun upper right)
 	var cc = pts[n] + Vector2(lean * 0.2, -h * 0.17)
 	var Rx = h * 0.36

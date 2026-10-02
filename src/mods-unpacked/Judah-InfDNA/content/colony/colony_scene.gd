@@ -9,6 +9,7 @@ const AntView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ant_vie
 const EnemyView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/enemy_view.gd")
 const LayersView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/layers_view.gd")
 const Perf = preload("res://mods-unpacked/Judah-InfDNA/content/colony/perf.gd")
+const AmbientView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ambient_view.gd")
 const UndergroundUI = preload("res://mods-unpacked/Judah-InfDNA/content/colony/underground_ui.gd")
 const Sfx = preload("res://mods-unpacked/Judah-InfDNA/content/colony/sfx.gd")
 const CameraRig = preload("res://mods-unpacked/Judah-InfDNA/content/colony/camera_rig.gd")
@@ -88,6 +89,13 @@ func _ready() -> void:
 	layers_view.show_tasks = layer_state["tasks"]
 	layers_view.show_health = layer_state["health"]
 	add_child(layers_view)
+
+	var ambient = AmbientView.new()     # bees and butterflies over the meadow
+	ambient.sim = sim
+	ambient.cam = cam
+	ambient.ground = world_view.ground
+	ambient.perf = perf
+	add_child(ambient)
 
 	sfx = Sfx.new()
 	sfx.sim = sim

@@ -24,6 +24,8 @@ nest panel, deep-underground camera, world-spanning jumps: no script errors), ba
   are deeper, and the blocky soil speckle is finer.
 - **From your v0.22 files:** `underground_ui.gd` (depth gauge, nest panel `U`, room labels, `PgUp`/`PgDn` between nest levels, `Q` queen,
   `Home` surface, deep vignette) and, in the sky, ants marching along the farmland and hedge ridges plus drifting pollen.
+- **Ambient wildlife (`ambient_view.gd`):** bees working the flower patches and butterflies drifting through the meadow, with ground
+  shadows; hidden when zoomed far out or on a low quality tier. Tree branches are now drawn behind the trunk so they grow out of its sides.
 - **Exploration:** giant trees, caves and cliff vistas are landmarks. An ant that walks up to one discovers it: trees pay food and
   fruit, caves hold a food hoard plus mutagen (and about half the time a spider that follows your scouts home), vistas pay a little.
   They show on the minimap (faint dots until found). New goals: Explorer (3 landmarks), Cave diver, Deep roots (generation 10),

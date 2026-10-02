@@ -48,6 +48,24 @@ static func draw(art: String, ci: CanvasItem, feet: Vector2, scale: float, shade
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
+# A butterfly flapping over the meadow. `pos` is its centre in world px; `c` the wing colour.
+static func butterfly(ci: CanvasItem, pos: Vector2, scale: float, t: float, facing: int, c: Color, alpha: float) -> void:
+	ci.draw_set_transform(pos, 0.0, Vector2(facing * scale, scale))
+	var flap = abs(sin(t * 9.0))
+	var wing = Color(c.r, c.g, c.b, alpha)
+	var dark = Color(c.r * 0.55, c.g * 0.55, c.b * 0.55, alpha)
+	# two wing pairs, seen side-on so they open and close as they flap
+	var w = 10.0 * (0.25 + 0.75 * flap)
+	_ink(ci, Vector2(-5.0, -w * 0.5), 8.0, w, wing, 1.6, -0.5)
+	_ink(ci, Vector2(-8.0, w * 0.35), 6.0, w * 0.7, dark.lightened(0.25), 1.4, 0.4)
+	_ell(ci, Vector2(-6.0, -w * 0.5), 2.2, w * 0.45, Color(1, 1, 1, 0.55 * alpha), -0.5, 8)
+	ci.draw_line(Vector2(-3.0, 0.0), Vector2(5.0, 0.0), INK, 3.4, true)
+	ci.draw_line(Vector2(-3.0, 0.0), Vector2(5.0, 0.0), dark, 1.8, true)
+	ci.draw_circle(Vector2(6.0, -0.5), 2.2, INK)
+	ci.draw_line(Vector2(6.0, -1.5), Vector2(10.0, -5.0), INK, 1.2, true)
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
 static func _spider(ci: CanvasItem, t: float, shade: float, alpha: float, moving: bool, flash: bool) -> void:
 	var body = _tint(Color("#3d2f2a"), shade, alpha, flash)
 	var body_hi = _tint(Color("#5a463d"), shade, alpha, flash)
