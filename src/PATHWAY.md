@@ -104,6 +104,16 @@ Known: workshop count can overshoot PER_KIND by one (jobs in flight aren't count
 Next city ideas: guard posts at outposts, food caravans between outposts and the core,
 a throne room that upgrades the queen, workshops visibly staffed by ants.
 
+### Balance findings (v0.26, balanced bot, 8 seeds x 25 min)
+All seeds survive 25 minutes (raid 14+), but population follows a boom-and-bust cycle: peak 130-170 ants at minute 8-10, trough
+(3-30 ants) around minute 14-18, recovery after. Upkeep of ~150 ants (~3.4 food/s) exceeds the forage income (~2.5-3 food/s), so the
+colony overshoots on its stockpile (the queen lays 3x faster above 150 spare food) and then starves out while the old cohort ages away
+(ant life ~270 s). Tried without effect: a wider lifespan spread, a lower food-frontier cap, 1.4x richer piles. What helped: recruitment of
+foragers to piles nestmates already found (stops the far-frontier starvation, no more outright collapses). Still open, in order of
+likely payoff: (1) an income-aware cap on laying (allowed ants ~ income / 0.042), (2) fewer defenders per raider (92 of 166 ants
+defended against 7 raiders at raid 4: the reserve rule keeps only ~15% foraging), (3) cheaper brood late. Use `bal.gd` with MINS=25 and
+SEED=11,22,33,66,77,88; results are deterministic per seed, so A/B a change on the same seeds.
+
 ## Balance targets (measure on the M3 harness; these are the pass/fail lines)
 - Run length: Balanced bot reaches raid 12 in 40-60% of runs; no single collapse cause
   (starvation, queen kill, plague, siege) above 40% of losses.
