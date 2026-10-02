@@ -104,16 +104,18 @@ Known: workshop count can overshoot PER_KIND by one (jobs in flight aren't count
 Next city ideas: guard posts at outposts, food caravans between outposts and the core,
 a throne room that upgrades the queen, workshops visibly staffed by ants.
 
-### Balance findings (v0.26, balanced bot, 8 seeds x 25 min)
-All seeds survive 25 minutes (raid 14+), but population follows a boom-and-bust cycle: peak 130-170 ants at minute 8-10, trough
-(3-30 ants) around minute 14-18, recovery after. Upkeep of ~150 ants (~3.4 food/s) exceeds the forage income (~2.5-3 food/s), so the
-colony overshoots on its stockpile (the queen lays 3x faster above 150 spare food) and then starves out while the old cohort ages away
-(ant life ~270 s). Tried without effect: a wider lifespan spread, 1.4x richer piles, small "scrap" piles near the nest plus a colony-size-scaled frontier (made two seeds worse). Kept: the food frontier (minimum distance of new piles) now stops growing at 480 cells (20% of piles still spawn out to 1440). What helped: recruitment of
-foragers to piles nestmates already found (stops the far-frontier starvation, no more outright collapses). Done after that: fast laying only below 90 ants (peaks now ~100,
-troughs mostly 30-60, one seed in four still dips to ~2 around raid 6), and a defender cap by threat. Still open, in order of
-likely payoff: (1) an income-aware cap on laying (allowed ants ~ income / 0.042), (2) fewer defenders per raider (92 of 166 ants
-defended against 7 raiders at raid 4: the reserve rule keeps only ~15% foraging), (3) cheaper brood late. Use `bal.gd` with MINS=25 and
-SEED=11,22,33,66,77,88; results are deterministic per seed, so A/B a change on the same seeds.
+### Balance findings (v0.26, balanced bot, 4-8 seeds x 25 min)
+Before the fix, every seed survived 25 minutes but the population boomed and crashed (peak 130-170 ants at minute 8-10, trough of 3-30 around
+minute 14-18, one seed in seven died). Chased through the economy ledger: income hit exactly zero for minutes while 40-80 foragers were
+"out". Cause: a walking bug. Around a shaft the top row of soil is flagged nest ("under"); surface walkers preferred that row, so a forager
+leaving an outpost mouth was treated as underground, sent back down, and shuffled in and out for ever (fixed in `_walk_surface`). After the
+fix: no collapses, steady income, population grows to 170-220 and holds. Lesson: look at the ledger and at individual ants' states before
+tuning numbers; the tuning experiments below (wider lifespan spread, 1.4x piles, scrap piles, lower frontier cap, laying limit) were all
+chasing a bug and have been dropped. Kept as sound on their own: recruitment of foragers to piles nestmates already found, and the defender
+cap by threat.
+Now open: the late game may be too easy for the bot (raid 14+ with queen at full health): steepen raid scaling (`_combat` scale
+1 + 0.065 per raid) or raid pacing, then re-measure against the targets below. Use `bal.gd` with MINS=25 and SEED=11,22,33,66,77,88;
+results are deterministic per seed, so A/B a change on the same seeds.
 
 ## Balance targets (measure on the M3 harness; these are the pass/fail lines)
 - Run length: Balanced bot reaches raid 12 in 40-60% of runs; no single collapse cause

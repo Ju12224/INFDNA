@@ -1123,7 +1123,10 @@ func _forage(a) -> void:
 		return
 
 	if here_under:
-		_descend(a, grid.dist_exit)
+		if grid.field(grid.dist_exit, a.x, a.y, a.z) == 0:
+			_walk_surface(a)          # at the mouth itself: step out along its heading (a random neighbour made it shuffle)
+		else:
+			_descend(a, grid.dist_exit)
 		return
 
 	var ex = int(grid.entrance.x)
@@ -1305,11 +1308,18 @@ func _update_trails() -> void:
 
 func _walk_surface(a) -> void:
 	var best = null
-	for c in grid.neighbors(a.x, a.y):
-		if int(c.x) - a.x == a.heading and grid.is_surface_cell(int(c.x), int(c.y)):
-			# prefer the cell hugging the ground
-			if best == null or c.y > best.y:
-				best = c
+	# Walk on the open ground, never along the top row of the soil where it is marked as nest ("under") around a shaft:
+	# an ant standing on such a cell is treated as underground and sent back down the way out, so a forager could shuffle
+	# in and out of an outpost mouth for ever (every forager from that mouth, with the colony starving). Only if there is
+	# no other way on is an "under" cell accepted.
+	for pass_n in 2:
+		for c in grid.neighbors(a.x, a.y):
+			if int(c.x) - a.x == a.heading and grid.is_surface_cell(int(c.x), int(c.y)) and (pass_n == 1 or not grid.is_under(int(c.x), int(c.y))):
+				# prefer the cell hugging the ground
+				if best == null or c.y > best.y:
+					best = c
+		if best != null:
+			break
 	if best == null:
 		a.heading = -a.heading
 		for c in grid.neighbors(a.x, a.y):
@@ -1479,13 +1489,10 @@ func _step_queen(dt: float) -> void:
 	var interval = [9.0, 5.0, 2.5][brood]
 	var reserve = [30.0, 14.0, 5.0][brood] + min(ants.size(), 60) * [0.8, 0.4, 0.15][brood]   # v0.22: size term capped, big colonies kept laying too rarely
 	var surplus = food - reserve
-	# a stockpile is turned into ants quickly only while the colony is small: every ant costs upkeep for life, and
-	# burning a big stockpile into a big cohort is what made the population boom and then starve out
-	if ants.size() < 90:
-		if surplus > 150.0:
-			interval *= 0.35
-		elif surplus > 60.0:
-			interval *= 0.55
+	if surplus > 150.0:
+		interval *= 0.35
+	elif surplus > 60.0:
+		interval *= 0.55
 	_lay_timer -= dt
 	if _lay_timer > 0.0:
 		return
@@ -1686,7 +1693,7 @@ func _pile_distance(near: int) -> int:
 	# The near ground has been picked over: after the first minutes new food only appears beyond a minimum
 	# distance that keeps growing, so the colony has to send ants on longer and longer expeditions.
 	# the frontier follows the colony's strength, not just the clock: a colony that has dwindled finds food nearer again
-	var lo = int(clamp(60.0 + min(0.9 * time, 14.0 * ants.size()) + 0.5 * ants.size(), 60.0, 480.0))
+	var lo = int(clamp(60.0 + min(0.9 * time, 14.0 * ants.size()) + 0.5 * ants.size(), 60.0, 1000.0))
 	if mod("pile_near") > 0.0:
 		lo = int(lo * 0.6)
 	var hi = int(min(RANGE_MAX - 60, lo + 450))

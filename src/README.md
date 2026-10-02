@@ -1,6 +1,6 @@
-# InfDNA (Brotato mod) - v0.26.0
+# InfDNA (Brotato mod) - v0.26.1
 
-## v0.26.0 - watch mode, calmer ants and raiders, day/night and rain, recruitment, strain spotlight, run summary
+## v0.26.1 - watch mode, calmer ants and raiders, day/night and rain, recruitment, strain spotlight, run summary
 Compile-checked, rendered headless under Xvfb (software GL), fuzzed 8 sim-minutes with watch mode and random time of day (no
 script errors), balance-probed (8 seeds x 25 min: all survive), `src/tests-v023/layers_smoke.gd` all pass;
 NOT playtested in Brotato.
@@ -16,17 +16,18 @@ NOT playtested in Brotato.
   they stand and fight), and facing flipping on vertical steps up the mound and at the shaft mouth (now left/right follows the screen on
   open ground). Rapid direction flips per 5 sim-minutes: 3416 -> 455. Surface ants also tilt to a smoothed hill slope instead of the
   6 px stair steps of the grid (big rotation jumps 10392 -> 757).
-- **The colony no longer starves itself on the far frontier.** Diagnosis from the balance probe: once the food frontier had moved past
-  what a young forager's own search radius covers, only scouts ever found anything, trails were never laid, and a 150-ant colony
-  starved to a handful (one seed in seven died outright at raid 8). Foragers setting out are now often told (recruitment) about a pile
-  a nestmate already found and that still holds food, nearer ones likelier. 8 seeds x 25 minutes: all survive (before: 6 of 7), peak
-  pop 140-174 (was ~120), and the mid-game crash is shallower. Also: new piles spawn near again if the colony has dwindled.
-- **Smoother population (boom and bust tamed).** The same probe showed the colony peaking near 165 ants on its stockpile and then
-  starving down to a handful (the queen laid 3x faster above 150 spare food, and every ant costs upkeep for life). The fast-laying
-  bonus now applies only while the colony has fewer than 90 ants, and non-soldiers stop leaving the food runs for a raid once ~6 + 5 per
-  threat point are already defending (a raid of 7 small raiders used to pull 92 of 166 ants off the food, and into a blob). 4 seeds x 25
-  minutes: population holds 60-100 instead of swinging 165 -> 3, no collapses; the cost is a lower peak (~100). Goals above 100 ants still
-  need real income (Lab, farms).
+- **The late-game collapse was a walking bug, now fixed.** Diagnosis from the balance probe: from about minute 9 the colony's income
+  dropped to exactly zero for minutes while 40-80 foragers were "out", the population swung 165 -> 3 and one seed in seven died. The foragers
+  were stuck at the mouths of the outpost shafts: around a shaft the top row of soil is flagged as nest ("under"), surface walkers preferred
+  that row because it hugs the ground, an ant standing on it was treated as underground and sent back down the way out, and so it shuffled
+  in and out of the mouth for ever. Surface walking now keeps to the open-air row (and only uses a nest-flagged cell if nothing else leads on).
+  A forager standing in the mouth itself now steps out along its heading instead of a random neighbour (forager direction flips per
+  5 sim-minutes: ~1200 -> ~50 after the first fix exposed it). Result, 4 seeds x 25 minutes: no collapses and no crashes, income flows, and the colony grows to a steady 170-220 ants (before: peaks
+  of 120-170 followed by troughs of 3-30). This also removes much of the "ants shuffling at the hole" look.
+- **Recruitment to known piles:** foragers setting out are often told about a pile a nestmate already found and that still holds food (nearer
+  ones likelier), so the food frontier cannot outrun what a young forager's own search radius covers.
+- **Defender cap by threat:** non-soldiers stop leaving the food runs for a raid once ~6 + 5 per threat point are already defending (a raid of
+  7 small raiders used to pull 92 of 166 ants off the food, and into a blob).
 - **Raiders stopped shivering too.** Small raiders and siegers used to flip toward whichever ant was nearest every hop (runners weave
   past them at 18 cells/s). They now keep chasing the same ant for ~12 hops, stand and fight when it is within a cell, and reverse at most
   every 5 hops; fleeing prey does the same. Rapid raider direction flips per 10 sim-minutes: 110 -> ~0 for small raiders, 14 -> 0 for brutes.
