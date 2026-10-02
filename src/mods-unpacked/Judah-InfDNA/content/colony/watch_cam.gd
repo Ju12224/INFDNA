@@ -8,6 +8,7 @@ extends Node
 const SHOT_MIN = 11.0
 const SHOT_MAX = 19.0
 const FIGHT_HOLD = 3.0        # a fight shot stays this long after the last blow
+const MAX_FIGHT = 28.0        # a long siege does not pin the camera forever
 const HAND_BACK = 6.0         # seconds the camera stays put after the player touches it
 const RANK = {"small": 1, "burrower": 2, "brute": 3, "elite": 4, "boss": 5}
 const ORDER = ["far", "gate", "ant", "dig", "queen", "ant"]
@@ -24,6 +25,8 @@ var _zoom := 0.7
 var _unit = null              # ant the shot follows, or null
 var _next := 0
 var _strain_done := -1.0    # newest strain event already shown
+var _fight_block := 0.0     # after a long fight shot the camera looks elsewhere for a while, even if the siege goes on
+var _fight_for := 0.0
 
 
 func set_active(on: bool) -> void:
@@ -61,7 +64,14 @@ func _process(delta: float) -> void:
 	var sim = scene.sim
 	_left -= delta
 	_since_cut += delta
-	var fight = _fight_focus()
+	_fight_block = max(0.0, _fight_block - delta)
+	var fight = _fight_focus() if _fight_block <= 0.0 else null
+	if _kind == "fight":
+		_fight_for += delta
+		if _fight_for > MAX_FIGHT:
+			_fight_block = 14.0
+			_left = 0.0
+			fight = null
 	if fight == null and _kind != "strain" and _since_cut > 4.0:
 		var sa = scene.newest_strain_ant(_strain_done)
 		if sa != null:
@@ -161,6 +171,7 @@ func _cut(kind: String) -> void:
 		"fight":
 			_zoom = 0.62
 			_left = 30.0
+			_fight_for = 0.0
 		"strain":
 			_zoom = 0.45
 		"far":
