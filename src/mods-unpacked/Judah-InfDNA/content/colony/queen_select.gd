@@ -5,6 +5,7 @@ extends Control
 const Kit = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ui_kit.gd")
 const KBtn = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ui_button.gd")
 const Queens = preload("res://mods-unpacked/Judah-InfDNA/core/queens.gd")
+const RunLog = preload("res://mods-unpacked/Judah-InfDNA/core/run_log.gd")
 const Baker = preload("res://mods-unpacked/Judah-InfDNA/content/colony/sprite_baker.gd")
 const COLONY_SCENE = "res://mods-unpacked/Judah-InfDNA/content/colony/colony.tscn"
 const TITLE_SCENE = "res://ui/menus/title_screen/title_screen.tscn"
@@ -31,6 +32,7 @@ var _cards := []
 var _card_styles := []
 var _card_scales := []
 var _f_s: Font
+var _records := {}      # queen id -> best run (run_log.gd)
 var _f_m: Font
 var _f_l: Font
 var _f_xl: Font
@@ -53,6 +55,7 @@ var _detail: PanelContainer
 func _ready() -> void:
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	_f_s = Kit.font(19, 1)
+	_records = RunLog.load_all()
 	_f_m = Kit.font(25, 2)
 	_f_l = Kit.font(38, 3)
 	_f_xl = Kit.font(60, 4)
@@ -280,6 +283,11 @@ func _make_card(i: int) -> Control:
 	nm.align = Label.ALIGN_CENTER
 	nm.autowrap = true
 	nm.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var rec = _records.get(q["id"])
+	if rec is Dictionary:        # your best run with this queen
+		var bl = Kit.label(v, "Best %s" % RunLog.clock(float(rec.get("time", 0.0))), _f_s, Kit.GOLD)
+		bl.align = Label.ALIGN_CENTER
+		bl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card.mouse_filter = Control.MOUSE_FILTER_STOP
 	card.connect("gui_input", self, "_card_input", [i])
 	card.connect("mouse_entered", self, "_card_hover", [i, true])

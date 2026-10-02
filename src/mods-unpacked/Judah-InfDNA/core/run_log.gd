@@ -23,6 +23,8 @@ static func load_all() -> Dictionary:
 static func record(queen: String, time: float, raids: int, peak_ants: int) -> Dictionary:
 	var all = load_all()
 	var best = all.get(queen)
+	if not (best is Dictionary):
+		best = null
 	var is_new = best == null or time > float(best.get("time", 0.0))
 	if is_new:
 		all[queen] = {"time": time, "raids": raids, "ants": peak_ants}
