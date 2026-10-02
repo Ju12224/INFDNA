@@ -540,7 +540,7 @@ func _build_director() -> void:
 	_dir_panel.anchor_right = 1.0
 	_dir_panel.margin_left = -440
 	_dir_panel.margin_right = -24
-	_dir_panel.margin_top = 394
+	_dir_panel.margin_top = 420
 	root.add_child(_dir_panel)
 	var v = VBoxContainer.new()
 	v.add_constant_override("separation", 5)

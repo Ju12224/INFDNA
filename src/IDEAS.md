@@ -5,6 +5,8 @@ to decide and to do, with consequences, not a fish tank. Items 1, 2 and 4 below 
 separate features. Item 5 is wanted. Item 6 must look super realistic and use real Brotato art.
 
 ## The directing role (items 1, 2, 4 together)
+Status: v0.28 has the Will meter, the five commands (Rally, Harvest, Recall, Surge, Breed), the caste order and the first predator (a bird).
+Not yet: rival colonies, an anteater boss, pheromone paint and dig orders, a strike party, Lab items that raise Will.
 The player is the colony's *voice*: a **Will** meter fills over time and is spent on **commands** that steer the colony. Commands matter
 because the colony alone is only competent: it forages, digs and defends, but badly (scattered, slow to react). Threats and
 opportunities keep appearing that a director can answer.

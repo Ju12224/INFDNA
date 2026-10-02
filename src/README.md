@@ -1,4 +1,30 @@
-# InfDNA (Brotato mod) - v0.27.0
+# InfDNA (Brotato mod) - v0.28.0
+
+## v0.28.0 - you direct the colony (Will, five commands, a bird)
+The game was boring to just watch, so the player now has a permanent job. **Will** (the gold bar in the Director panel, right side) fills
+by 1.5 per second (a full bar in about a minute) and buys commands, each with a cooldown. Keys act at the cursor; the buttons arm and
+wait for a click on the ground (Esc or right-click cancels).
+- **Rally (R, 30 Will):** plant a flag. About 45% of the colony (soldiers first, never an ant carrying food) walks to it and holds it for
+  25 s, and ants within 16 cells bite 35% harder. It will not pull the colony out of a nest with raiders inside or a hurt queen (an early test
+  that did lost the queen at raid 3). Use it where a raid is coming from: raids now arrive in waves.
+- **Harvest (E, 20 Will):** put the cursor over a food pile; for 60 s most foragers setting out go there, up to 60 already outside are
+  redirected, and they carry 30% more.
+- **Recall (Z, 15 Will):** everyone outside runs for home and stays in for 12 s, and while they run they are in cover (drawn faded): the bird
+  cannot pick them out.
+- **Surge (J, 25 Will):** surface ants run 45% faster for 10 s.
+- **Breed (M, 40 Will):** the next 8 eggs come from the selected ant, each mutated (or mutate hard if none is selected). With the new-strain
+  spotlight (`N`) this is the evolution lever: look at the new strain, then breed from it.
+- **Brood caste order** (Mixed / Workers / Soldiers, in the Director panel): what the queen's brood leans toward.
+- **Orders on the map:** the rally flag (pole, waving banner, a ring showing the bonus reach and a shrinking arc for the time left), a bobbing
+  arrow over the harvested pile, and markers on the minimap.
+- **The bird (first predator):** now and then a bird hunts the foragers far from the nest: it stoops toward the nearest ant on the open
+  ground and picks one off every ~3.6 s (two when they bunch up), for about 30 s (shorter against a small colony). The banner says where,
+  the minimap blinks a red mark, and it leaves the moment nothing is left outside, so Recall ends the hunt at once. Left alone it kills
+  ~15 ants a visit, every ~4 minutes. Procedural art (`creature_art.bird`), shadow and stoop (`predator_view.gd`).
+- Measured with a deliberately crude bot that casts these on a timer (not a good player): it lasts longer than the same colony left alone
+  (queens alive at minute 50 where the undirected ones fell at minute 41-45) but its population crashes earlier, because it rallies at every
+  cooldown and starves the food runs. A person who uses the commands sparingly should do better. Next: rival colonies and more predators
+  (`src/IDEAS.md`).
 
 ## v0.27.0 - late raids that can actually end a run
 After the walking fix the balanced bot's colony sat at ~180 ants with a full-health queen through raid 26 (40 minutes): nothing late

@@ -388,7 +388,7 @@ func _init(seed_value: int = 0, queen_id: String = "well_rounded") -> void:
 	for i in 8:
 		grid.deposit(ex + (i % 2 * 2 - 1) * rng.randi_range(2, 5), grid.open_under * SPOIL_KEEP / 8.0, rng)
 	grid.rebuild_nav()
-	toasts.append({"text": "B: scout beacon at the cursor   G: bless the selected ant (mutagen)   1-4: speed", "t": 12.0})
+	toasts.append({"text": "You direct the colony: R rally flag   E harvest a pile   Z recall   J surge   M breed   (cursor = target)   B beacon   G mutagen", "t": 14.0})
 
 
 func register_genome(g, gen: int = -1) -> void:
