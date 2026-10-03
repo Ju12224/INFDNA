@@ -14,9 +14,14 @@ const RunLog = preload("res://mods-unpacked/Judah-InfDNA/core/run_log.gd")
 const Legacy = preload("res://mods-unpacked/Judah-InfDNA/core/legacy.gd")
 const Wild = preload("res://mods-unpacked/Judah-InfDNA/core/wild.gd")
 
-const HINT_VIEW = "Drag a box to select ants  ·  Right-click: orders and powers\nWheel: zoom  ·  WASD: pan  ·  Space: pause  ·  Tab: panels\nMouse to the top edge: map  ·  bottom edge: speed, Lab, menu"
-const HINT_CLEAN = "Drag: select ants   Right-click: orders and powers   Q: free them   Wheel: zoom   WASD: pan   Space: pause   Tab: more panels"
-const HINT_FULL = "WASD / middle-drag pan   Wheel zoom   Drag: select ants   Right-click: orders and powers   Q: free   Space: pause   Tab: view mode   Esc: menu\nLayers P C F T H X K O   Powers R E Z J M Y   L lineage   U nest   N new strain   V watch   I goals"
+const HINT_VIEW = "Drag a box to select ants  ·  Right-click: orders and powers\nWheel: zoom  ·  WASD: pan  ·  Space: pause  ·  Tab: panels  ·  ]: most mutated ant\nMouse to the top edge: map  ·  bottom edge: speed, Lab, menu"
+const HINT_CLEAN = "Drag: select ants   Right-click: orders and powers   Q: free them   Wheel: zoom   WASD: pan   Space: pause   ]: top mutant   Tab: more panels"
+const HINT_FULL = "WASD / middle-drag pan   Wheel zoom   Drag: select ants   Right-click: orders and powers   Q: free   Space: pause   Tab: view mode   Esc: menu\nLayers P C F T H X K O   Powers R E Z J M Y   L lineage   U nest   N new strain   ] apex   V watch   I goals"
+const MONO_COL = Color("#b58cff")        # the Monstrosity meter
+const APEX_COL = Color("#f2c14e")        # the most mutated ants, and their score
+const ARC_COLS = [Color("#b58cff"), Color("#f2c14e"), Color("#ff8a4a"), Color("#c25cff")]    # growing, dominion, tremors, the void
+const APEX_ROW = 32.0
+const APEX_Y0 = 66.0
 const VIEW_SHIFT = 44.0          # in view mode the pause chip, banner and toasts sit this much higher (no minimap above them)
 const REVEAL_IN = 38.0           # the mouse this near the top or bottom edge (HUD units) slides the minimap or the speed bar in
 const REVEAL_OUT = 140.0         # ...and it slides away again once the mouse is this far from the edge
@@ -89,6 +94,12 @@ var _watch_hidden := []      # nodes hidden in watch mode, with the visibility t
 # Standard: the colony card, raid timer, minimap, speed bar. Full: every panel.
 var mode := 0
 var _strip: Control          # the status line (view mode)
+var _strip_best: Control     # click the strip's "best NNN" to look at the most mutated ant
+var _strip_best_r := Rect2()
+var _apex_card: PanelContainer
+var _apex_ctl: Control       # the Apex list (standard and full modes): drawn, not laid out
+var _apex_hover := -1
+var _apex_desc := {}         # genome uid -> its description (the genome never changes)
 var _tag_panel: PanelContainer
 var _tag_label: Label
 var _notch_top: Label
@@ -346,6 +357,20 @@ func _build_left() -> void:
 	_graph.rect_min_size = Vector2(396, 74)
 	_graph.connect("draw", self, "_draw_graph")
 	gv.add_child(_graph)
+
+	# ---- the point of the game: Monstrosity and the Apex ants
+	var av = _card(_left_col, Color(0.36, 0.28, 0.44))
+	_apex_card = av.get_parent()
+	_apex_ctl = Control.new()
+	_apex_ctl.rect_min_size = Vector2(396, APEX_Y0 + 5.0 * APEX_ROW + 2.0)
+	_apex_ctl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_apex_ctl.mouse_filter = Control.MOUSE_FILTER_STOP
+	_apex_ctl.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	_apex_ctl.hint_tooltip = "The five most mutated ants alive. Click one to look at it (then right-click it to breed from it). ] and [ step through them."
+	_apex_ctl.connect("draw", self, "_draw_apex")
+	_apex_ctl.connect("gui_input", self, "_on_apex_input")
+	_apex_ctl.connect("mouse_exited", self, "_on_apex_exit")
+	av.add_child(_apex_ctl)
 
 
 # ================================================================== build: lineages
@@ -681,10 +706,16 @@ func _refresh_squad() -> void:
 func _build_view() -> void:
 	_strip = Control.new()
 	_strip.rect_position = Vector2(20, 14)
-	_strip.rect_size = Vector2(900, 36)
+	_strip.rect_size = Vector2(1500, 36)
 	_strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_strip.connect("draw", self, "_draw_strip")
 	root.add_child(_strip)
+	_strip_best = Control.new()
+	_strip_best.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_strip_best.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	_strip_best.hint_tooltip = "The most mutated ant alive: click to look at it. ] steps through the top five. Right-click an ant, Breed, to make more like it."
+	_strip_best.connect("gui_input", self, "_on_strip_best")
+	_strip.add_child(_strip_best)
 
 	_tag_panel = PanelContainer.new()
 	_tag_panel.add_stylebox_override("panel", Kit.flat(Color(0.1, 0.16, 0.24, 0.85), Kit.INK, 8, 2, 4.0, 0))
@@ -747,7 +778,43 @@ func _draw_strip() -> void:
 	x += 28.0 + _f_s.get_string_size(rt).x + 20.0
 	ops.append(["icon", x, "luck"])
 	ops.append(["bar", x + 28.0, clamp(sim.will / max(1.0, sim.will_max()), 0.0, 1.0), Kit.GOLD, 64.0])
-	x += 28.0 + 64.0 + 12.0
+	x += 28.0 + 64.0 + 20.0
+	# the point of the game: how monstrous the colony is (or, once it has taken the meadow, how far along the arc is) and its strangest ant
+	var mp = _mono_pct(sim)
+	var arc = _arc_line(sim)
+	ops.append(["icon", x, "power"])
+	if arc["text"] == "":
+		var mt = "Monstrosity %d%%" % mp
+		ops.append(["text", x + 28.0, mt, Color(1, 1, 1, 0.85)])
+		x += 28.0 + _f_s.get_string_size(mt).x + 10.0
+		ops.append(["bar", x, mp / 100.0, MONO_COL, 72.0])
+		x += 72.0 + 10.0
+		var sn = sim.monstrosity_stage()
+		ops.append(["text", x, sn, Color(MONO_COL.r, MONO_COL.g, MONO_COL.b, 0.85)])
+		x += _f_s.get_string_size(sn).x + 20.0
+	else:
+		var ac: Color = arc["col"]
+		var pulse = 0.82 + 0.18 * sin(_t * 4.0) if sim.arc_stage >= 2 else 1.0
+		ops.append(["text", x + 28.0, arc["text"], Color(ac.r, ac.g, ac.b, pulse)])
+		x += 28.0 + _f_s.get_string_size(arc["text"]).x + 10.0
+		ops.append(["bar", x, arc["frac"], ac, 72.0])
+		x += 72.0 + 10.0
+		var mt2 = "Monstrosity %d%%" % mp
+		ops.append(["text", x, mt2, Color(1, 1, 1, 0.5)])
+		x += _f_s.get_string_size(mt2).x + 20.0
+	var best_r = Rect2()
+	if not sim.apex.empty():
+		var bt = "%d" % int(sim.ms_of(sim.apex[0]))
+		ops.append(["text", x, "best", Color(1, 1, 1, 0.6)])
+		var bx = x + _f_s.get_string_size("best ").x
+		ops.append(["text", bx, bt, APEX_COL])
+		best_r = Rect2(x - 4.0, 2.0, bx - x + _f_s.get_string_size(bt).x + 8.0, 30.0)
+		x = bx + _f_s.get_string_size(bt).x + 12.0
+	if best_r != _strip_best_r:
+		_strip_best_r = best_r
+		_strip_best.rect_position = best_r.position
+		_strip_best.rect_size = best_r.size
+		_strip_best.mouse_filter = Control.MOUSE_FILTER_STOP if best_r.size.x > 0.0 else Control.MOUSE_FILTER_IGNORE
 	_strip.draw_rect(Rect2(0, 0, x, 34), Color(0.08, 0.07, 0.11, 0.55))
 	_strip.draw_rect(Rect2(0, 0, 3, 34), Color(0.95, 0.76, 0.3, 0.8))
 	for o in ops:
@@ -761,6 +828,138 @@ func _draw_strip() -> void:
 			"bar":
 				_strip.draw_rect(Rect2(o[1], 12.0, o[4], 10.0), Kit.INK)
 				_strip.draw_rect(Rect2(o[1] + 1.0, 13.0, (o[4] - 2.0) * o[2], 8.0), o[3])
+
+
+func _on_strip_best(ev: InputEvent) -> void:
+	if ev is InputEventMouseButton and ev.pressed and ev.button_index == BUTTON_LEFT:
+		scene.show_apex(1)
+		_strip_best.accept_event()
+
+
+# ---- Monstrosity and the Apex ants (colony_sim: monstrosity, apex; arc.gd)
+func _mono_pct(sim) -> int:
+	return int(round(clamp(sim.monstrosity, 0.0, 100.0)))
+
+
+# The arc line: {"text": "TREMORS 3/8", "frac": 0..1, "col"}; the text is empty while the colony is only growing.
+func _arc_line(sim) -> Dictionary:
+	var st = int(clamp(sim.arc_stage, 0, 3))
+	if st <= 0:
+		return {"text": "", "frac": 0.0, "col": ARC_COLS[0]}
+	var txt = Sim.Arc.label(sim).to_upper()
+	if st == Sim.Arc.TREMORS:
+		txt = "TREMORS %d/%d" % [sim.arc_tremors, Sim.Arc.TREMORS_N]
+	elif st == Sim.Arc.VOID:
+		var total = 1 + int(min(2, sim.void_cycles))
+		var left = sim.void_left
+		for e in sim.enemies:
+			if e.kind == "voidmaw" and e.void_born:
+				left += 1
+		txt = "THE VOID %d/%d" % [int(clamp(total - left, 0, total)), total]
+	return {"text": txt, "frac": Sim.Arc.progress(sim), "col": ARC_COLS[st]}
+
+
+func _apex_text(g, w: float) -> String:
+	var d = _apex_desc.get(g.uid)
+	if d == null:
+		d = g.describe()
+		if _apex_desc.size() > 80:
+			_apex_desc.clear()
+		_apex_desc[g.uid] = d
+	if _f_s.get_string_size(d).x <= w:
+		return d
+	var n = d.length()
+	while n > 6 and _f_s.get_string_size(d.substr(0, n) + " ...").x > w:
+		n -= 1
+	var cut = d.substr(0, n)
+	var comma = cut.rfind(",")
+	if comma > 8:
+		cut = cut.substr(0, comma)           # whole traits only
+	return cut.strip_edges() + " ..."
+
+
+func _draw_apex() -> void:
+	var sim = scene.sim
+	var c = _apex_ctl
+	var w = c.rect_size.x
+	var mp = _mono_pct(sim)
+	var arc = _arc_line(sim)
+	var ic = Kit.icon("power")
+	if ic != null:
+		c.draw_texture_rect(ic, Rect2(0, 0, 24, 24), false)
+	c.draw_string(_f_m, Vector2(30, 22), "Monstrosity %d%%" % mp, Color.white)
+	var sn = sim.monstrosity_stage()
+	var sw = _f_m.get_string_size("Monstrosity %d%% " % mp).x
+	c.draw_string(_f_s, Vector2(30.0 + sw + 6.0, 22), sn, Color(MONO_COL.r, MONO_COL.g, MONO_COL.b, 0.9))
+	if not sim.apex.empty():
+		var bt = "%d" % int(sim.ms_of(sim.apex[0]))
+		var bw = _f_m.get_string_size(bt).x
+		c.draw_string(_f_m, Vector2(w - bw, 22), bt, APEX_COL)
+		c.draw_string(_f_s, Vector2(w - bw - _f_s.get_string_size("best ").x - 4.0, 22), "best", Color(1, 1, 1, 0.6))
+	# the meter, with a tick where each stage starts
+	c.draw_rect(Rect2(0, 30, w, 11), Kit.INK)
+	c.draw_rect(Rect2(2, 32, (w - 4.0) * clamp(sim.monstrosity / 100.0, 0.0, 1.0), 7), MONO_COL)
+	for st in sim.MONSTROSITY_STAGES:
+		if st[0] > 0.0:
+			c.draw_rect(Rect2(2.0 + (w - 4.0) * st[0] / 100.0, 32, 2, 7), Color(0.08, 0.07, 0.11, 0.8))
+	# the arc: its stage and progress, or what the colony still has to do to take the meadow
+	if arc["text"] != "":
+		var ac: Color = arc["col"]
+		var pulse = 0.82 + 0.18 * sin(_t * 4.0) if sim.arc_stage >= 2 else 1.0
+		c.draw_string(_f_s, Vector2(0, 60), arc["text"], Color(ac.r, ac.g, ac.b, pulse))
+		var tw = _f_s.get_string_size(arc["text"]).x + 12.0
+		c.draw_rect(Rect2(tw, 47, w - tw, 11), Kit.INK)
+		c.draw_rect(Rect2(tw + 2.0, 49, (w - tw - 4.0) * clamp(arc["frac"], 0.0, 1.0), 7), ac)
+	else:
+		var hint = ("The ground rests: %ds" % int(ceil(sim.arc_cool))) if sim.arc_cool > 0.0 else ("Hold 95%% for %ds: the monsters take the meadow" % int(Sim.Arc.ENTER_HOLD))
+		c.draw_string(_f_s, Vector2(0, 60), hint, Color(1, 1, 1, 0.5))
+	# the list
+	if sim.apex.empty():
+		c.draw_string(_f_s, Vector2(8, APEX_Y0 + 22.0), "No standout mutants yet: breed strange ants.", Color(1, 1, 1, 0.5))
+	for i in sim.apex.size():
+		var a = sim.apex[i]
+		var y = APEX_Y0 + i * APEX_ROW
+		var chosen = scene.selected == a
+		c.draw_rect(Rect2(0, y, w, APEX_ROW - 2.0), Color(0.1, 0.08, 0.14, 0.7))
+		if chosen:
+			c.draw_rect(Rect2(0, y, w, APEX_ROW - 2.0), Color(APEX_COL.r, APEX_COL.g, APEX_COL.b, 0.2))
+			c.draw_rect(Rect2(0, y, 4, APEX_ROW - 2.0), APEX_COL)
+		elif i == _apex_hover:
+			c.draw_rect(Rect2(0, y, w, APEX_ROW - 2.0), Color(1, 1, 1, 0.1))
+		var rc = APEX_COL if i == 0 else Color(1, 1, 1, 0.55)
+		c.draw_string(_f_s, Vector2(10, y + 22.0), str(i + 1), rc)
+		var tex = scene.baker.get_texture(a.genome)
+		if tex != null:
+			c.draw_texture_rect(tex, Rect2(30, y - 1.0, 40, 32), false)
+		var ms = "%d" % int(sim.ms_of(a))
+		c.draw_string(_f_m, Vector2(76, y + 24.0), ms, APEX_COL if i == 0 else Color(APEX_COL.r, APEX_COL.g, APEX_COL.b, 0.8))
+		var tx = 76.0 + _f_m.get_string_size("000").x + 10.0
+		c.draw_string(_f_s, Vector2(tx, y + 22.0), _apex_text(a.genome, w - tx - 8.0), Color(1, 1, 1, 0.85))
+
+
+func _apex_row_at(p: Vector2) -> int:
+	var i = int(floor((p.y - APEX_Y0) / APEX_ROW))
+	return i if (p.y >= APEX_Y0 and i >= 0 and i < scene.sim.apex.size()) else -1
+
+
+func _on_apex_input(ev: InputEvent) -> void:
+	if ev is InputEventMouseMotion:
+		var i = _apex_row_at(ev.position)
+		if i != _apex_hover:
+			_apex_hover = i
+			_apex_ctl.update()
+	elif ev is InputEventMouseButton and ev.pressed and ev.button_index == BUTTON_LEFT:
+		var j = _apex_row_at(ev.position)
+		if j >= 0:
+			scene.focus_ant(scene.sim.apex[j])
+			_apex_ctl.update()
+		_apex_ctl.accept_event()
+
+
+func _on_apex_exit() -> void:
+	if _apex_hover != -1:
+		_apex_hover = -1
+		_apex_ctl.update()
 
 
 func cycle_mode() -> void:
@@ -1155,6 +1354,8 @@ func _process(delta: float) -> void:
 	else:
 		_banner.visible = false
 		_banner_text = ""
+	if sim.arc_stage >= 2 and _strip.visible:
+		_strip.update()
 	_refresh_director()
 	_refresh_squad()
 	_edge_reveal(delta)
@@ -1194,6 +1395,8 @@ func _process(delta: float) -> void:
 	_task_bar.update()
 	_mm.update()
 	_strip.update()
+	if _apex_card.visible and _left_col.visible:
+		_apex_ctl.update()
 
 
 # Closing the run: what the colony achieved, and whether it beat this queen's best.

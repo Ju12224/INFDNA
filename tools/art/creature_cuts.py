@@ -233,10 +233,10 @@ def grow_in(mask, allowed, steps):
     return cur
 
 
-def drop_specks(im, min_px=40, frac=0.0):
+def drop_specks(im, min_px=40, frac=0.0, thr=128):
     """Remove little islands of opaque pixels that are not part of the main picture (the bits of outline a cut leaves behind)."""
     a = im.getchannel("A")
-    lab, sizes = labels_of(a, 24)
+    lab, sizes = labels_of(a, thr)
     if len(sizes) <= 1:
         return im
     floor = max(min_px, frac * max(sizes))
@@ -250,6 +250,65 @@ def drop_specks(im, min_px=40, frac=0.0):
 
 
 # ---------------------------------------------------------------- legs
+def _reattach_islands(lab, alpha, min_alpha=128):
+    """A walk over outlines can hand a leg a bit of someone else's outline (a spike of a claw) that is not joined to the rest of that leg. Every leg keeps
+    only its biggest connected piece; the islands go to the leg they touch most (or to nobody when they touch none)."""
+    w, h = lab.size
+    data = list(lab.getdata())
+    al = list(alpha.getdata())
+    comp = [-1] * (w * h)
+    comps = []          # (label, [pixel indexes])
+    for s0 in range(w * h):
+        if comp[s0] != -1 or data[s0] == 255 or al[s0] < min_alpha:
+            continue
+        lv = data[s0]
+        k = len(comps)
+        comp[s0] = k
+        q = deque([s0])
+        pts = []
+        while q:
+            i = q.popleft()
+            pts.append(i)
+            x = i % w
+            y = i // w
+            for dx in (-1, 0, 1):
+                for dy in (-1, 0, 1):
+                    nx = x + dx
+                    ny = y + dy
+                    if 0 <= nx < w and 0 <= ny < h:
+                        j = ny * w + nx
+                        if comp[j] == -1 and data[j] == lv and al[j] >= min_alpha:
+                            comp[j] = k
+                            q.append(j)
+        comps.append((lv, pts))
+    main = {}
+    for k, (lv, pts) in enumerate(comps):
+        if lv not in main or len(pts) > len(comps[main[lv]][1]):
+            main[lv] = k
+    islands = [k for k, (lv, pts) in enumerate(comps) if main[lv] != k]
+    islands.sort(key=lambda k: -len(comps[k][1]))
+    for k in islands:
+        lv, pts = comps[k]
+        votes = {}
+        for i in pts:
+            x = i % w
+            y = i // w
+            for dx in (-1, 0, 1):
+                for dy in (-1, 0, 1):
+                    nx = x + dx
+                    ny = y + dy
+                    if 0 <= nx < w and 0 <= ny < h:
+                        v = data[ny * w + nx]
+                        if v != lv and v != 255 and al[ny * w + nx] >= min_alpha:
+                            votes[v] = votes.get(v, 0) + 1
+        new = max(votes, key=votes.get) if votes else 255
+        for i in pts:
+            data[i] = new
+    out = Image.new("L", (w, h))
+    out.putdata(data)
+    return out
+
+
 def partition(im, legs, k, ink_max=70, ink_cost=5.0, seed_r=3):
     """Give every opaque pixel of a legs picture to one leg. `legs` is a list of dicts with "lines" (picture px; scaled by k here). Walks outwards from the
     seeds (all legs together, nearest first); a step onto an outline pixel costs ink_cost, onto anything else 1, so a pixel goes to the leg whose own bones
@@ -314,6 +373,7 @@ def partition(im, legs, k, ink_max=70, ink_cost=5.0, seed_r=3):
                 push(heap, (nd, j))
     rows = b"".join(bytes(label[(y + 1) * W + 1:(y + 1) * W + 1 + w]) for y in range(h))
     lab = Image.frombytes("L", (w, h), rows)
+    lab = _reattach_islands(lab, im.getchannel("A"))
     ink = Image.frombytes("L", (w, h), bytes(inkm))
     # opaque pixels nobody reached (a bone with no seed): say so
     unreached = 0
@@ -344,7 +404,7 @@ def cut_legs(im, legs, k, rim=5):
         piece_mask = grow_in(m, ink, rim)
         piece = im.copy()
         piece.putalpha(ImageChops.multiply(a, piece_mask))
-        piece = drop_specks(piece, 60, 0.02)
+        piece = drop_specks(piece, 80, 0.03)
         bb = bbox_of(piece)
         if bb is None:
             continue
@@ -438,8 +498,26 @@ def make_jaws(body, spec):
         masks = []
         for gi, o in enumerate(objects_with_rings(body, jw["box"], jw.get("ring", 12))):
             masks.append((smooth_mask(o["mask"]), o["top"], jw["open"][gi % len(jw["open"])]))
-    cut_mask = Image.new("L", body.size, 0)
     a = body.getchannel("A")
+    # slivers of a piece's outline that the ring did not reach stay behind as stray bits of the body: they go back to the piece they touch
+    taken = Image.new("L", body.size, 0)
+    for mk, pivot, ang in masks:
+        taken = ImageChops.lighter(taken, mk)
+    left = ImageChops.multiply(a.point(lambda v: 255 if v >= 128 else 0), ImageChops.invert(taken))
+    lab, sizes = labels_of(left, 128)
+    for k, n in enumerate(sizes):
+        if n > jw.get("sliver", 700):
+            continue
+        part = dilate(mask_from(lab, body.size, [k]), 3)
+        best, bo = None, 0
+        for mi, (mk, pivot, ang) in enumerate(masks):
+            ov = sum(1 for v in ImageChops.multiply(part, mk).getdata() if v)
+            if ov > bo:
+                best, bo = mi, ov
+        if best is not None:
+            mk, pivot, ang = masks[best]
+            masks[best] = (ImageChops.lighter(mk, mask_from(lab, body.size, [k])), pivot, ang)
+    cut_mask = Image.new("L", body.size, 0)
     for mk, pivot, ang in masks:
         cut_mask = ImageChops.lighter(cut_mask, mk)
         piece = body.copy()

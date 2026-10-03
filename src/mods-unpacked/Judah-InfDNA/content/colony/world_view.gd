@@ -747,37 +747,37 @@ func _draw_carcass(ci: CanvasItem, pile: Dictionary, base: Vector2) -> void:
 	var ang = PredatorView.dead_angle(face, float(pile.get("spin", 0.0)))
 	if not PredatorView.draw_dead(ci, piv, sc, face, ang, 1.0, 0.0, 0.0, alpha, tint, pa):
 		ci.draw_circle(base + Vector2(0, -14.0 * ps), 22.0 * ps * k, Color(0.3, 0.26, 0.24, alpha))
-	# crumbling: dark specks lift off its outline, rise a little and fade; each slot has its own rhythm and a fresh spot every cycle
-	var mid = piv + Vector2(face * 55.0 * sc, 10.0 * sc)
-	var rx = 250.0 * sc
-	var ry = 110.0 * sc
+	# crumbling: dark specks break off its outline, rise a little and fade; each slot has its own rhythm and a fresh spot every cycle
+	var tilt = float(pile.get("spin", 0.0)) * 0.15 * face                  # the pose is turned a little differently on each carcass
+	var edges = PredatorView.DEAD_EDGE
 	var on = clamp(e * 2.2, 0.0, 1.0)
-	var N = 20
+	var N = 26
 	for i in N:
 		if (i + 0.5) / N > on:
 			break
 		var h1 = _hash(sd + i * 1.37)
 		var h2 = _hash(sd + i * 2.91 + 5.0)
 		var h3 = _hash(sd + i * 4.13 + 9.0)
-		var u = _t / (1.5 + 1.8 * h1) + h2
+		var u = _t / (1.4 + 1.8 * h1) + h2
 		var cyc = floor(u)
 		var tau = u - cyc
 		var cs = sd + i * 7.1 + cyc * 13.3
-		var a = TAU * _hash(cs)
-		var rr = 0.55 + 0.45 * _hash(cs + 1.7)
-		var sp = mid + Vector2(cos(a) * rx * rr, min(sin(a) * ry * rr, base.y - mid.y - 6.0 * ps))
-		sp += Vector2(sin(tau * 4.0 + h2 * 6.0) * 9.0 * ps + tau * 14.0 * ps, -tau * (36.0 + 60.0 * h3) * ps)
-		var sa = pow(sin(PI * tau), 0.7) * 0.85 * fin
-		var sr = (1.4 + 2.2 * h3) * ps * (1.0 - 0.45 * tau)
-		var sc2 = Color(0.14, 0.13, 0.17, sa) if h1 < 0.72 else Color(0.38, 0.42, 0.3, sa * 0.8)
-		ci.draw_circle(sp, sr, sc2)
+		var ep: Vector2 = edges[int(_hash(cs) * edges.size()) % edges.size()] + Vector2(_hash(cs + 1.7) - 0.5, _hash(cs + 3.1) - 0.5) * 16.0
+		var sp = piv + Vector2(ep.x * face, ep.y).rotated(tilt) * sc
+		sp.y = min(sp.y, base.y - 2.0 * ps)
+		sp += Vector2(sin(tau * 4.0 + h2 * 6.0) * 10.0 * ps + tau * 16.0 * ps, -tau * (40.0 + 70.0 * h3) * ps)
+		var sa = pow(sin(PI * tau), 0.6) * 0.95 * fin
+		var sr = (2.0 + 3.0 * h3) * ps * (1.0 - 0.5 * tau)
+		var spc = Color(0.13, 0.12, 0.16, sa) if h1 < 0.72 else Color(0.36, 0.4, 0.28, sa * 0.85)
+		ci.draw_circle(sp, sr, spc)
 	# a faint grey-green mist rising off it
+	var mid = piv + Vector2(face * 55.0 * sc, 10.0 * sc)
 	var gt = _tex.get(GLOW_TEX)
 	var ma = clamp(e * 3.0, 0.0, 1.0) * fin
 	if gt != null and ma > 0.0:
 		for j in 3:
 			var tm = fposmod(_t * 0.11 + j / 3.0 + sd * 0.1, 1.0)
 			var mp = mid + Vector2(sin(tm * 5.0 + j * 2.0) * 18.0 * ps, -(6.0 + tm * 80.0) * ps)
-			var mr = (46.0 + 64.0 * tm) * ps * k
-			ci.draw_texture_rect(gt, Rect2(mp - Vector2(mr, mr), Vector2(mr, mr) * 2.0), false, Color(0.55, 0.68, 0.5, sin(PI * tm) * 0.16 * ma))
+			var mr = (50.0 + 70.0 * tm) * ps * k
+			ci.draw_texture_rect(gt, Rect2(mp - Vector2(mr, mr), Vector2(mr, mr) * 2.0), false, Color(0.4, 0.5, 0.38, sin(PI * tm) * 0.3 * ma))
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

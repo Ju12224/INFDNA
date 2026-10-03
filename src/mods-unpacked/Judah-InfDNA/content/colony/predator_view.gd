@@ -23,6 +23,11 @@ const DEAD_TILT = 2.85                  # radians: lies on its back, head down, 
 const WING_B_DEAD = -0.5                # the near and far wing when limp, in rig_art's wing angles
 const WING_A_DEAD = -0.1
 const HEAD_DEAD = 0.15                  # the head dropped about the neck
+# Points on the outline of the dead bird (art px from the pivot, facing +1, at DEAD_TILT): where a rotting carcass sheds its specks.
+const DEAD_EDGE = [Vector2(-232, 62), Vector2(-216, 104), Vector2(-202, 14), Vector2(-184, 70), Vector2(-174, 118), Vector2(-164, -50), Vector2(-156, 32),
+	Vector2(-120, -28), Vector2(-84, -96), Vector2(-72, -16), Vector2(-8, -130), Vector2(-8, -30), Vector2(-6, -80), Vector2(28, -164), Vector2(62, 112),
+	Vector2(94, -130), Vector2(106, 74), Vector2(124, -166), Vector2(148, 118), Vector2(166, -148), Vector2(210, -178), Vector2(236, -132), Vector2(260, -170),
+	Vector2(276, 24), Vector2(300, -104), Vector2(304, -158), Vector2(316, 96), Vector2(322, 42), Vector2(336, -32), Vector2(344, -102)]
 
 var sim
 var cam

@@ -129,16 +129,37 @@ def label_pixels(mask):
     return comps
 
 
-def _beige(p):
-    """Is this the colour of the drawing (warm beige / brown / cream) rather than halo noise (olive, red, neutral grey)?"""
-    r, g, b = p[0], p[1], p[2]
-    return r >= g >= b and 2 <= r - g <= 48 and 2 <= g - b <= 52
+def _beige(avg):
+    """Is this (mean) colour that of the drawing -- warm beige / brown / cream -- rather than halo noise (neutral grey, olive, yellow-green)?"""
+    r, g, b = avg
+    return 11 <= r - g <= 45 and 0 <= g - b <= 45 and (r - g) >= 0.5 * (g - b)
+
+
+def _reddish(avg):
+    r, g, b = avg
+    return (r - g) > 1.8 * (g - b) + 4
+
+
+def _inside(region, x, y):
+    """Is the point in the region: a box (x0, y0, x1, y1) or a polygon [(x, y), ...]?"""
+    if len(region) == 4 and not isinstance(region[0], (tuple, list)):
+        return region[0] <= x < region[2] and region[1] <= y < region[3]
+    n = len(region)
+    ins = False
+    j = n - 1
+    for i in range(n):
+        xi, yi = region[i]
+        xj, yj = region[j]
+        if (yi > y) != (yj > y) and x < (xj - xi) * (y - yi) / float(yj - yi) + xi:
+            ins = not ins
+        j = i
+    return ins
 
 
 class Sheet:
     """One sheet: the drawing's bright fill, its islands, and the ink mask grown round them."""
 
-    def __init__(self, key, fill_lo=100, erode=3, lenient_lo=60, ink_hi=52, thin_reach=9):
+    def __init__(self, key, fill_lo=100, erode=3, lenient_lo=56, dark_lo=0, dark_erode=9, ink_hi=52, thin_reach=9):
         spec = SHEETS[key]
         self.key = key
         self.ink = spec["ink"]
@@ -153,88 +174,39 @@ class Sheet:
         if thin_reach:
             # thin light stripes (antennae seen in the ink) are too narrow to survive the erosion: keep the bright pixels that have ink on both sides
             core = ImageChops.lighter(core, ImageChops.darker(bright, _flanked(ink_ok, thin_reach)))
+        # the shaded far-side legs and the like are mid-dark brown (above the outline's near-black): thick dark regions are fill too (the erosion
+        # is wide enough to kill the 8x8 blocks of JPEG halo, which are about as bright)
+        if dark_lo:
+            core = ImageChops.lighter(core, _binary(L, dark_lo).filter(ImageFilter.MinFilter(dark_erode)))
         self.fill = reconstruct(core, _binary(L, lenient_lo))
         self.comps = label_pixels(self.fill)
         px = self.im.load()
         for c in self.comps:
             # specks of halo / JPEG noise: small islands that are not the beige-brown-cream of the drawing (olive, red, grey)
-            good = sum(1 for (x, y) in c["pts"] if _beige(px[x, y]))
-            c["junk"] = c["area"] < 1500 and good < 0.5 * c["area"]
-        self._weed_thin()
-        self._cluster()
+            n = len(c["pts"])
+            avg = [sum(px[x, y][k] for (x, y) in c["pts"]) / n for k in range(3)]
+            c["junk"] = c["area"] < 1500 and (not _beige(avg) or (_reddish(avg) and self._thin(c)))
 
-    def _island_mask(self, idx):
-        m = Image.new("L", self.size, 0)
+    @staticmethod
+    def _thin(c):
+        """Is the island only a few px wide (it vanishes under two 3x3 erosions)?  Edge lines of the halo are; parts of the drawing seldom are."""
+        x0, y0, x1, y1 = c["box"]
+        m = Image.new("L", (x1 - x0 + 6, y1 - y0 + 6), 0)
         p = m.load()
-        for i in idx:
-            for (x, y) in self.comps[i]["pts"]:
-                p[x, y] = 255
-        return m
+        for (x, y) in c["pts"]:
+            p[x - x0 + 3, y - y0 + 3] = 255
+        return m.filter(ImageFilter.MinFilter(3)).filter(ImageFilter.MinFilter(3)).getbbox() is None
 
-    def _weed_thin(self):
-        """Thin islands (2-4 px wide: the bright edge line of the halo, not a part of the drawing) are junk unless they sit inside the outline band of
-        something real -- antenna stripes and tiny claws do, they are chained to their neighbours at less than an outline's width."""
-        thin = []
-        solid = []
-        for i, c in enumerate(self.comps):
-            if c["junk"] or c["area"] < 12:
-                continue
-            if c["area"] >= 1500:
-                solid.append(i)
-                continue
-            x0, y0, x1, y1 = c["box"]
-            m = Image.new("L", (x1 - x0 + 6, y1 - y0 + 6), 0)
-            p = m.load()
-            for (x, y) in c["pts"]:
-                p[x - x0 + 3, y - y0 + 3] = 255
-            if m.filter(ImageFilter.MinFilter(3)).filter(ImageFilter.MinFilter(3)).getbbox() is None:
-                thin.append(i)
-            else:
-                solid.append(i)
-        reach_r = max(2, self.ink - 2)
-        for _ in range(6):
-            reach = grow_in(self._island_mask(solid), Image.new("L", self.size, 255), reach_r)
-            rp = reach.load()
-            moved = []
-            for i in thin:
-                pts = self.comps[i]["pts"]
-                if sum(1 for (x, y) in pts if rp[x, y]) >= 0.35 * len(pts):
-                    moved.append(i)
-            if not moved:
-                break
-            solid += moved
-            thin = [i for i in thin if i not in moved]
-        for i in thin:
-            self.comps[i]["junk"] = True
-
-    def _cluster(self, gap=None):
-        """Islands that belong to one drawn piece: their outline bands touch (fills closer than `gap` px).  Sets c['cluster']."""
-        gap = gap or self.ink
-        real = [i for i, c in enumerate(self.comps) if not c["junk"] and c["area"] >= 12]
-        band = grow_in(self._island_mask(real), Image.new("L", self.size, 255), max(1, gap // 2))
-        cl = label_pixels(band.resize((self.size[0] // 2, self.size[1] // 2), Image.NEAREST))
-        lab = {}
-        for k, c in enumerate(cl):
-            for (x, y) in c["pts"]:
-                lab[(x, y)] = k
-        for i, c in enumerate(self.comps):
-            c["cluster"] = None
-            if i in real:
-                x, y = c["pts"][0]
-                c["cluster"] = lab.get((x // 2, y // 2))
-
-    def pick(self, boxes, min_area=60, drop=()):
-        """Indices of the fill islands whose centre lies in any of the boxes (and in none of the `drop` boxes)."""
+    def pick(self, regions, min_area=60, drop=()):
+        """Indices of the real fill islands (not halo specks) whose centre lies in any of the regions (box or polygon) and in none of `drop`."""
         out = []
         for i, c in enumerate(self.comps):
             if c["area"] < min_area or c["junk"]:
                 continue
-            if any(x0 <= c["cx"] < x1 and y0 <= c["cy"] < y1 for (x0, y0, x1, y1) in drop):
+            if any(_inside(r, c["cx"], c["cy"]) for r in drop):
                 continue
-            for (x0, y0, x1, y1) in boxes:
-                if x0 <= c["cx"] < x1 and y0 <= c["cy"] < y1:
-                    out.append(i)
-                    break
+            if any(_inside(r, c["cx"], c["cy"]) for r in regions):
+                out.append(i)
         return out
 
     def owners(self, groups, min_area=60):
@@ -266,10 +238,22 @@ def _poly_mask(size, poly, offset=(0, 0)):
     return m
 
 
-def piece_image(sh, lab, pid, opts):
+def ellipse_mask(size, cx, cy, rx, ry):
+    """A smooth filled ellipse on a sheet-sized mask (drawn 4x and shrunk, so its edge is not stepped)."""
+    k = 4
+    big = Image.new("L", (size[0], size[1]), 0)
+    bb = big.crop((int(cx - rx - 8), int(cy - ry - 8), int(cx + rx + 8), int(cy + ry + 8)))
+    bb = bb.resize((bb.size[0] * k, bb.size[1] * k))
+    ImageDraw.Draw(bb).ellipse((8 * k, 8 * k, (2 * rx + 8) * k, (2 * ry + 8) * k), fill=255)
+    bb = bb.resize((bb.size[0] // k, bb.size[1] // k), Image.LANCZOS).point(lambda v: 255 if v > 127 else 0)
+    big.paste(bb, (int(cx - rx - 8), int(cy - ry - 8)))
+    return big
+
+
+def piece_image(sh, lab, pid, opts, mask=None):
     """RGBA crop for piece number pid: the owned pixels, holes closed (eyes etc.), outline smoothed and repainted flat ink at the very edge.
     Returns (RGBA image, (x, y) of its top-left corner on the sheet)."""
-    m = lab.point(lambda v: 255 if v == pid else 0)
+    m = mask if mask is not None else lab.point(lambda v: 255 if v == pid else 0)
     bb = m.getbbox()
     if bb is None:
         return None, None
@@ -323,6 +307,8 @@ def piece_image(sh, lab, pid, opts):
     inner = m.filter(ImageFilter.MinFilter(7))
     ring = ImageChops.subtract(ImageChops.subtract(m, inner), near)
     noisy = ImageChops.darker(ImageChops.subtract(m0, near), _binary(sh.L.crop(box), 30))
+    if not opts.get("noisy", True):
+        noisy = Image.new("L", m.size, 0)
     ring = ImageChops.lighter(ring, noisy)
     rgb = Image.composite(Image.new("RGB", rgb.size, INK), rgb, ring)
     a = m.filter(ImageFilter.GaussianBlur(0.8))
@@ -356,6 +342,7 @@ def shrink(im, maxside=MAXSIDE):
 def P(name, kind, boxes, pivot="center", **opts):
     if boxes and isinstance(boxes[0], (int, float)):
         boxes = [boxes]
+    boxes = list(boxes)
     d = {"name": name, "kind": kind, "boxes": list(boxes), "pivot": pivot}
     d.update(opts)
     return d
@@ -420,34 +407,33 @@ CATALOGUE = {
         P("leg_4", "leg", (468, 225, 625, 522), "top"),
         P("leg_5", "leg", (625, 225, 800, 522), "top"),
         P("leg_6", "leg", (800, 225, 965, 528), "top"),
-        P("antenna_3_l", "antenna", (970, 275, 1142, 445), "top_left"),
-        P("antenna_3_r", "antenna", (970, 445, 1140, 590), "top_left"),
-        P("antenna_4_l", "antenna", (1145, 265, 1358, 362), "bottom_right"),
-        P("antenna_4_r", "antenna", (1358, 265, 1528, 418), "top_left"),
-        P("antenna_5_l", "antenna", (1140, 350, 1345, 478), "top_left"),
-        P("antenna_5_r", "antenna", (1105, 478, 1325, 592), "top_right"),
-        P("antenna_6_r", "antenna", (1335, 405, 1522, 612), "top_left"),
+        P("antenna_3_l", "antenna", [(970, 275, 1142, 408), (1094, 408, 1142, 470)], "top_left"),
+        P("antenna_3_r", "antenna", (970, 408, 1094, 592), "top_left"),
+        P("antenna_4_l", "antenna", (1145, 265, 1372, 365), "bottom_right"),
+        P("antenna_4_r", "antenna", (1372, 265, 1528, 418), "top_left"),
+        P("antenna_5_l", "antenna", [(1140, 350, 1345, 452), (1280, 452, 1345, 520)], "top_left"),
+        P("antenna_5_r", "antenna", [(1105, 452, 1280, 592), (1280, 520, 1330, 592)], "top_right"),
+        P("antenna_6_r", "antenna", (1345, 400, 1522, 612), "top_left"),
         P("sting_1", "misc", (8, 728, 122, 998), "top"),
-        P("horn_1", "spine", (122, 730, 240, 998), "bottom"),
-        P("horn_2", "spine", (215, 760, 308, 892), "bottom"),
-        P("horn_3", "spine", (222, 892, 372, 1000), "left"),
-        P("horn_4", "spine", (308, 715, 435, 925), "bottom"),
+        P("horn_1", "spine", (122, 730, 226, 998), "bottom"),
+        P("horn_2", "spine", (226, 760, 306, 893), "bottom"),
+        P("horn_3", "spine", (226, 893, 372, 1000), "left"),
+        P("horn_4", "spine", (306, 715, 435, 925), "bottom"),
         P("frill_1", "misc", (360, 835, 540, 995), "top"),
         P("plate_1", "misc", (430, 712, 604, 862), "center"),
         P("plate_2", "misc", (604, 730, 802, 872), "center"),
-        P("spine_1", "spine", (562, 852, 842, 1012), "bottom"),
-        P("spine_2", "spine", (778, 715, 1062, 885), "bottom"),
+        P("spine_1", "spine", (562, 852, 830, 1012), "bottom"),
+        P("spine_2", "spine", [[(778, 715), (1062, 715), (1062, 885), (1000, 872), (840, 812), (778, 812)]], "bottom"),
         P("spine_3", "spine", (942, 592, 1146, 782), "bottom"),
         P("spine_4", "spine", (1146, 580, 1302, 778), "bottom"),
         P("spine_5", "spine", (1040, 780, 1185, 895), "bottom"),
         P("spine_6", "spine", (1000, 890, 1182, 995), "bottom"),
         P("spine_7", "spine", (1182, 850, 1312, 968), "bottom"),
         P("plate_3", "misc", (1188, 740, 1312, 835), "center"),
-        P("egg_sac_1", "egg", (822, 818, 995, 995), "center"),
-        P("eye_1", "eye", (1352, 776, 1398, 820), "center"),
-        P("eye_2", "eye", (1440, 765, 1522, 845), "center"),
-        P("claw_1", "misc", (1330, 830, 1392, 872), "top"),
-        P("claw_2", "misc", (1426, 820, 1480, 872), "top"),
+        P("egg_sac_1", "egg", [[(822, 812), (1000, 812), (1000, 995), (822, 995)]], "center"),
+        # the two eyes are dark balls on the black sheet (only their glints and facets are bright): cut as ellipses, whole
+        P("eye_1", "eye", [], "center", ellipse=(1377.5, 820, 43.5, 49), holes="none", noisy=False, min_island=0),
+        P("eye_2", "eye", [], "center", ellipse=(1477, 820, 47, 50), holes="none", noisy=False, min_island=0),
         P("fur_1", "fur", (1290, 595, 1415, 755), "bottom"),
         P("fur_2", "fur", (1415, 605, 1525, 758), "bottom"),
         P("fur_3", "fur", (1312, 878, 1440, 998), "center"),
@@ -584,15 +570,19 @@ def build(contact=None, debug=None, only=None, sheets=None):
             g = [c for c in sh.pick(sp["boxes"], drop=sp.get("drop", ())) if c not in claimed]
             claimed.update(g)
             groups.append(g)
-            if not g:
+            if not g and not sp.get("ellipse"):
                 print("!! nothing found for", sp["name"])
         lab = sh.owners(groups)
+        ell = {}
+        for i, sp in enumerate(specs):
+            if sp.get("ellipse"):
+                ell[i] = ellipse_mask(sh.size, *sp["ellipse"])
         if debug:
             assign_debug(sh, groups, [sp["name"] for sp in specs], os.path.join(debug, "assign_%s.png" % key))
         for i, sp in enumerate(specs):
-            if not groups[i]:
+            if not groups[i] and i not in ell:
                 continue
-            im, pos = piece_image(sh, lab, i + 1, sp)
+            im, pos = piece_image(sh, lab, i + 1, sp, ell.get(i))
             if im is None:
                 continue
             im = trim(im)

@@ -246,13 +246,13 @@
   },
   "wing_a": {
    "file": "bird_wing_a.png",
-   "w": 342,
+   "w": 341,
    "h": 289
   },
   "wing_b": {
    "file": "bird_wing_b.png",
    "w": 451,
-   "h": 329
+   "h": 328
   },
   "claw_1": {
    "file": "bird_claw_1.png",
@@ -262,50 +262,50 @@
   "claw_2": {
    "file": "bird_claw_2.png",
    "w": 151,
-   "h": 115
+   "h": 118
   }
  },
  "rocks": [
   {
    "file": "rock_0.png",
-   "w": 231,
-   "h": 248,
+   "w": 233,
+   "h": 249,
    "tall": false
   },
   {
    "file": "rock_1.png",
-   "w": 225,
-   "h": 192,
+   "w": 227,
+   "h": 194,
    "tall": false
   },
   {
    "file": "rock_2.png",
-   "w": 229,
-   "h": 163,
+   "w": 231,
+   "h": 165,
    "tall": false
   },
   {
    "file": "rock_3.png",
-   "w": 189,
-   "h": 116,
+   "w": 191,
+   "h": 118,
    "tall": false
   },
   {
    "file": "rock_4.png",
-   "w": 210,
-   "h": 91,
+   "w": 212,
+   "h": 92,
    "tall": false
   },
   {
    "file": "rock_5.png",
-   "w": 184,
-   "h": 55,
+   "w": 179,
+   "h": 57,
    "tall": false
   },
   {
    "file": "rock_6.png",
-   "w": 80,
-   "h": 69,
+   "w": 73,
+   "h": 70,
    "tall": false
   }
  ],
@@ -345,7 +345,7 @@
    {
     "layer": "far",
     "file": "spider_far_2.png",
-    "x": 117,
+    "x": 120,
     "y": 157,
     "pivot": [
      257.5,
@@ -639,7 +639,7 @@
    {
     "layer": "near",
     "file": "void_near_6.png",
-    "x": 413,
+    "x": 411,
     "y": 299,
     "pivot": [
      527.5,
