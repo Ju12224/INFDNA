@@ -1,0 +1,301 @@
+{
+ "_about": "Effect animations cut from art_src/fx_<name>.png (RGBA, cut from its alpha) by tools/art/make_fx.py. Every effect has 4 frames, played in order over the effect's life (cross-fade between neighbours). The frames of one effect share ONE scale (they keep their sizes relative to each other), so draw them all with the same factor: 'ref_w' is the widest frame's width. 'center' is the anchor in the frame's own px: the centre of the effect, or for anchor 'ground' (acid, dust) the bottom centre where it touches the ground. Lightning frames are turned so the bolt runs along +x; 'axis' = [x0, y, x1, y] are its two ends (stretch x0..x1 from pos to 'to'). Thick ink outlines like the rest of the art; clear pixels carry the nearest visible colour (no fringe when filtered).",
+ "frames": 4,
+ "anims": {
+  "web": {
+   "anchor": "center",
+   "frames_are": "silk ball, splat, full web, dripping web",
+   "use": "kind 'web' (the spider snare): drawn over the snared raider",
+   "sheet_scale": 0.3817,
+   "ref_w": 200,
+   "frames": [
+    {
+     "file": "fx/web_0.png",
+     "w": 134,
+     "h": 79,
+     "center": [
+      101.5,
+      36.0
+     ]
+    },
+    {
+     "file": "fx/web_1.png",
+     "w": 160,
+     "h": 155,
+     "center": [
+      132.9,
+      90.3
+     ]
+    },
+    {
+     "file": "fx/web_2.png",
+     "w": 200,
+     "h": 208,
+     "center": [
+      100.9,
+      105.1
+     ]
+    },
+    {
+     "file": "fx/web_3.png",
+     "w": 167,
+     "h": 192,
+     "center": [
+      82.8,
+      94.5
+     ]
+    }
+   ]
+  },
+  "sonic": {
+   "anchor": "center",
+   "frames_are": "shock burst, ring, double ring, ring breaking up",
+   "use": "kind 'wave' (sonic pulse): grows to the pulse radius",
+   "sheet_scale": 0.434,
+   "ref_w": 240,
+   "frames": [
+    {
+     "file": "fx/sonic_0.png",
+     "w": 130,
+     "h": 127,
+     "center": [
+      64.3,
+      63.6
+     ]
+    },
+    {
+     "file": "fx/sonic_1.png",
+     "w": 179,
+     "h": 158,
+     "center": [
+      85.2,
+      81.1
+     ]
+    },
+    {
+     "file": "fx/sonic_2.png",
+     "w": 213,
+     "h": 200,
+     "center": [
+      104.8,
+      97.8
+     ]
+    },
+    {
+     "file": "fx/sonic_3.png",
+     "w": 240,
+     "h": 225,
+     "center": [
+      119.9,
+      110.7
+     ]
+    }
+   ]
+  },
+  "lightning": {
+   "anchor": "center",
+   "frames_are": "small arc, long arc, big burst, fading arc",
+   "use": "kind 'arc': rotated and stretched from pos to 'to' along the axis",
+   "sheet_scale": 0.319,
+   "ref_w": 200,
+   "frames": [
+    {
+     "file": "fx/lightning_0.png",
+     "w": 111,
+     "h": 81,
+     "center": [
+      53.4,
+      45.5
+     ],
+     "axis": [
+      1.0,
+      45.5,
+      110.0,
+      45.5
+     ]
+    },
+    {
+     "file": "fx/lightning_1.png",
+     "w": 179,
+     "h": 110,
+     "center": [
+      88.5,
+      49.5
+     ],
+     "axis": [
+      1.0,
+      49.5,
+      178.0,
+      49.5
+     ]
+    },
+    {
+     "file": "fx/lightning_2.png",
+     "w": 200,
+     "h": 185,
+     "center": [
+      98.0,
+      93.5
+     ],
+     "axis": [
+      1.0,
+      93.5,
+      199.0,
+      93.5
+     ]
+    },
+    {
+     "file": "fx/lightning_3.png",
+     "w": 114,
+     "h": 62,
+     "center": [
+      53.9,
+      31.1
+     ],
+     "axis": [
+      1.0,
+      31.1,
+      107.0,
+      31.1
+     ]
+    }
+   ],
+   "turned_deg": -25.3
+  },
+  "acid": {
+   "anchor": "ground",
+   "frames_are": "blob, splash, big splash, puddle",
+   "use": "none yet (the sim has no acid/venom effect kind); ready for an acid hit",
+   "sheet_scale": 0.4132,
+   "ref_w": 200,
+   "frames": [
+    {
+     "file": "fx/acid_0.png",
+     "w": 107,
+     "h": 61,
+     "center": [
+      53.5,
+      52.0
+     ]
+    },
+    {
+     "file": "fx/acid_1.png",
+     "w": 166,
+     "h": 128,
+     "center": [
+      85.5,
+      127.0
+     ]
+    },
+    {
+     "file": "fx/acid_2.png",
+     "w": 200,
+     "h": 183,
+     "center": [
+      100.0,
+      178.0
+     ]
+    },
+    {
+     "file": "fx/acid_3.png",
+     "w": 142,
+     "h": 126,
+     "center": [
+      71.0,
+      125.0
+     ]
+    }
+   ]
+  },
+  "dust": {
+   "anchor": "ground",
+   "frames_are": "small puff, big puff, biggest puff, scattered clods",
+   "use": "kind 'puff' (dust kicked up), drawn under the units",
+   "sheet_scale": 0.4124,
+   "ref_w": 200,
+   "frames": [
+    {
+     "file": "fx/dust_0.png",
+     "w": 177,
+     "h": 90,
+     "center": [
+      93.5,
+      89.0
+     ]
+    },
+    {
+     "file": "fx/dust_1.png",
+     "w": 194,
+     "h": 144,
+     "center": [
+      100.5,
+      143.0
+     ]
+    },
+    {
+     "file": "fx/dust_2.png",
+     "w": 200,
+     "h": 160,
+     "center": [
+      86.5,
+      159.0
+     ]
+    },
+    {
+     "file": "fx/dust_3.png",
+     "w": 173,
+     "h": 150,
+     "center": [
+      87.0,
+      149.0
+     ]
+    }
+   ]
+  },
+  "hit": {
+   "anchor": "center",
+   "frames_are": "star, big burst, shards, fading sparks",
+   "use": "kinds 'spark' (small) and 'burst' (bigger), drawn under the units",
+   "sheet_scale": 0.463,
+   "ref_w": 200,
+   "frames": [
+    {
+     "file": "fx/hit_0.png",
+     "w": 128,
+     "h": 123,
+     "center": [
+      59.4,
+      64.5
+     ]
+    },
+    {
+     "file": "fx/hit_1.png",
+     "w": 200,
+     "h": 206,
+     "center": [
+      99.2,
+      103.0
+     ]
+    },
+    {
+     "file": "fx/hit_2.png",
+     "w": 191,
+     "h": 187,
+     "center": [
+      93.4,
+      92.5
+     ]
+    },
+    {
+     "file": "fx/hit_3.png",
+     "w": 114,
+     "h": 144,
+     "center": [
+      56.6,
+      71.0
+     ]
+    }
+   ]
+  }
+ }
+}
