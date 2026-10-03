@@ -1,4 +1,25 @@
-# InfDNA (Brotato mod) - v0.31.0
+# InfDNA (Brotato mod) - v0.32.0
+
+## v0.32.0 - view mode: the bare world, and everything done with select + right-click
+Second playtest note: "the game shouldn't be a bunch of menus you click; it should be select an area, right-click, pick an option, like a view mode without all that stuff
+blocking it."
+- **The default screen is the world.** No panels, no colony card, no buttons. One thin translucent status line at the top left (day and season, food, queen, ants, seconds to the
+  next raid or the raid itself in red, Will). A small "7 selected - right-click for orders" tag appears at the bottom only while ants are selected. Caste badges, the depth gauge on
+  the right and the room labels are off in this mode (the nest panel, U, still opens).
+- **The minimap and the speed / Lab / menu bar slide in at the edges.** Move the mouse to the top edge for the map, to the bottom edge for speed, Lab, Menu and Panels; they slide
+  away again when the mouse moves off (with some slack so they do not flicker), and never while a drag is going on. Two faint words at the edges ("map", "speed - Lab - menu") and a
+  three-line key hint say so for the first minute and then fade.
+- **Right-click is the menu.** Right-click (no drag; right-drag still pans) opens a short list at the cursor. With ants selected it starts with what they can do about what is under
+  the cursor: *Attack the spider* / *Harvest this pile (46 food)* / *Dig here* (or "Too hard to dig") / *Go here and guard* / *Guard here*, and *Free these ants* when some are under
+  orders. Below that, always, the director's powers with their key and cost: *Rally here*, *Harvest this pile*, *Recall every ant*, *Surge*, *Breed from this ant*, *Strike the
+  <rival>* (once the nest is found), *Scent flag here*; greyed out when recharging or short of Will. Click an option or press its number; click elsewhere or Esc closes it.
+  **Shift + right-click** skips the menu and does the first order on it. The menu takes every click while it is open, so it never starts a drag-box or a camera move by accident.
+  The power keys (R E Z J M Y B) still work for anyone who likes them.
+- **Tab cycles three screens**: view (the default), standard (colony card, raid timer, minimap, speed bar: what v0.31 started with) and full (every panel). The Panels button does the
+  same. Watch mode (V) is still the cinematic one.
+- Startup toasts and key hints rewritten for the above. The smoke test now covers the menu (open, Esc, number key, Shift+right-click, picking an order and a power) and the three
+  screens; the fuzz test drives the menu with random picks.
+- **Not verified:** the menu and the edge reveal have not been used in Brotato with a real mouse. In my render the bare screen at 1920x1080 and the menu look right.
 
 ## v0.31.0 - you command the ants, a clean screen, and the first real playtest's bugs
 The first playtest in Brotato reported: trees and objects floating or in the wrong place, a bird frozen in the air, too many menus, and "I should be able to select

@@ -108,11 +108,14 @@ func _idle(delta):
 		var exg = int(sim.grid.entrance.x)
 		var wx = (exg + rng.randi_range(-200, 200)) * 6.0
 		var wy = rng.randf_range(-100.0, 600.0) + sim.grid.surf_y(exg) * 6.0
-		s.context_order(Vector2(wx, wy))
+		s.open_context_menu(s.get_canvas_transform().xform(Vector2(wx, wy)), rng.randf() < 0.2)
+		if s.cmenu.is_open:
+			s.cmenu._choose(rng.randi() % s.cmenu.items.size())
+			s.cmenu.close()
 	if rng.randf() < 0.1:
 		s.release_selection()
 	if rng.randf() < 0.05:
-		s.hud.toggle_compact()
+		s.hud.cycle_mode()
 	if rng.randf() < 0.03 and sim.bird == null:
 		var exb = int(sim.grid.entrance.x)
 		sim.bird = {"x": float(exb + rng.randi_range(-150, 150)), "t": rng.randf_range(0.5, 6.0), "cd": 9.0, "dive": 0.0, "alt": 0.6, "face": 1, "kills": 0}

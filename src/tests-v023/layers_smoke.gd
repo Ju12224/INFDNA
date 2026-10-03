@@ -17,6 +17,17 @@ func _init():
 	root.add_child(s)
 
 
+func _menu_pick(s, wp: Vector2, label_start: String) -> bool:
+	s.open_context_menu(s.get_canvas_transform().xform(wp))
+	for i in s.cmenu.items.size():
+		var it = s.cmenu.items[i]
+		if it["t"] == "item" and it["ok"] and str(it["label"]).begins_with(label_start):
+			s.cmenu._choose(i)
+			return true
+	s.cmenu.close()
+	return false
+
+
 func _check(ok: bool, what: String) -> void:
 	print(("PASS " if ok else "FAIL ") + what)
 	if not ok:
@@ -437,10 +448,18 @@ func _idle(_delta):
 		_check(not s.boxing and s.selection.size() > 0, "releasing the box selects the ants inside it (%d)" % s.selection.size())
 		_check(s.ant_view.sel_ids.size() == s.selection.size(), "every selected ant gets a ring")
 		s.hud._refresh_squad()
-		_check(s.hud._squad_panel.visible and s.hud._squad_label.text.find("selected") >= 0, "the squad bar shows when ants are selected")
+		_check(s.hud.mode == 0 and s.hud._tag_panel.visible and s.hud._tag_label.text.find("selected") >= 0 and not s.hud._squad_panel.visible, "view mode: a small tag (not a bar) says how many ants are selected")
 		var ordered_before = Od.count(sim)
-		s.context_order(sim.grid.center(ex2 + 30, sim.grid.surf_y(ex2 + 30) - 10))
-		_check(Od.count(sim) > ordered_before, "a right-click on open ground gives the selection a guard order (%d under orders)" % Od.count(sim))
+		var gwp = sim.grid.center(ex2 + 30, sim.grid.surf_y(ex2 + 30) - 10)
+		s.open_context_menu(s.get_canvas_transform().xform(gwp))
+		_check(s.cmenu.is_open and s.cmenu.items.size() >= 8, "a right-click opens the options menu (%d rows)" % s.cmenu.items.size())
+		var labels := []
+		for it in s.cmenu.items:
+			labels.append(it["label"])
+		_check(" | ".join(labels).find("Guard here") >= 0 and " | ".join(labels).find("Rally here") >= 0 and " | ".join(labels).find("Recall") >= 0, "...with orders for the selection and the powers: " + " | ".join(labels))
+		s.cmenu.close()
+		_check(_menu_pick(s, gwp, "Guard here"), "the menu offers 'Guard here' on open ground")
+		_check(Od.count(sim) > ordered_before, "choosing it gives the selection a guard order (%d under orders)" % Od.count(sim))
 		var pile_x = -1
 		for p in sim.piles:
 			if p["amount"] > 10.0:
@@ -448,7 +467,7 @@ func _idle(_delta):
 				break
 		if pile_x >= 0:
 			var wp = sim.grid.center(pile_x, sim.grid.surf_y(pile_x) - 10)
-			s.context_order(wp)
+			_check(_menu_pick(s, wp, "Harvest this pile"), "the menu offers 'Harvest this pile' over a food pile")
 			var harvesters := 0
 			for a in s.selection:
 				if a.squad != 0 and sim.squads.has(a.squad) and sim.squads[a.squad]["kind"] == "harvest":
@@ -460,11 +479,40 @@ func _idle(_delta):
 		q.pressed = true
 		s._unhandled_input(q)
 		_check(Od.count(sim) == 0, "Q frees the selected ants")
-		var comp = s.hud.compact
-		s.hud.toggle_compact()
-		_check(s.hud.compact != comp and s.hud._dir_panel.visible == (not s.hud.compact), "Tab switches between the clean screen and every panel")
-		s.hud.toggle_compact()
-		_check(s.hud.compact == comp and not s.hud._dir_panel.visible, "...and back to the clean screen")
+		# the menu: keys, Esc, quick order, power casting
+		s.open_context_menu(s.get_canvas_transform().xform(gwp))
+		var esc0 = InputEventKey.new()
+		esc0.scancode = KEY_ESCAPE
+		esc0.pressed = true
+		s.cmenu._input(esc0)
+		_check(not s.cmenu.is_open, "Esc closes the menu")
+		var ob2 = Od.count(sim)
+		s._set_selection(s.ant_view.pick_rect(Rect2(s._to_world(Vector2.ZERO), s._to_world(vp) - s._to_world(Vector2.ZERO)).abs()), false)
+		s.open_context_menu(s.get_canvas_transform().xform(gwp), true)
+		_check(not s.cmenu.is_open and Od.count(sim) > ob2, "Shift + right-click gives the first order without opening the menu")
+		sim.will = 100.0
+		sim.cmd_cd = {}
+		var rt0 = sim.rally_t
+		_check(_menu_pick(s, gwp, "Rally here"), "the menu offers Rally")
+		_check(sim.rally_t > rt0 and sim.will < 100.0, "choosing Rally plants the flag and spends Will")
+		s.open_context_menu(s.get_canvas_transform().xform(gwp))
+		var key1 = InputEventKey.new()
+		key1.scancode = KEY_1
+		key1.pressed = true
+		s.cmenu._input(key1)
+		_check(not s.cmenu.is_open, "a number key picks the numbered option")
+		# the three screens: view (bare), standard, full
+		_check(s.hud.mode == 0 and not s.hud._left_col.visible and s.hud._strip.visible and not s.hud._dir_panel.visible and not s.hud._layers_panel.visible, "view mode is bare: no colony card, no panels, just the status line")
+		s.hud._edge_reveal(1.0)
+		s.hud._edge_reveal(1.0)
+		_check(s.hud._mm_panel.visible and not s.hud._bar_panel.visible, "the mouse at the top edge slides the minimap in (and only that)")
+		s.hud.cycle_mode()
+		_check(s.hud.mode == 1 and s.hud._left_col.visible and s.hud._bar_panel.visible and s.hud._mm_panel.visible and not s.hud._strip.visible and not s.hud._dir_panel.visible, "Tab: the standard screen (colony card, minimap, speed bar)")
+		s.hud.cycle_mode()
+		_check(s.hud.mode == 2 and s.hud._dir_panel.visible and s.hud._layers_panel.visible, "Tab again: every panel")
+		s.hud.cycle_mode()
+		_check(s.hud.mode == 0 and not s.hud._dir_panel.visible and not s.hud._bar_panel.visible, "...and back to the bare view")
+		_check(s.ug.bare and not s.layer_state["castes"], "view mode also drops the depth gauge, room labels and caste badges")
 		var esc = InputEventKey.new()
 		esc.scancode = KEY_ESCAPE
 		esc.pressed = true

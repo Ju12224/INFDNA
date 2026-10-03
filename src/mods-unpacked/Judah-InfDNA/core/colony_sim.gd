@@ -432,8 +432,8 @@ func _init(seed_value: int = 0, queen_id: String = "well_rounded", heirloom_in: 
 	for i in 8:
 		grid.deposit(ex + (i % 2 * 2 - 1) * rng.randi_range(2, 5), grid.open_under * SPOIL_KEEP / 8.0, rng)
 	grid.rebuild_nav()
-	toasts.append({"text": "Drag a box over ants to select them, then right-click: guard a spot, harvest a pile, attack a raider, dig soil.", "t": 16.0})
-	toasts.append({"text": "Powers: R rally, E harvest, Z recall, J surge, M breed (Tab shows them). Q frees selected ants.", "t": 16.0})
+	toasts.append({"text": "Drag a box over ants to select them, then right-click for orders: guard, harvest, attack, dig.", "t": 16.0})
+	toasts.append({"text": "Right-click the ground for powers: rally, recall, surge, breed. Tab shows more panels.", "t": 16.0})
 	if not heirloom.empty():
 		toasts.append({"text": "Heirloom from %s: %s." % [heirloom.get("from", "a past colony"), str(heirloom.get("label", "")).to_lower()], "t": 12.0})
 

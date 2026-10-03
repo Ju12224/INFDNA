@@ -51,6 +51,7 @@ var _buckets := []
 var _dark := 0.0
 var _goal = null
 var _goal_zoom := 0.0
+var bare := false            # view mode: no depth gauge and no room labels (the nest panel, U, still opens)
 
 
 func _ready() -> void:
@@ -86,6 +87,13 @@ func _process(delta: float) -> void:
 			if cam.position.distance_to(_goal) < 4.0:
 				_goal = null
 	_ui.update()
+
+
+# Called by the HUD when the screen mode changes.
+func update_mode() -> void:
+	bare = scene != null and scene.hud != null and scene.hud.mode == 0
+	if _ui != null:
+		_ui.update()
 
 
 # Watch mode hides the gauge, labels and panel.
@@ -183,8 +191,9 @@ func _paint() -> void:
 		return
 	var sz = _ui.rect_size
 	_vignette(sz)
-	_room_labels(sz)
-	_gauge(sz)
+	if not bare:
+		_room_labels(sz)
+		_gauge(sz)
 	if panel_open:
 		_panel(sz)
 

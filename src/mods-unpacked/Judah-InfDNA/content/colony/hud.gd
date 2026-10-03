@@ -14,8 +14,12 @@ const RunLog = preload("res://mods-unpacked/Judah-InfDNA/core/run_log.gd")
 const Legacy = preload("res://mods-unpacked/Judah-InfDNA/core/legacy.gd")
 const Wild = preload("res://mods-unpacked/Judah-InfDNA/core/wild.gd")
 
-const HINT_CLEAN = "Drag: select ants   Right-click: order them   Q: free them   Wheel: zoom   WASD: pan   Space: pause   Tab: more panels"
-const HINT_FULL = "WASD / middle-drag pan   Wheel zoom   Drag: select ants   Right-click: order   Q: free   Space: pause   Tab: fewer panels   Esc: menu\nLayers P C F T H X K O   Powers R E Z J M Y   L lineage   U nest   N new strain   V watch   I goals"
+const HINT_VIEW = "Drag a box to select ants  ·  Right-click: orders and powers\nWheel: zoom  ·  WASD: pan  ·  Space: pause  ·  Tab: panels\nMouse to the top edge: map  ·  bottom edge: speed, Lab, menu"
+const HINT_CLEAN = "Drag: select ants   Right-click: orders and powers   Q: free them   Wheel: zoom   WASD: pan   Space: pause   Tab: more panels"
+const HINT_FULL = "WASD / middle-drag pan   Wheel zoom   Drag: select ants   Right-click: orders and powers   Q: free   Space: pause   Tab: view mode   Esc: menu\nLayers P C F T H X K O   Powers R E Z J M Y   L lineage   U nest   N new strain   V watch   I goals"
+const VIEW_SHIFT = 44.0          # in view mode the pause chip, banner and toasts sit this much higher (no minimap above them)
+const REVEAL_IN = 38.0           # the mouse this near the top or bottom edge (HUD units) slides the minimap or the speed bar in
+const REVEAL_OUT = 140.0         # ...and it slides away again once the mouse is this far from the edge
 
 # task order in the sim: NURSE, FORAGE, DIG, HOME, DEFEND (shared with the Tasks layer so the legend matches)
 const TASK_COLORS = LayersView.TASK_COLORS
@@ -80,6 +84,19 @@ var _watch_chip: Label
 var _watch_info: Label
 var _watch_t := 0.0
 var _watch_hidden := []      # nodes hidden in watch mode, with the visibility to restore
+# View mode (the default, Tab cycles): the bare world and a thin status line. The minimap and the speed / Lab / menu bar slide in when
+# the mouse touches the top or bottom edge; everything is done with drag-select and the right-click menu (context_menu.gd).
+# Standard: the colony card, raid timer, minimap, speed bar. Full: every panel.
+var mode := 0
+var _strip: Control          # the status line (view mode)
+var _tag_panel: PanelContainer
+var _tag_label: Label
+var _notch_top: Label
+var _notch_bot: Label
+var _mm_a := 0.0
+var _bar_a := 0.0
+var _mm_in := false
+var _bar_in := false
 # The clean screen: by default only the colony card, the raid timer, the minimap, speed, Lab and Menu are up (plus a bar for the selected
 # ants). Tab (or the Panels button) brings every panel back.
 var compact := true
@@ -157,12 +174,13 @@ func _ready() -> void:
 	_build_bar()
 	_build_director()
 	_build_squad()
+	_build_view()
 	_build_inspector()
 	_build_overlays()
 	_build_shop()
 	_build_collapse()
 	_build_evolution()
-	set_compact(true)
+	set_mode(0)
 
 	# scene enters from black
 	Kit.fade_rect(root, Color("#0b0910"), 1.0, 0.0, 0.7)
@@ -382,9 +400,8 @@ func _build_bar() -> void:
 	_btn(bar, "Lab", "luck").connect("pressed", scene, "open_shop")
 	_btn(bar, "Menu", "exit").connect("pressed", scene, "go_to_menu")
 	_panels_btn = _btn(bar, "Panels", "sense")
-	_panels_btn.toggle_mode = true
-	_panels_btn.hint_tooltip = "Show every panel: body plans, powers, layers, focus and brood (Tab)"
-	_panels_btn.connect("toggled", self, "_on_panels_toggled")
+	_panels_btn.hint_tooltip = "Show more panels, then every panel, then back to the bare view (Tab)"
+	_panels_btn.connect("pressed", self, "cycle_mode")
 
 	var hint = Kit.label(root, HINT_CLEAN, _f_s)
 	hint.anchor_top = 1.0
@@ -644,17 +661,200 @@ func _build_squad() -> void:
 func _refresh_squad() -> void:
 	var sel = scene.selection
 	var vis = not sel.empty() and not scene.watch_mode and not scene.shop_open and not scene.sim.collapsed
-	_squad_panel.visible = vis
+	_squad_panel.visible = vis and mode != 0
+	_tag_panel.visible = vis and mode == 0
 	if not vis:
 		return
 	var ordered := 0
 	for a in sel:
 		if a.squad != 0:
 			ordered += 1
-	var sig = "%d|%d" % [sel.size(), ordered]
+	var sig = "%d|%d|%d" % [sel.size(), ordered, mode]
 	if sig != _squad_sig:
 		_squad_sig = sig
-		_squad_label.text = "%d selected%s" % [sel.size(), ("  ·  %d under orders" % ordered) if ordered > 0 else ""]
+		var head = "%d selected%s" % [sel.size(), ("  ·  %d under orders" % ordered) if ordered > 0 else ""]
+		_squad_label.text = head
+		_tag_label.text = head + "   ·   right-click for orders" + ("   ·   Q frees" if ordered > 0 else "")
+
+
+# ================================================================== view mode
+func _build_view() -> void:
+	_strip = Control.new()
+	_strip.rect_position = Vector2(20, 14)
+	_strip.rect_size = Vector2(900, 36)
+	_strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_strip.connect("draw", self, "_draw_strip")
+	root.add_child(_strip)
+
+	_tag_panel = PanelContainer.new()
+	_tag_panel.add_stylebox_override("panel", Kit.flat(Color(0.1, 0.16, 0.24, 0.85), Kit.INK, 8, 2, 4.0, 0))
+	_tag_panel.anchor_left = 0.5
+	_tag_panel.anchor_right = 0.5
+	_tag_panel.anchor_top = 1.0
+	_tag_panel.anchor_bottom = 1.0
+	_tag_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_tag_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_tag_panel.margin_bottom = -34
+	_tag_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tag_panel.visible = false
+	root.add_child(_tag_panel)
+	_tag_label = Kit.label(_tag_panel, "", _f_s, Color("#bfe6ff"))
+	_tag_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# faint hints at the two edges that slide something in; they fade after the first minute
+	_notch_top = Kit.label(root, "map", _mm_font)
+	_notch_top.anchor_left = 0.5
+	_notch_top.anchor_right = 0.5
+	_notch_top.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_notch_top.margin_top = 2
+	_notch_top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_notch_bot = Kit.label(root, "speed  ·  Lab  ·  menu", _mm_font)
+	_notch_bot.anchor_left = 0.5
+	_notch_bot.anchor_right = 0.5
+	_notch_bot.anchor_top = 1.0
+	_notch_bot.anchor_bottom = 1.0
+	_notch_bot.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_notch_bot.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_notch_bot.margin_bottom = -2
+	_notch_bot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+
+# The status line: day, food, queen, ants, the next raid (or the raid), Will. Drawn, not laid out, so it costs next to nothing.
+func _draw_strip() -> void:
+	var sim = scene.sim
+	var ops := []
+	var x := 12.0
+	var txt = "Day %d  ·  %s" % [sim.day, Sim.Seasons.NAMES[scene.day.season]]
+	ops.append(["text", x, txt, Color(1, 1, 1, 0.75)])
+	x += _f_s.get_string_size(txt).x + 22.0
+	var fr = clamp(sim.food / max(1.0, sim.food_cap), 0.0, 1.0)
+	ops.append(["icon", x, "food"])
+	ops.append(["bar", x + 28.0, fr, Kit.GREEN if fr > 0.15 else Kit.RED, 96.0])
+	x += 28.0 + 96.0 + 20.0
+	var qf = clamp(sim.queen_hp / max(1.0, sim.queen_max), 0.0, 1.0)
+	ops.append(["icon", x, "hp"])
+	ops.append(["bar", x + 28.0, qf, Kit.RED if qf < 0.5 else Kit.GREEN, 64.0])
+	x += 28.0 + 64.0 + 20.0
+	ops.append(["icon", x, "ant"])
+	var an = str(sim.ants.size())
+	ops.append(["text", x + 28.0, an, Color.white])
+	x += 28.0 + _f_s.get_string_size(an).x + 20.0
+	var hostile = sim.hostile_count() + sim.raid_queue.size()
+	ops.append(["icon", x, "horde"])
+	var rt = ("RAID  %d" % hostile) if hostile > 0 else ("%ds" % int(max(0.0, sim.raid_timer)))
+	var rc = Color("#ff7a6a") if hostile > 0 else Color(1, 1, 1, 0.85)
+	ops.append(["text", x + 28.0, rt, rc])
+	x += 28.0 + _f_s.get_string_size(rt).x + 20.0
+	ops.append(["icon", x, "luck"])
+	ops.append(["bar", x + 28.0, clamp(sim.will / max(1.0, sim.will_max()), 0.0, 1.0), Kit.GOLD, 64.0])
+	x += 28.0 + 64.0 + 12.0
+	_strip.draw_rect(Rect2(0, 0, x, 34), Color(0.08, 0.07, 0.11, 0.55))
+	_strip.draw_rect(Rect2(0, 0, 3, 34), Color(0.95, 0.76, 0.3, 0.8))
+	for o in ops:
+		match o[0]:
+			"text":
+				_strip.draw_string(_f_s, Vector2(o[1], 24.0), o[2], o[3])
+			"icon":
+				var tx = Kit.icon(o[2])
+				if tx != null:
+					_strip.draw_texture_rect(tx, Rect2(o[1], 5.0, 24, 24), false)
+			"bar":
+				_strip.draw_rect(Rect2(o[1], 12.0, o[4], 10.0), Kit.INK)
+				_strip.draw_rect(Rect2(o[1] + 1.0, 13.0, (o[4] - 2.0) * o[2], 8.0), o[3])
+
+
+func cycle_mode() -> void:
+	set_mode(mode + 1)
+
+
+# 0 view, 1 standard, 2 full.
+func set_mode(m: int) -> void:
+	mode = posmod(m, 3)
+	set_compact(mode != 2)
+	var shift = -VIEW_SHIFT if mode == 0 else 0.0
+	_pause_chip.margin_top = 84 + shift
+	_banner.margin_top = 110 + shift
+	_toasts.margin_top = 196 + shift
+	_inspect.margin_bottom = -104
+	if scene.ug != null:
+		scene.ug.update_mode()
+	if not scene.watch_mode:
+		_left_col.visible = mode != 0
+		_strip.visible = mode == 0
+		_notch_top.visible = mode == 0
+		_notch_bot.visible = mode == 0
+		_strip.modulate.a = 1.0
+		_tag_panel.modulate.a = 1.0
+		if mode != 0:
+			_mm_a = 1.0
+			_bar_a = 1.0
+			_mm_panel.visible = true
+			_bar_panel.visible = true
+			_mm_panel.modulate.a = 1.0
+			_bar_panel.modulate.a = 1.0
+		else:
+			_mm_in = false
+			_bar_in = false
+			_mm_a = 0.0
+			_bar_a = 0.0
+			_mm_panel.visible = false
+			_bar_panel.visible = false
+		_hint.visible = true
+		_hint.modulate.a = 0.6
+	_hint.text = HINT_VIEW if mode == 0 else (HINT_CLEAN if mode == 1 else HINT_FULL)
+	_hint.margin_bottom = -22 if mode == 0 else -96
+	_panels_btn.text = ["Panels", "All", "Hide"][mode]
+	_strip.update()
+	_squad_sig = ""
+
+
+# View mode: the minimap and the bottom bar slide in when the mouse touches their edge (with a little hysteresis so they do not flicker)
+# and out again when it moves away. Never while a drag is going on, the menu is up or a screen covers the world.
+func _edge_reveal(delta: float) -> void:
+	if mode != 0 or scene.watch_mode:
+		return
+	var vs = get_viewport().get_visible_rect().size
+	var k = root.rect_scale.x
+	var m = get_viewport().get_mouse_position()
+	var busy = scene.shop_open or scene.sim.collapsed or evo_open_now()
+	var dragging = scene._lmb or scene._rmb or scene.cmenu.is_open
+	var top_d = m.y / k
+	var bot_d = (vs.y - m.y) / k
+	if busy:
+		_mm_in = false
+		_bar_in = false
+	elif not dragging:
+		if _mm_in:
+			_mm_in = top_d < REVEAL_OUT
+		else:
+			_mm_in = top_d < REVEAL_IN
+		if _bar_in:
+			_bar_in = bot_d < REVEAL_OUT
+		else:
+			_bar_in = bot_d < REVEAL_IN
+	var f = 1.0 - exp(-14.0 * delta)
+	_mm_a = lerp(_mm_a, 1.0 if _mm_in else 0.0, f)
+	_bar_a = lerp(_bar_a, 1.0 if _bar_in else 0.0, f)
+	_mm_panel.visible = _mm_a > 0.03
+	_bar_panel.visible = _bar_a > 0.03
+	_mm_panel.modulate.a = _mm_a
+	_bar_panel.modulate.a = _bar_a
+	# the faint edge hints, and the key hints, are for the first minute
+	var fade = 1.0 - smoothstep(30.0, 34.0, _t)
+	_hint.modulate.a = 0.6 * fade * (1.0 - _bar_a)
+	_hint.visible = _hint.modulate.a > 0.01
+	var nf = 0.42 * (1.0 - smoothstep(60.0, 66.0, _t))
+	_notch_top.modulate.a = nf * (1.0 - _mm_a)
+	_notch_bot.modulate.a = nf * (1.0 - _bar_a)
+	# what the sliding panels would cover gives way to them
+	_strip.modulate.a = 1.0 - _mm_a
+	_tag_panel.modulate.a = 1.0 - _bar_a
+	# the inspector sits above the bar only while the bar is out
+	_inspect.margin_bottom = lerp(-24.0, -104.0, _bar_a)
+
+
+func evo_open_now() -> bool:
+	return _evo_holder != null and _evo_holder.visible
 
 
 func _on_cmd(id: String) -> void:
@@ -945,7 +1145,7 @@ func _process(delta: float) -> void:
 		var short = scene.eff_speed < scene.speed * 0.85 and not scene.shop_open
 		_speed_btns[sidx].text = ("~%.1fx" % scene.eff_speed) if short else SPEED_LABELS[sidx]
 	if _pause_chip.visible:
-		_pause_chip.modulate.a = 0.65 + 0.35 * sin(_t * 5.0)
+		_pause_chip.modulate.a = (0.65 + 0.35 * sin(_t * 5.0)) * (1.0 - (_mm_a if mode == 0 else 0.0))
 	# banner fade
 	if sim.banner_t > 0.0 and sim.banner != "":
 		if sim.banner != _banner_text:
@@ -957,6 +1157,7 @@ func _process(delta: float) -> void:
 		_banner_text = ""
 	_refresh_director()
 	_refresh_squad()
+	_edge_reveal(delta)
 	if scene.watch_mode:
 		_watch_t += delta
 		_watch_chip.modulate.a = lerp(0.9, 0.28, smoothstep(5.0, 9.0, _watch_t))
@@ -992,6 +1193,7 @@ func _process(delta: float) -> void:
 	_graph.update()
 	_task_bar.update()
 	_mm.update()
+	_strip.update()
 
 
 # Closing the run: what the colony achieved, and whether it beat this queen's best.
@@ -1590,7 +1792,7 @@ func sync_quality() -> void:
 func set_watch(on: bool) -> void:
 	if on:
 		_watch_hidden = []
-		for n in [_left_col, _lineage_panel, _bar_panel, _mm_panel, _hint, _layers_panel, _inspect, _dir_panel, _dir_hint, _squad_panel]:
+		for n in [_left_col, _lineage_panel, _bar_panel, _mm_panel, _hint, _layers_panel, _inspect, _dir_panel, _dir_hint, _squad_panel, _strip, _tag_panel, _notch_top, _notch_bot]:
 			if n != null:
 				_watch_hidden.append([n, n.visible])
 				n.visible = false
@@ -1614,15 +1816,11 @@ func _refresh_watch_info(sim) -> void:
 		("raid %d" % sim.raid_n) if sim.raid_n > 0 else "calm"]
 
 
-func _on_panels_toggled(on: bool) -> void:
-	set_compact(not on)
-
-
 func toggle_compact() -> void:
-	set_compact(not compact)
+	cycle_mode()
 
 
-# The clean screen (compact) or every panel.
+# Standard (compact) or full panels. View mode is the standard set of panels with the status line instead (see set_mode).
 func set_compact(on: bool) -> void:
 	compact = on
 	for n in _extra_nodes:
@@ -1632,8 +1830,6 @@ func set_compact(on: bool) -> void:
 		_lineage_panel.visible = not on
 		_dir_panel.visible = not on
 		_layers_panel.visible = not on
-	_panels_btn.set_pressed_no_signal(not on)
-	_hint.text = HINT_CLEAN if on else HINT_FULL
 
 
 func _on_layer_toggled(on: bool, key: String) -> void:

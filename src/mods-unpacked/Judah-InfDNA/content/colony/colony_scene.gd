@@ -25,6 +25,7 @@ const Legacy = preload("res://mods-unpacked/Judah-InfDNA/core/legacy.gd")
 const Wild = preload("res://mods-unpacked/Judah-InfDNA/core/wild.gd")
 const Orders = preload("res://mods-unpacked/Judah-InfDNA/core/orders.gd")
 const SelectView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/select_view.gd")
+const ContextMenu = preload("res://mods-unpacked/Judah-InfDNA/content/colony/context_menu.gd")
 const DayCycle = preload("res://mods-unpacked/Judah-InfDNA/content/colony/day_cycle.gd")
 const WatchCam = preload("res://mods-unpacked/Judah-InfDNA/content/colony/watch_cam.gd")
 const SELECT_SCENE = "res://mods-unpacked/Judah-InfDNA/content/colony/queen_select.tscn"
@@ -72,8 +73,9 @@ var _rmb := false
 var _rmb_pos := Vector2()
 var _rmb_moved := false
 var _sel_t := 0.0
+var cmenu                    # context_menu.gd: the right-click menu
 # view layers (HUD "Layers" panel and the P/C/F/T/H keys); see set_layer
-var layer_state := {"trails": true, "castes": true, "fights": true, "tasks": false, "health": false, "follow": false, "light": true, "sound": true}
+var layer_state := {"trails": true, "castes": false, "fights": true, "tasks": false, "health": false, "follow": false, "light": true, "sound": true}
 
 
 func _ready() -> void:
@@ -167,6 +169,7 @@ func _ready() -> void:
 	layers_view.show_fights = layer_state["fights"]
 	layers_view.show_tasks = layer_state["tasks"]
 	layers_view.show_health = layer_state["health"]
+	ant_view.show_castes = layer_state["castes"]
 	add_child(layers_view)
 
 	var dview = DirectorView.new()      # the rally flag and harvest marker
@@ -206,9 +209,13 @@ func _ready() -> void:
 	hud = Hud.new()
 	hud.scene = self
 	add_child(hud)
+	cmenu = ContextMenu.new()       # the right-click menu, above the HUD
+	cmenu.scene = self
+	add_child(cmenu)
 	ug = UndergroundUI.new()      # depth gauge, nest panel (U), room labels, level navigation (PgUp / PgDn)
 	ug.scene = self
 	add_child(ug)
+	ug.update_mode()
 	watch = WatchCam.new()
 	watch.scene = self
 	add_child(watch)
@@ -222,6 +229,8 @@ func _process(delta: float) -> void:
 		_end_box(get_viewport().get_mouse_position(), Input.is_key_pressed(KEY_SHIFT))
 	if _rmb and not Input.is_mouse_button_pressed(BUTTON_RIGHT):
 		_rmb = false
+	if cmenu.is_open and (shop_open or sim.collapsed or watch_mode):
+		cmenu.close()
 	_sel_t -= delta
 	if _sel_t <= 0.0:
 		_sel_t = 0.25
@@ -326,7 +335,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif _rmb:
 			_rmb = false
 			if not _rmb_moved and not shop_open and not sim.collapsed:
-				context_order(_to_world(event.position))
+				open_context_menu(event.position, event.shift)
 	elif event is InputEventMouseMotion and _rmb:
 		if event.position.distance_to(_rmb_pos) > 8.0:
 			_rmb_moved = true                   # a right-drag pans the camera; only a plain right-click orders
@@ -351,7 +360,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_Q:
 				release_selection()
 			KEY_TAB:
-				hud.toggle_compact()
+				hud.cycle_mode()
 			KEY_ESCAPE:
 				if armed != "":
 					set_armed("")
@@ -476,32 +485,69 @@ func live_selection() -> Array:
 	return out
 
 
-# A right-click with ants selected: attack the raider under the cursor, harvest a food pile, dig the soil, or guard / walk to the spot.
-func context_order(wp: Vector2) -> void:
-	var sel = live_selection()
-	if sel.empty():
-		return
+# What a right-click lands on: a raider, a food pile, bare surface, solid soil, or open tunnel (menu_target.kind).
+func menu_target(wp: Vector2) -> Dictionary:
 	var g = sim.grid
 	var C = g.CELL
 	var col = int(floor(wp.x / C))
-	var res
+	var t = {"kind": "surface", "col": col, "row": g.surf_y(col) - 2, "z": 0, "foe": null, "pile": null, "diggable": false}
 	var foe = ant_view.pick_enemy(wp, 34.0)
 	if foe != null:
-		res = Orders.issue(sim, sel, "attack", foe.x, foe.y, foe.z, foe.id)
+		t["kind"] = "foe"
+		t["foe"] = foe
+		t["col"] = foe.x
+		t["row"] = foe.y
+		t["z"] = foe.z
+		return t
+	var surf = world_view.ground.smooth_px(col)
+	if wp.y < surf + C * 1.5:
+		var best = null
+		for p in sim.piles:
+			if p["amount"] > 4.0 and abs(p["x"] - col) <= 5 and (best == null or abs(p["x"] - col) < abs(best["x"] - col)):
+				best = p
+		if best != null:
+			t["kind"] = "pile"
+			t["pile"] = best
+		return t
+	var row = int(floor(wp.y / C))
+	var z = 0 if (g.can_walk(col, row, 0) or not g.can_walk(col, row, 1)) else 1
+	t["row"] = row
+	t["z"] = z
+	if g.is_solid(col, row, z):
+		t["kind"] = "soil"
+		t["diggable"] = g.diggable(col, row, z)
 	else:
-		var surf = world_view.ground.smooth_px(col)
-		if wp.y < surf + C * 1.5:
-			var pile_near = false
-			for p in sim.piles:
-				if p["amount"] > 4.0 and abs(p["x"] - col) <= 5:
-					pile_near = true
-					break
-			res = Orders.issue(sim, sel, "harvest" if pile_near else "move", col, g.surf_y(col) - 2)
-		else:
-			var row = int(floor(wp.y / C))
-			var z = 0 if (g.can_walk(col, row, 0) or not g.can_walk(col, row, 1)) else 1
-			res = Orders.issue(sim, sel, "dig" if g.is_solid(col, row, z) else "move", col, row, z)
-	sim.toasts.append({"text": res["msg"], "t": 2.5})
+		t["kind"] = "tunnel"
+	return t
+
+
+# Right-click: the options menu at the cursor (Shift + right-click does the first order on it at once).
+func open_context_menu(screen_pos: Vector2, quick: bool = false) -> void:
+	var list = cmenu.build(menu_target(_to_world(screen_pos)))
+	if quick:
+		var act = cmenu.quick_act(list)
+		if not act.empty():
+			menu_choice(act)
+			return
+	cmenu.open(screen_pos, list)
+
+
+# An option picked from the menu.
+func menu_choice(act: Dictionary) -> void:
+	var sel = live_selection()
+	match str(act.get("t", "")):
+		"order":
+			var res = Orders.issue(sim, sel, str(act["kind"]), int(act["x"]), int(act["y"]), int(act.get("z", 0)), int(act.get("ref", 0)))
+			sim.toasts.append({"text": res["msg"], "t": 2.5})
+		"free":
+			release_selection()
+		"cast":
+			var from = selected
+			if from == null and str(act["id"]) == "breed" and not sel.empty():
+				from = sel[0]
+			sim.cast(str(act["id"]), int(act.get("x", 0)), from)
+		"beacon":
+			sim.place_beacon(int(act["x"]))
 
 
 func release_selection() -> void:
