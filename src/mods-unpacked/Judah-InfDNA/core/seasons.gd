@@ -12,7 +12,7 @@ const NOTES = [
 	"Spring: the thaw. Food returns and the queen lays faster.",
 	"Summer: steady food. Keep an eye on the sky.",
 	"Autumn: a glut of rich food. Fill the larder before winter!",
-	"Winter: hardly any food on the surface and everyone eats more. Live off your stores.",
+	"Winter: hardly any food on the surface and everyone eats a little more, but the ants huddle and age slowly. Live off your stores.",
 ]
 
 
@@ -100,6 +100,10 @@ static func raid_k(t: float) -> float:        # how often raids come (the raider
 
 static func walk_k(t: float) -> float:        # how fast ants walk over the open ground (stiff with cold)
 	return 1.0 - 0.15 * winter(t)
+
+
+static func age_k(t: float) -> float:         # how fast ants grow old: they huddle in the cold, so a lean winter is not a cull by old age too
+	return 1.0 - 0.5 * winter(t)
 
 
 # ---- the views' side (all 0..1)

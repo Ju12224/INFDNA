@@ -210,6 +210,8 @@ var dist_threat := PoolIntArray()
 var fx: Array = []               # view effects: {"kind", "pos", "text", "color", "t"}
 var _threat_timer := 0.0
 var _alarm_timer := 0.0
+var _alert_n := 0                 # hostiles the colony answers right now (see _alerts)
+const ALERT_RANGE = 240           # cells from the entrance: the threat field reaches 260, and a hostile further out is no reason to leave the food runs
 var _queen_calm := 0.0
 var queen_def := {}
 var shake := 0.0                 # camera kick requested by the sim (view consumes it)
@@ -664,6 +666,7 @@ var _s_upkeep := 1.0
 var _s_lay := 1.0
 var _s_walk := 1.0
 var _s_raid := 1.0
+var _s_age := 1.0
 var _s_warned := false
 
 
@@ -675,6 +678,7 @@ func _step_seasons(_dt: float) -> void:
 	_s_lay = Seasons.lay_k(time)
 	_s_walk = Seasons.walk_k(time)
 	_s_raid = Seasons.raid_k(time)
+	_s_age = Seasons.age_k(time)
 	var idx = Seasons.index(time)
 	if idx != season:
 		var was = season
@@ -997,9 +1001,9 @@ func _step_bird(dt: float) -> void:
 # shaggy, a huge pile of hit points that grows with the colony). It sieges the entrance like the other bosses, and every couple of
 # seconds its long tongue licks up to three ants off the ground near it. Rally the soldiers to the entrance; Recall keeps the rest
 # below. Killing one earns food and a mutagen.
-var _anteater_timer := 480.0
+var _anteater_timer := 600.0
 var anteaters_slain := 0
-const ANTEATER_CD = 2.6
+const ANTEATER_CD = 3.2
 
 
 func _step_anteater_spawn(dt: float) -> void:
@@ -1010,7 +1014,7 @@ func _step_anteater_spawn(dt: float) -> void:
 		if e.kind == "anteater":
 			_anteater_timer = 60.0
 			return
-	if ants.size() < 45 or _inside_n > 0 or collapsed:
+	if ants.size() < 70 or _inside_n > 0 or collapsed:
 		_anteater_timer = 30.0
 		return
 	_anteater_timer = rng.randf_range(520.0, 760.0)
@@ -1033,7 +1037,7 @@ func _anteater_tongue(e, dt: float) -> void:
 		e.tongue_cd = 0.4
 		return
 	e.tongue_cd = ANTEATER_CD * rng.randf_range(0.85, 1.15)
-	var n = 1 + (1 if near.size() >= 6 else 0) + (1 if near.size() >= 14 else 0)
+	var n = 1 + (1 if near.size() >= 10 else 0) + (1 if near.size() >= 24 else 0)
 	var mouth = enemy_pos(e) + Vector2(e.facing * 150.0, -55.0)
 	for i in n:
 		if near.empty():
@@ -1135,11 +1139,14 @@ func _update_stimuli() -> void:
 	_stim_defend = 0.0
 	# how many non-soldiers a raid is worth: a handful of small raiders does not need half the colony off the food runs
 	var threat := 0.0
+	var hostiles := 0
 	for e0 in enemies:
-		if e0.cls != "prey" and e0.state != 2:
-			threat += DEFEND_WEIGHT.get(e0.cls, 1.0)
+		if _alerts(e0):
+			hostiles += 1
+			if e0.state != 2:
+				threat += DEFEND_WEIGHT.get(e0.cls, 1.0)
+	_alert_n = hostiles
 	_defender_cap = 6 + int(5.0 * threat)
-	var hostiles = hostile_count()
 	_inside_n = 0
 	if hostiles > 0:
 		var inside := 0
@@ -1172,7 +1179,7 @@ func _update_stimuli() -> void:
 	# rooms even when the nest isn't crowded (more when workshops are waiting)
 	# (only for an established colony with a surplus: v0.16 playtest showed a crew pulled
 	#  from a small colony starves it)
-	if ants.size() >= 60 and food > food_target and hostile_count() == 0:
+	if ants.size() >= 60 and food > food_target and _alert_n == 0:
 		_stim_dig = max(_stim_dig, 0.14 + 0.04 * planner.wanted_rooms.size())
 
 
@@ -1337,7 +1344,7 @@ func _footing_fix(u, dt: float) -> void:
 
 
 func _step_ant(a, dt: float) -> void:
-	a.age += dt
+	a.age += dt * _s_age
 	a.hurt = max(0.0, a.hurt - dt)
 	a.shelter_t = max(0.0, a.shelter_t - dt)
 	a.timer += dt
@@ -2453,7 +2460,7 @@ func _spawn_enemy(kind: String, side: int, from_x: int = 0, guard_at: int = 0) -
 		else:
 			e.max_hp *= clamp(ants.size() / 70.0, 0.55, 1.0)   # a small colony faces a weaker borer
 	if kind == "anteater":
-		e.max_hp *= clamp(ants.size() / 110.0, 0.7, 1.7)       # bigger colony, bigger beast
+		e.max_hp = (400.0 + 6.5 * ants.size()) * fate.raider_hp_mult      # it grows with the colony, not with the raid count
 	e.hp = e.max_hp
 	e.heading = -side
 	e.facing = e.heading
@@ -3022,12 +3029,12 @@ func _step_threat(dt: float) -> void:
 		_threat_timer = 0.7
 		var src := []
 		for e in enemies:
-			if e.cls != "prey" and grid.can_walk(e.x, e.y, e.z):   # passive prey is not a threat
+			if _alerts(e) and grid.can_walk(e.x, e.y, e.z):   # passive prey and far-off wanderers are not a threat
 				src.append(Vector3(e.x, e.y, e.z))
 		dist_threat = grid._bfs(src, 260) if not src.empty() else PoolIntArray()
 	# alarm: idle and digging ants reconsider quickly while raiders are present
 	_alarm_timer -= dt
-	if hostile_count() > 0 and _alarm_timer <= 0.0:
+	if _alert_n > 0 and _alarm_timer <= 0.0:
 		_alarm_timer = 2.0
 		for a in ants:
 			if a.task == Task.NURSE or a.task == Task.DIG or (a.task == Task.FORAGE and a.carry == 0.0 and grid.is_under(a.x, a.y)):
@@ -3047,7 +3054,7 @@ func _defend(a) -> void:
 		else:
 			_go(a, Vector2(a.x, a.y))
 		return
-	if hostile_count() == 0 or a.timer > 70.0 or dist_threat.size() == 0:
+	if _alert_n == 0 or a.timer > 70.0 or dist_threat.size() == 0:
 		a.task = Task.HOME
 		_descend(a, grid.dist_home)
 		return
@@ -3223,6 +3230,12 @@ func hostile_count() -> int:
 		if e.cls != "prey":
 			n += 1
 	return n
+
+
+# A hostile the colony has a reason to answer: near the nest, or in it. A cave spider still 600 cells out used to keep most of the
+# colony standing guard (and off the food runs) for the minutes it took to walk home.
+func _alerts(e) -> bool:
+	return e.cls != "prey" and (abs(e.x - int(grid.entrance.x)) <= ALERT_RANGE or grid.is_under(e.x, e.y))
 
 
 func _step_economy(dt: float) -> void:

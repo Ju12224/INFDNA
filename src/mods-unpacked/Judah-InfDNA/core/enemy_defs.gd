@@ -37,7 +37,7 @@ const DEFS = {
 
 	# v0.29: the anteater is not part of a raid roster. It lumbers in now and then (colony_sim._step_anteater): slow, shaggy
 	# and huge, it sieges the entrance and licks ants off the ground with its tongue.
-	"anteater": {"name": "Anteater", "hp": 1000.0, "dmg": 6.5, "speed": 1.5, "cls": "boss", "food": 190.0, "cost": 18, "tex": [], "art": "anteater"},
+	"anteater": {"name": "Anteater", "hp": 1000.0, "dmg": 6.5, "ant_mult": 0.3, "speed": 1.5, "cls": "boss", "food": 190.0, "cost": 18, "tex": [], "art": "anteater"},
 
 	# v0.29: the rival colony's ants (drawn procedurally, bigger for the heavier castes)
 	"redant": {"name": "Red Ant", "hp": 34.0, "dmg": 2.4, "speed": 4.2, "cls": "small", "food": 7.0, "cost": 1, "tex": [], "art": "redant", "art_scale": 1.0},
