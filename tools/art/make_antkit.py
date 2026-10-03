@@ -206,6 +206,13 @@ def partition(sh, island_ids, seeds):
             sizes = ndi.sum(np.ones_like(cl), cl, index=np.arange(1, n + 1))
             keep = np.isin(cl, [i + 1 for i, s in enumerate(sizes) if s >= 0.05 * sizes.max()])
             m = m & ndi.binary_dilation(keep, structure=np.ones((3, 3), bool), iterations=2)
+        # the seam with a neighbour (pixels about as near the neighbour's fill as this part's) is smoothed: no 1-2 px bumps of the painted
+        # outline stick out where two outlines were fused; tips elsewhere are left alone
+        other = np.min(np.delete(dist, k, axis=0), axis=0) if len(seeds) > 1 else np.full(isl.shape, 1e9)
+        seam = other <= dist[k] + 8.0
+        if seam.any():
+            smooth = ndi.binary_opening(m, structure=disk(2))
+            m = (m & ~seam) | (smooth & seam)
         # soft pixels only as the part's own anti-aliased rim (the haze in a narrow gap between two outlines is nobody's)
         own_solid = m & solid
         if own_solid.any():

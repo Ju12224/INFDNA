@@ -315,9 +315,11 @@ func _draw_pit(ci: CanvasItem) -> void:
 	ci.draw_circle(Vector2(0, rx * 0.04), rx * 1.2, Color(0.4, 0.27, 0.17, 0.85 * k))
 	ci.draw_circle(Vector2.ZERO, rx * 1.07, Color(0.27, 0.17, 0.11, k))
 	ci.draw_circle(Vector2.ZERO, rx, Color(INK.r, INK.g, INK.b, k))
-	ci.draw_circle(Vector2(0, -rx * 0.07), rx * 0.95, Color(0.19, 0.12, 0.09, k))
-	ci.draw_circle(Vector2(0, rx * 0.1), rx * 0.88, Color(0.05, 0.03, 0.07, k))
-	ci.draw_circle(Vector2(0, rx * 0.2), rx * 0.62, Color(0.09, 0.04, 0.15, k))
+	ci.draw_circle(Vector2(0, -rx * 0.02), rx * 0.96, Color(0.33, 0.22, 0.15, k))          # the far wall of the hole, earth in layers
+	ci.draw_arc(Vector2(0, rx * 0.1), rx * 0.9, PI * 1.12, PI * 1.88, 28, Color(0.21, 0.13, 0.09, k), 4.0)
+	ci.draw_arc(Vector2(0, rx * 0.17), rx * 0.88, PI * 1.18, PI * 1.82, 28, Color(0.42, 0.3, 0.2, 0.8 * k), 3.0)
+	ci.draw_circle(Vector2(0, rx * 0.24), rx * 0.83, Color(0.05, 0.03, 0.07, k))           # and below it nothing: the void
+	ci.draw_circle(Vector2(0, rx * 0.32), rx * 0.6, Color(0.1, 0.04, 0.17, k))
 	ci.draw_arc(Vector2.ZERO, rx * 1.005, 0.0, TAU, 56, Color(vv.r, vv.g, vv.b, (0.5 + 0.3 * pulse) * k), 4.0, true)
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	# light far down in it, breathing
@@ -341,10 +343,10 @@ func _draw_pit(ci: CanvasItem) -> void:
 		var p0 = c + Vector2((_hash(j * 3.3 + 4.0) - 0.5) * rx * 1.4, (_hash(j * 4.7) - 0.5) * rx * PIT_FLAT * 0.9)
 		var p2 = p0 + Vector2(sin(_t * 0.8 + j * 1.7) * 9.0, -ph * (110.0 + 170.0 * h1))
 		var a = sin(PI * ph) * 0.8 * k
-		if j % 4 == 0 and gt != null:
-			var gs = Vector2(16.0, 16.0) * (1.0 + h1)
-			ci.draw_texture_rect(gt, Rect2(p2 - gs * 0.5, gs), false, Color(vv.r, vv.g, vv.b, a * 0.7))
-		ci.draw_circle(p2, (1.4 + 2.0 * h2) * (1.0 - 0.4 * ph), Color(0.85, 0.66, 1.0, a))
+		if j % 3 == 0 and gt != null:
+			var gs = Vector2(22.0, 22.0) * (1.0 + h1)
+			ci.draw_texture_rect(gt, Rect2(p2 - gs * 0.5, gs), false, Color(vv.r, vv.g, vv.b, a * 0.8))
+		ci.draw_circle(p2, (1.8 + 2.4 * h2) * (1.0 - 0.4 * ph), Color(0.88, 0.7, 1.0, a))
 
 
 # The near rim of the pit: earth heaved up along its front edge (a crescent under the hole), lit along the top, torn turf at its foot.

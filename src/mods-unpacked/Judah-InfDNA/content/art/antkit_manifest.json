@@ -1134,16 +1134,16 @@
   },
   "antenna_beaded_r": {
    "file": "antkit/antenna_beaded_r.png",
-   "w": 87,
+   "w": 86,
    "h": 166,
    "kind": "antenna",
    "pivot": [
-    13.5,
+    12.5,
     7.8
    ],
    "sheet": "antkit_full.png",
    "src": [
-    954,
+    955,
     822,
     1035,
     982
@@ -1175,8 +1175,8 @@
    "h": 164,
    "kind": "antenna",
    "pivot": [
-    22.7,
-    122.3
+    23.6,
+    122.5
    ],
    "sheet": "antkit_parts_b.png",
    "src": [
@@ -1761,7 +1761,7 @@
    "h": 116,
    "kind": "fur",
    "pivot": [
-    64.3,
+    64.2,
     58.2
    ],
    "sheet": "antkit_parts_b.png",
@@ -1775,16 +1775,16 @@
   },
   "fur_tuft_small": {
    "file": "antkit/fur_tuft_small.png",
-   "w": 98,
+   "w": 97,
    "h": 111,
    "kind": "fur",
    "pivot": [
-    49.1,
+    48.1,
     54.6
    ],
    "sheet": "antkit_parts_b.png",
    "src": [
-    1429,
+    1430,
     887,
     1521,
     992

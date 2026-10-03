@@ -160,10 +160,9 @@ func _draw_emerging(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade:
 	var f2 = Vector2(lerp(pc.x, feet.x, on), lerp(pc.y + ry * 0.3, feet.y, on) + (1.0 - q) * h * 0.42)
 	var sc = depth_scale * float(e.def.get("art_scale", 1.0)) * lerp(0.7, 1.0, q)
 	var lit = smoothstep(0.05, 0.85, em)
-	var tint = Color(lerp(0.3, 1.0, lit), lerp(0.2, 1.0, lit), lerp(0.42, 1.0, lit)) * shade
+	var tint = Color(lerp(0.42, 1.0, lit), lerp(0.3, 1.0, lit), lerp(0.58, 1.0, lit)) * shade
 	tint.a = alpha
 	var vv = WorldView.VOID_VIOLET
-	var gt = _dust[0] if not _dust.empty() else null
 	if not (CreatureArt.Rig.available("void") and CreatureArt.Rig.draw(ci, "void", f2, sc, e.facing, _t + e.id * 0.7, moving or em < 0.8, mouth, tint, e.flash > 0.0)):
 		CreatureArt.draw("voidmaw", ci, f2, sc, shade * lerp(0.35, 1.0, lit), alpha, _t, e.facing, e.id, moving, e.flash > 0.0, 0.0, mouth)
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
@@ -177,16 +176,16 @@ func _draw_emerging(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade:
 	# the near rim of the pit, in front of its sunk body (the same one the pit has: nothing changes when this one goes)
 	WorldView.draw_pit_lip(ci, pc, rx, alpha)
 	# dust billowing up round it (the thickest at the start), and clods thrown out of the pit
-	if gt != null:
+	if _glow:
 		for j in 10:
 			var hj = fmod(abs(sin(j * 7.31 + 1.0) * 43758.5453), 1.0)
-			var ph = fmod(_t * (0.35 + 0.25 * hj) + hj, 1.0)
+			var ph = fmod(_t * (0.3 + 0.22 * hj) + hj, 1.0)
 			var bx = (float(j) / 9.0 - 0.5) * rx * 1.9
-			var dp = pc + Vector2(bx + sin(_t + j) * 8.0, ry * 0.7 - ph * (40.0 + 90.0 * hj))
-			var ds = (80.0 + 90.0 * hj) * (0.6 + 0.6 * ph)
-			var dc = Color(0.74, 0.64, 0.56).linear_interpolate(Color(0.62, 0.5, 0.78), 0.3 * hj)
-			dc.a = sin(PI * ph) * fade * alpha
-			ci.draw_texture_rect(_dust[j % _dust.size()] if _dust[j % _dust.size()] != null else gt, Rect2(dp - Vector2(ds, ds) * 0.5, Vector2(ds, ds)), false, dc)
+			var dp = pc + Vector2(bx + sin(_t * 0.8 + j) * 10.0, ry * 0.8 - ph * (50.0 + 100.0 * hj))
+			var ds = (70.0 + 80.0 * hj) * (0.55 + 0.7 * ph)
+			var dc = Color(0.7, 0.6, 0.5).linear_interpolate(Color(0.6, 0.48, 0.74), 0.35 * hj)
+			dc.a = sin(PI * ph) * 0.55 * fade * alpha
+			ci.draw_texture_rect(_glow, Rect2(dp - Vector2(ds, ds * 0.8) * 0.5, Vector2(ds, ds * 0.8)), false, dc)
 	for j in 7:
 		var hj = fmod(abs(sin(j * 3.77 + 5.0) * 43758.5453), 1.0)
 		var ph = fmod(_t * 0.9 + hj, 1.0)

@@ -474,13 +474,13 @@ def detail_layer(parts, P, Dleaf, Dbark, theta, rng, line_close):
         n1 = _noise(rng, (HH, HW), 12.0 * S)
         n2 = _noise(rng, (HH, HW), 3.0 * S)
         n3 = _noise(rng, (HH, HW), 0.7 * S)
-        field = n1 * 0.75 + n2 * 0.3 + low * 2.8 + left * 0.5 - 2.5
+        field = n1 * 0.75 + n2 * 0.3 + low * 2.8 + left * 0.5 - 2.65
         patch = smooth(field, 0.0, 0.45) * np.clip(bh, 0, 1) * smooth(yf, 0.42, 0.62) * P["moss"]
         grain = smooth(n3, -0.8, 0.9)
         d = 2 * S
         top = np.clip(patch - np.roll(patch, d, 0), 0, 1)          # the upper edge of a cushion catches the light
         bottom = np.clip(patch - np.roll(patch, -d, 0), 0, 1)      # its lower edge is in shade
-        moss_a = np.clip(patch * (0.5 + 0.12 * grain), 0, 0.62)
+        moss_a = np.clip(patch * (0.44 + 0.12 * grain), 0, 0.56)
         moss_l = np.clip(top * 0.55 + patch * smooth(n3 + n2 * 0.3, 0.9, 1.9) * 0.3, 0, 0.5)
         moss_d = np.clip(bottom * 0.4, 0, 0.4)
 
