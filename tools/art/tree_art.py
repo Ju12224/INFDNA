@@ -181,19 +181,16 @@ def split_lines(im, kind):
     d = np.sqrt(((rgb - ink) ** 2).sum(-1))
     K = 1.0 - smooth(d, 12.0, 38.0)                          # how much of the pixel's colour is ink
     inkb = (K > 0.5) & (A > 0.5)
-    blob = ndi.binary_opening(inkb, structure=disk(4 if kind == "oak" else 5))
+    blob = ndi.binary_opening(inkb, structure=disk(6 if kind == "oak" else 5))
     blob = ndi.binary_dilation(blob, structure=disk(1)) & (K > 0.2)
     lineb = inkb & ~blob
     if kind != "oak":
         dout = ndi.distance_transform_edt(A > 0.5)
         lineb &= dout <= 8.0
-    near = ndi.binary_dilation(lineb, iterations=2) & ~blob
+    near = ndi.binary_dilation(lineb, structure=disk(3)) & ~blob
     if kind != "oak":
-        near &= ndi.distance_transform_edt(A > 0.5) <= 10.0
-    Lr = np.where(near, K, 0.0)                               # the line's share of each pixel's colour
-    Lr = np.where(A < 0.5, np.where(near, 1.0, 0.0), Lr)      # the soft outer edge of the outline is all line
-    # paint the lines out: each line pixel takes the colour of the nearest clean pixel beside the line (a little way off, past the
-    # anti-aliased fringe), smoothed so the fill has no seams
+        near &= ndi.distance_transform_edt(A > 0.5) <= 11.0
+    # the colour under each line: that of the nearest clean pixel beside it (past the anti-aliased fringe), smoothed so the fill has no seams
     clean = (A > 0.9) & (K < 0.2) & ~ndi.binary_dilation(near, iterations=1)
     if clean.any():
         idx = ndi.distance_transform_edt(~clean, return_distances=False, return_indices=True)
@@ -201,8 +198,13 @@ def split_lines(im, kind):
         F = np.stack([ndi.gaussian_filter(F[..., c], 1.1) for c in range(3)], -1)
     else:
         F = rgb
-    wf = smooth(Lr, 0.03, 0.5)
-    base_rgb = rgb * (1 - wf[..., None]) + F * wf[..., None]
+    # how much of each pixel near a line is the line: the pixel is unmixed into ink and the colour under it (an anti-aliased edge pixel is part of both)
+    dv = F - ink
+    t = ((rgb - ink) * dv).sum(-1) / np.maximum((dv * dv).sum(-1), 400.0)
+    Lr = np.where(near, np.clip(1.0 - t, 0.0, 1.0), 0.0)
+    Lr = np.where(lineb, np.maximum(Lr, K), Lr)
+    Lr = np.where((A < 0.5) & near, 1.0, Lr)                  # the soft outer edge of the outline is all line
+    base_rgb = np.where(near[..., None], F, rgb)
     base_rgb = bleed(base_rgb, A)
     ink_full = np.clip(Lr * A, 0, 1)
 
@@ -418,6 +420,7 @@ def detail_layer(parts, P, Dleaf, Dbark, theta, rng, line_close):
     light_a = np.zeros((HH, HW), np.float32)
     moss_a = np.zeros((HH, HW), np.float32)
     moss_l = np.zeros((HH, HW), np.float32)
+    moss_d = np.zeros((HH, HW), np.float32)
     up = lambda arr: np.clip(resize_f(arr.astype(np.float32), (HW, HH), Image.BILINEAR), 0, None)
     yy = (np.arange(HH, dtype=np.float32) / S)[:, None]
     yf = np.clip((yy - parts.y0) / max(1.0, parts.y1 - parts.y0), 0, 1)
@@ -468,14 +471,18 @@ def detail_layer(parts, P, Dleaf, Dbark, theta, rng, line_close):
         cx0 = float(cols.mean()) if len(cols) else W * 0.5
         left = smooth((cx0 - xx) / max(1.0, W * 0.25), -0.6, 1.0)
         low = smooth(yf, 0.55, 0.98)
-        n1 = _noise(rng, (HH, HW), 13.0 * S)
+        n1 = _noise(rng, (HH, HW), 12.0 * S)
         n2 = _noise(rng, (HH, HW), 3.0 * S)
         n3 = _noise(rng, (HH, HW), 0.7 * S)
-        field = n1 * 0.9 + n2 * 0.3 + low * 2.6 + left * 0.7 - 2.3
-        patch = smooth(field, 0.0, 0.9) * np.clip(bh, 0, 1) * P["moss"]
+        field = n1 * 0.75 + n2 * 0.3 + low * 2.8 + left * 0.5 - 2.5
+        patch = smooth(field, 0.0, 0.45) * np.clip(bh, 0, 1) * smooth(yf, 0.42, 0.62) * P["moss"]
         grain = smooth(n3, -0.8, 0.9)
-        moss_a = np.clip(patch * (0.5 + 0.16 * grain), 0, 0.6)
-        moss_l = np.clip(patch * smooth(n2 * 0.7 + n3 * 0.35 + 0.2, 0.3, 1.5) * 0.45, 0, 0.4)
+        d = 2 * S
+        top = np.clip(patch - np.roll(patch, d, 0), 0, 1)          # the upper edge of a cushion catches the light
+        bottom = np.clip(patch - np.roll(patch, -d, 0), 0, 1)      # its lower edge is in shade
+        moss_a = np.clip(patch * (0.5 + 0.12 * grain), 0, 0.62)
+        moss_l = np.clip(top * 0.55 + patch * smooth(n3 + n2 * 0.3, 0.9, 1.9) * 0.3, 0, 0.5)
+        moss_d = np.clip(bottom * 0.4, 0, 0.4)
 
     if P["tufts"] > 0 and parts.green.any():
         # a few leaves on the rims of the clumps: lit ones where the rim faces the sun, shaded ones on the other side; small and soft
@@ -526,8 +533,9 @@ def detail_layer(parts, P, Dleaf, Dbark, theta, rng, line_close):
     acc_a = np.zeros((HH, HW), np.float32)
     _over(acc_rgb, acc_a, [14, 10, 12], np.clip(dark_a, 0, 0.6) * keep_h)
     if P["moss"] > 0:
-        _over(acc_rgb, acc_a, [62, 92, 44], moss_a * keep_h)
-        _over(acc_rgb, acc_a, [112, 148, 72], moss_l * keep_h)
+        _over(acc_rgb, acc_a, [70, 102, 46], moss_a * keep_h)
+        _over(acc_rgb, acc_a, [30, 48, 26], moss_d * keep_h)
+        _over(acc_rgb, acc_a, [136, 170, 82], moss_l * keep_h)
     _over(acc_rgb, acc_a, [240, 236, 196], np.clip(light_a, 0, 0.4) * keep_h)
     rgb = np.where(acc_a[..., None] > 1e-4, acc_rgb / np.maximum(acc_a, 1e-4)[..., None], 0)
     rgb = bleed(rgb, acc_a, 1e-3)

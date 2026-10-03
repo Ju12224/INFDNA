@@ -85,34 +85,76 @@ func _process(delta: float) -> void:
 		if _under > 0.5:
 			_drip_env = 1.0
 	var bird_on = _bird_left > 0.0
+	# The sample loop runs ~22000 times a second, so it is kept lean: the filter states live in locals, every per-sample constant
+	# is worked out once, the cricket voices are unrolled, and the samples go to the player in one push_buffer (same sound as
+	# the old per-sample loop; about half the cost, measured).
+	var inv = 1.0 / RATE
+	var t0 = _t
+	var lp1 = _lp1
+	var lp2 = _lp2
+	var lp3 = _lp3
+	var hp = _hp
+	var wind9 = wind_gain * 9.0
+	var rain_on = rain_gain > 0.0
+	var crick = cricket_gain > 0.0
+	var ch = cricket_gain * 0.5
+	var rum_on = rumble_gain > 0.0
+	var rum4 = rumble_gain * 4.0
+	var b0 = (_bird_len - _bird_left) / 0.2
+	var binv = inv / 0.2
+	var bph = _bird_ph
+	var bf = TAU * _bird_f0 * inv
+	var bk = TAU * 650.0 * inv
+	var denv = _drip_env
+	var dph = _drip_ph
+	var dk = 0.07 * _under
+	var buf := PoolVector2Array()
+	buf.resize(frames)
 	for i in frames:
-		var ts = _t + float(i) / RATE
 		var n = randf() * 2.0 - 1.0
-		_lp1 += (n - _lp1) * a1
-		_lp2 += (_lp1 - _lp2) * a1
-		var v = _lp2 * wind_gain * 9.0
-		if rain_gain > 0.0:
-			_hp += (n - _hp) * 0.35
-			v += (n - _hp) * rain_gain
-		if cricket_gain > 0.0:
-			for q in 3:
-				var cyc = fposmod(ts * (1.05 + 0.13 * q) + q * 0.37, 1.0)
-				if cyc < 0.3:
-					var pulse = 0.5 + 0.5 * sin(TAU * (34.0 + 3.0 * q) * ts)
-					v += sin(TAU * (4150.0 + 190.0 * q) * ts) * pulse * pulse * cricket_gain * 0.5
+		lp1 += (n - lp1) * a1
+		lp2 += (lp1 - lp2) * a1
+		var v = lp2 * wind9
+		if rain_on:
+			hp += (n - hp) * 0.35
+			v += (n - hp) * rain_gain
+		if crick:
+			# three voices: chirp rate 1.05 / 1.18 / 1.31 Hz, trill 34 / 37 / 40 Hz, pitch 4150 / 4340 / 4530 Hz
+			var ts = t0 + i * inv
+			if fposmod(ts * 1.05, 1.0) < 0.3:
+				var pulse = 0.5 + 0.5 * sin(213.62830044410595 * ts)
+				v += sin(26075.219024795285 * ts) * pulse * pulse * ch
+			if fposmod(ts * 1.18 + 0.37, 1.0) < 0.3:
+				var pulse2 = 0.5 + 0.5 * sin(232.4778563656447 * ts)
+				v += sin(27269.024233159467 * ts) * pulse2 * pulse2 * ch
+			if fposmod(ts * 1.31 + 0.74, 1.0) < 0.3:
+				var pulse3 = 0.5 + 0.5 * sin(251.32741228718345 * ts)
+				v += sin(28462.829441523654 * ts) * pulse3 * pulse3 * ch
 		if bird_on:
 			# a run of short chirps: each one glides up in pitch under a smooth envelope
-			var cu = fposmod(((_bird_len - _bird_left) + float(i) / RATE) / 0.2, 1.0)
+			var cu = fposmod(b0 + i * binv, 1.0)
 			if cu < 0.62:
-				var env = sin(PI * (cu / 0.62))
-				_bird_ph += TAU * (_bird_f0 + 650.0 * (cu / 0.62)) / RATE
-				v += sin(_bird_ph) * env * env * 0.09
-		if rumble_gain > 0.0:
-			_lp3 += (n - _lp3) * 0.006
-			v += _lp3 * rumble_gain * 4.0
-		if _drip_env > 0.002:
-			_drip_ph += TAU * (1500.0 - 500.0 * (1.0 - _drip_env)) / RATE
-			v += sin(_drip_ph) * _drip_env * 0.07 * _under
-			_drip_env *= 0.9993
-		v = clamp(v, -0.85, 0.85)
-		_pb.push_frame(Vector2(v, v))
+				var cn = cu / 0.62
+				var env = sin(PI * cn)
+				bph += bf + bk * cn
+				v += sin(bph) * env * env * 0.09
+		if rum_on:
+			lp3 += (n - lp3) * 0.006
+			v += lp3 * rum4
+		if denv > 0.002:
+			dph += TAU * (1500.0 - 500.0 * (1.0 - denv)) * inv
+			v += sin(dph) * denv * dk
+			denv *= 0.9993
+		if v > 0.85:
+			v = 0.85
+		elif v < -0.85:
+			v = -0.85
+		buf[i] = Vector2(v, v)
+	_pb.push_buffer(buf)
+	_lp1 = lp1
+	_lp2 = lp2
+	_lp3 = lp3
+	_hp = hp
+	_bird_ph = bph
+	_drip_env = denv
+	_drip_ph = dph

@@ -50,11 +50,62 @@ func tex_mip(file: String):
 	var img = Image.new()
 	var t = null
 	if img.load(DIR + file) == OK:
-		var it = ImageTexture.new()
-		it.create_from_image(img, Texture.FLAG_FILTER | Texture.FLAG_MIPMAPS)
-		t = it
+		t = _mip_texture(img)
 	_tex[key] = t
 	return t
+
+
+func _mip_texture(img: Image):
+	var it = ImageTexture.new()
+	it.create_from_image(img, Texture.FLAG_FILTER | Texture.FLAG_MIPMAPS)
+	return it
+
+
+func has_tex_mip(file: String) -> bool:
+	return _tex.has("m:" + file)
+
+
+# A big picture with mipmaps (the close-up layers of a tree) read off the main thread, so zooming in never stalls a frame: null until it is ready
+# (ask again next frame). One file is read at a time, in the order asked; where threads cannot start it is read at once instead.
+var _thread = null
+var _job := ""
+var _job_img = null
+var _queue := []
+
+
+func tex_mip_async(file: String):
+	var key = "m:" + file
+	if _tex.has(key):
+		return _tex[key]
+	if file != _job and not _queue.has(file):
+		_queue.append(file)
+	_pump()
+	return _tex.get(key)
+
+
+func _pump() -> void:
+	if _thread != null:
+		if _thread.is_alive():
+			return
+		_thread.wait_to_finish()
+		_thread = null
+		var img = _job_img
+		_job_img = null
+		_tex["m:" + _job] = _mip_texture(img) if img != null else null
+		_job = ""
+	if _queue.empty():
+		return
+	_job = _queue.pop_front()
+	_thread = Thread.new()
+	if _thread.start(self, "_read_job", _job) != OK:
+		_thread = null
+		_tex["m:" + _job] = tex_mip(_job)
+		_job = ""
+
+
+func _read_job(file: String) -> void:
+	var img = Image.new()
+	_job_img = img if img.load(DIR + file) == OK else null
 
 
 # A creature entry of the manifest ({} when there is none).

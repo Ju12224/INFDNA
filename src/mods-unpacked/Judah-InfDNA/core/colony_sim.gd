@@ -1605,6 +1605,20 @@ func _rescue(u) -> void:
 		rescued += 1
 
 
+# ---- gait: how an ant walks (the rules of where it may step are locomotion.gd's). It pauses now and then, sets off slowly and gets up to speed
+# (the ramp is kept in the gait word, see Loco.DIR_MASK), slows for a sharp turn, carries a load a little slower than it walks out light, turns its body
+# smoothly, and takes its time squeezing through to the other tunnel plane.
+const ROT_RATE = 7.0           # rad/s: the fastest a body turns (a quarter turn takes about a quarter of a second)
+const RAMP_T = 0.3             # s from standing to full speed
+const RAMP_MIN = 0.3           # share of full speed it sets off at
+const RAMP_CAP = [255, 235, 175, 110, 70]   # speed kept through a turn of 0..4 eighths (straight on .. straight back), out of 255
+const LADEN_K = 0.93           # on open ground a forager with a load walks this much slower ...
+const OUT_K = 1.08             # ... and one going out light this much faster, so a round trip takes as long as before
+const SPOIL_K = 0.95           # a digger with a dirt pellet
+var _pause_req := 0.0          # a pause the deciding ant's task asked for (_on_arrive applies it once the task has chosen where to go)
+var occ := PoolIntArray()      # tunnel cells (both planes) an ant is about to enter or stands in: taken until this time (tenths of a sim second)
+
+
 func _step_ant(a, dt: float) -> void:
 	a.age += dt * _s_age
 	a.hurt = max(0.0, a.hurt - dt)
@@ -1621,28 +1635,30 @@ func _step_ant(a, dt: float) -> void:
 		_rescue(a)
 	_qe("a_misc", q0)
 
-	# smooth body rotation toward the local ground normal
-	# (in a narrow tunnel floor and ceiling nearly cancel; one extra ceiling cell used to
-	# flip the normal and turn the ant upside down. A floor under the feet wins.)
-	# (cached per target cell: the normal only changes when the ant enters a new cell)
+	# the body turns smoothly toward the tilt _orient chose for this step, never faster than ROT_RATE (it used to swing a quarter turn in two ticks)
 	if rot_every <= 1 or (_tick_n + a.id) % rot_every == 0:
-		var rk = a.tx * 7919 + a.ty * 31 + a.tz
-		if rk != a.rot_key:
-			a.rot_key = rk
-			if grid.is_surface_cell(a.tx, a.ty):
-				a.trot = grid.surface_tilt(a.tx)      # open ground: follow the smoothed hill, not the 6 px stair steps
-			else:
-				var n = grid.ground_normal(a.tx, a.ty, a.tz)
-				a.trot = atan2(-n.x, n.y)
-				if grid.is_solid(a.tx, a.ty + 1, a.tz) or grid.is_solid(a.x, a.y + 1, a.z):
-					a.trot = clamp(a.trot, -1.1, 1.1)
-		a.rot = lerp_angle(a.rot, a.trot, clamp(dt * 8.0 * rot_every, 0.0, 1.0))
+		var dr = wrapf(a.trot - a.rot, -PI, PI)
+		if dr != 0.0:
+			var kr = dt * rot_every
+			var lim = ROT_RATE * kr
+			a.rot += clamp(dr * min(1.0, kr * 9.0), -lim, lim)
 
 	if a.dig_timer > 0.0:
 		a.dig_timer -= dt
 		if a.dig_timer <= 0.0:
 			_finish_dig(a)
 		return
+
+	# a pause: the ant stands where it is for a moment (looking about, antennae out) and decides nothing until it is over. Being bitten, being
+	# called to defend or given an order ends it at once.
+	if a.t < 0.0:
+		if a.hurt > 0.0 or a.squad != 0 or a.task == Task.DEFEND or a.tx != a.x or a.ty != a.y or a.tz != a.z:
+			a.t = 0.0
+		else:
+			a.t += dt
+			if a.t < 0.0:
+				return
+			a.t = 0.0
 
 	var dist = a.hop if a.hop > 0.0 else (1.4142 if (a.tx != a.x and a.ty != a.y) else 1.0)
 	if a.tx == a.x and a.ty == a.y and a.tz == a.z:
@@ -1655,6 +1671,21 @@ func _step_ant(a, dt: float) -> void:
 			sp *= 1.45 + 0.3 * mod("surge_power")
 		if not und and a.task == Task.FORAGE:
 			sp *= 1.0 + TRAIL_BOOST * min(1.0, grid.pher_at(a.x) / 1.2)   # ants run faster on a used trail
+			sp *= LADEN_K if a.carry > 0.0 else OUT_K
+		elif a.spoil > 0.0:
+			sp *= SPOIL_K
+		# getting up to speed: the mean of the ramp over this tick, so the step size does not change how far an ant gets
+		var gait = a.scout
+		var r0 = ((gait >> Loco.RAMP_SHIFT) & 255) / 255.0
+		if r0 < 1.0:
+			var r1 = r0 + dt / RAMP_T
+			var avg = (r0 + r1) * 0.5
+			if r1 >= 1.0:
+				var tr = (1.0 - r0) * RAMP_T
+				avg = ((r0 + 1.0) * 0.5 * tr + (dt - tr)) / dt
+				r1 = 1.0
+			sp *= RAMP_MIN + (1.0 - RAMP_MIN) * avg
+			a.scout = (gait & Loco.DIR_MASK) | (int(r1 * 255.0) << Loco.RAMP_SHIFT)
 		a.t += sp * dt / dist
 	# Arrival carries the overshoot into the next hop (v0.22). Before, the remainder was thrown
 	# away, so ants walked 9% slower than their speed at 1x and 19% slower at 4x-sized steps.
@@ -1672,25 +1703,108 @@ func _step_ant(a, dt: float) -> void:
 		if prof != null:
 			_qe("a_arrive", q1)
 			prof["n_hops"] = prof.get("n_hops", 0) + 1
+		if a.t < 0.0:
+			break                  # it stopped for a pause
 		var moved = a.tx != a.x or a.ty != a.y
 		if moved:
-			var move = Vector2(a.tx - a.x, a.ty - a.y)
-			var tangent = Vector2(cos(a.rot), sin(a.rot))
-			var d = move.dot(tangent)
-			if grid.is_surface_cell(a.x, a.y):
-				d = move.x       # open ground: left/right is simply the screen direction, and a vertical step (hill, shaft mouth) keeps facing
-			elif move.x == 0.0 and abs(tangent.y) < 0.7:
-				d = 0.0          # a plain vertical step on near-level ground must not turn the ant round
-			if abs(d) > 0.1:
-				a.facing = 1 if d > 0 else -1
+			_orient(a)
+		elif a.tz != a.z:
+			a.scout = Loco.PLANE_STEP | (int(min((a.scout >> Loco.RAMP_SHIFT) & 255, 60)) << Loco.RAMP_SHIFT)   # through the hole at a crawl
 		if (moved or a.tz != a.z) and a.dig_timer <= 0.0:
 			dist = a.hop if a.hop > 0.0 else (1.4142 if (a.tx != a.x and a.ty != a.y) else 1.0)
 			a.t = min(over / dist, 1.6)
+			if occ.size() == grid.PLANES * grid.WH and grid.is_under(a.tx, a.ty):
+				_occupy(a.tx, a.ty, a.tz, 3)
 		else:
+			a.scout = a.scout & Loco.DIR_MASK     # standing: it will set off slowly
 			break
 
 
+# The body's target tilt and the way the ant faces, set once per step. On open ground: the smoothed hill, and left/right is the screen direction. In
+# the tunnels: the floor under its feet (the nearest solid ground), facing the way the step goes along the body. Where the walls of a shaft or crack
+# cancel out, or it climbs a chimney or scrambles a ledge, the body lies along the way it is going (it used to go up a shaft lying flat, like a lift).
+# A plain vertical step on level ground never turns it round. Also notes the step in the gait word and slows the ant for a sharp turn.
+func _orient(a) -> void:
+	var mx = a.tx - a.x
+	var my = a.ty - a.y
+	var f = a.facing
+	var th = a.trot
+	if grid.is_surface_cell(a.tx, a.ty):
+		if abs(my) <= abs(mx):
+			th = grid.surface_tilt(a.tx)
+			f = 1 if mx > 0 else -1
+		else:
+			th = atan2(f * my, f * mx)
+	else:
+		var n = _floor_dir(a.tx, a.ty, a.tz)
+		var nl = n.x * n.x + n.y * n.y
+		if nl * 3.0 >= n.z and nl > 0.0:
+			th = atan2(-n.x, n.y)
+			if grid.is_solid(a.tx, a.ty + 1, a.tz) or grid.is_solid(a.x, a.y + 1, a.z):
+				th = clamp(th, -1.1, 1.1)       # a floor under the feet wins (a ceiling cell must not turn it upside down)
+			var d = mx * cos(th) + my * sin(th)
+			if abs(d) > 0.35 * sqrt(mx * mx + my * my):
+				f = 1 if d > 0 else -1
+		else:
+			if abs(mx) >= abs(my) and mx * f < 0:
+				f = -f                                 # a level step against its facing: turn round rather than walk on upside down
+			th = atan2(f * my, f * mx)
+	a.trot = th
+	a.facing = f
+	var gait = a.scout
+	var code = Loco.dir_code(mx, my)
+	var r = (gait >> Loco.RAMP_SHIFT) & 255
+	var last = gait & Loco.DIR_MASK
+	if last != 0 and last != Loco.PLANE_STEP:
+		r = int(min(r, RAMP_CAP[Loco.TURN[last * 9 + code]]))
+	a.scout = code | (r << Loco.RAMP_SHIFT)
+
+
+# Solid cells round (x, y) in plane z: (sum of their offsets x, y; how many) - the raw ground normal and how boxed in the cell is.
+func _floor_dir(x: int, y: int, z: int) -> Vector3:
+	var g = grid
+	var xl = x - g.ox
+	if xl >= 1 and xl < g.W - 1 and y >= 1 and y < g.H - 1:
+		var s = g.solid
+		var W = g.W
+		var b = z * g.WH + y * W + xl
+		var ul = s[b - W - 1]
+		var u = s[b - W]
+		var ur = s[b - W + 1]
+		var l = s[b - 1]
+		var r = s[b + 1]
+		var dl = s[b + W - 1]
+		var dd = s[b + W]
+		var dr = s[b + W + 1]
+		return Vector3(ur + r + dr - ul - l - dl, dl + dd + dr - ul - u - ur, ul + u + ur + l + r + dl + dd + dr)
+	var n = Vector3.ZERO
+	for i in 8:
+		if g.is_solid(x + Loco.OX[i], y + Loco.OY[i], z):
+			n += Vector3(Loco.OX[i], Loco.OY[i], 1)
+	return n
+
+
+# Mark a tunnel cell as taken for `tenths` tenths of a second (other ants then prefer a free cell next to it).
+func _occupy(x: int, y: int, z: int, tenths: int) -> void:
+	var i = z * grid.WH + y * grid.W + (x - grid.ox)
+	if i >= 0 and i < occ.size():
+		occ[i] = int(time * 10.0) + tenths
+
+
+# The ant stands where it is for `secs` (see _step_ant).
+func _pause(a, secs: float) -> void:
+	a.hop = 0.0
+	a.tx = a.x
+	a.ty = a.y
+	a.tz = a.z
+	a.t = -secs
+	a.scout = a.scout & Loco.DIR_MASK
+	if occ.size() == grid.PLANES * grid.WH and grid.is_under(a.x, a.y):
+		_occupy(a.x, a.y, a.z, int(secs * 10.0) + 1)
+
+
 func _on_arrive(a) -> void:
+	_pause_req = 0.0
 	if not grid.is_under(a.x, a.y):
 		a.lane = clamp(a.lane + rng.randf_range(-0.02, 0.02), 0.0, 1.0)      # small steps: ants hop 18 cells a second now, and big ones made them shimmer
 		if a.task == Task.FORAGE and grid.pher_at(a.x) > 0.8:
@@ -1707,6 +1821,8 @@ func _on_arrive(a) -> void:
 
 	if a.squad != 0 and Orders.obey(self, a):
 		return
+	var c0 = a.carry
+	var task0 = a.task
 	var q2 = _qb()
 	match a.task:
 		Task.FORAGE:
@@ -1726,6 +1842,21 @@ func _on_arrive(a) -> void:
 				_choose_task(a)
 			else:
 				_descend(a, grid.dist_home)
+	# moments an ant stands still: at the pile with its mandibles full, at home having handed the food over, having just taken up a new job, and
+	# (sometimes) with its head out of the nest mouth before it steps out
+	if a.task == Task.DEFEND or a.squad != 0 or a.dig_timer > 0.0:
+		return
+	if a.carry > 0.0 and c0 <= 0.0:
+		_pause_req = max(_pause_req, rng.randf_range(0.3, 0.45))
+	elif c0 > 0.0 and a.carry <= 0.0:
+		_pause_req = max(_pause_req, rng.randf_range(0.25, 0.5))
+	elif a.task != task0:
+		_pause_req = max(_pause_req, rng.randf_range(0.15, 0.4))
+	elif a.task == Task.FORAGE and a.carry <= 0.0 and a.ty < a.y and grid.is_under(a.x, a.y) and not grid.is_under(a.tx, a.ty) and rng.randf() < 0.4:
+		_pause_req = max(_pause_req, rng.randf_range(0.2, 0.35))
+	if _pause_req > 0.0:
+		_pause(a, _pause_req)
+		_pause_req = 0.0
 
 
 func _go(a, c) -> void:
@@ -1736,10 +1867,13 @@ func _go(a, c) -> void:
 
 
 # Step down a distance field. Only strictly-closer cells are candidates (guaranteed
-# progress); among those, prefer cells touching dirt so ants crawl along surfaces.
-# Holes between the planes are one more step (the same cell in the other plane).
+# progress); among those, the one that turns least from the last step, preferring cells touching dirt (ants crawl along surfaces) and cells no other
+# ant is about to enter. Holes between the planes are one more step (the same cell in the other plane).
 func _descend(a, f: PoolIntArray) -> void:
-	Loco.descend(self, a, f, a is Ant)
+	var ant = a is Ant
+	if ant and occ.size() != grid.PLANES * grid.WH:
+		occ = grid._neg           # all -1 (free); the first mark copies it
+	Loco.descend(self, a, f, ant, ant)
 
 
 func _forage(a) -> void:
@@ -1876,12 +2010,15 @@ func _search(a, ex: int, off: int) -> bool:
 		if a.leg <= 0:          # short sweeps, not a coin flip every hop: the ant visibly casts about instead of vibrating
 			a.heading = -a.heading
 			a.leg = rng.randi_range(14, 24)
+			if rng.randf() < 0.6:
+				_pause_req = rng.randf_range(0.12, 0.25)     # stops, feels about with its antennae, turns
 		return false
 	if a.site != NO_SITE:
 		if abs(a.site - a.x) <= 2:
 			a.site = NO_SITE         # got there: the pile is gone, circle the spot
 			a.local_t = 40
 			a.leg = rng.randi_range(10, 18)
+			_pause_req = rng.randf_range(0.3, 0.5)          # nothing here any more: a moment at a loss
 		else:
 			a.heading = 1 if a.site > a.x else -1
 		return false
@@ -1899,6 +2036,7 @@ func _search(a, ex: int, off: int) -> bool:
 		a.leg = 25 + int(-log(max(0.001, rng.randf())) * LEG_MEAN)
 		if rng.randf() < 0.4:
 			a.heading = -a.heading
+			_pause_req = rng.randf_range(0.15, 0.3)        # a scout that turns back stops to think about it first
 	return false
 
 
@@ -2124,6 +2262,22 @@ func _nurse(a) -> void:
 		_choose_task(a)
 		if a.task != Task.NURSE:
 			return
+	# nurses potter about: a short walk along the floor of the nest (Loco.shuffle_home keeps it going one way), a moment standing over the brood,
+	# another walk (they used to step to a random neighbour five times a second, and vibrated)
+	if a.leg > 8:
+		a.leg = 0                 # (left over from a foraging leg)
+	if a.leg <= 0:
+		a.leg = rng.randi_range(2, 7)
+		a.scout = 0               # after standing it may set off either way
+		var stand = rng.randf_range(0.5, 2.2)
+		# never past the time it would think about another job (nursing spells keep their length, and with them the colony's share of nurses)
+		stand = min(stand, 5.05 - a.timer) if a.timer < 5.0 else min(stand, 0.3)
+		if stand > 0.05:
+			_pause_req = stand
+			return
+	a.leg -= 1
+	if a.leg == 0:
+		a.scout = (a.scout & Loco.DIR_MASK) | (int(min((a.scout >> Loco.RAMP_SHIFT) & 255, 120)) << Loco.RAMP_SHIFT)   # the last step of a walk slows into the stop
 	if Loco.shuffle_home(self, a):
 		return
 	var nb := []

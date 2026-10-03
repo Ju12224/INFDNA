@@ -62,8 +62,10 @@ def L(name, *lines, **kw):
 
 # ------------------------------------------------------------------------------------------------------------------------------- specs
 # body:  box on fauna_bodies.png (the pieces of the alpha whose centre lies in it), len_px = body length at the working size (nose to tail)
-# far / near: sheet a|b, box on it, s (leg px -> body px), legs back to front (the order they are drawn in), drop (body bits to throw away),
-#             wings, hips {leg name: (x, y) in body-sheet px}; per leg optional rot (deg, forced), fit=False (keep scale 1 and no turn)
+# far / near: sheet a|b, box on it, s (leg px -> body px, "auto": the median that lets the legs reach the ground), legs back to front (the
+#             order they are drawn in), drop (body bits to throw away), wings, hips {leg name: x on the underside or (x, y), body-sheet px},
+#             inset (how far up from the underside a hip sits), leg (defaults for every leg); per leg optional rot (preferred turn, degrees,
+#             clockwise), max_rot, fit_scale, fit=False (a claw: no stretch, turned by rot only), scale (times the set's size)
 # ground: y of the ground line in body-sheet px; game: game length (px at scale 1, worker ant ~40)
 def P(*pts):
     """Seed points, one line each (a point in every drawn segment of a leg or body bit)."""
@@ -90,9 +92,10 @@ SPEC = {
                  "hips": {"hind": (370, 255), "mid": (425, 262), "front": (480, 262)}},
         "far": {"sheet": "b", "box": (470, 160, 840, 325),
                 "legs": [L("hind", [(655, 238), (630, 205), (605, 180), (570, 215), (530, 250), (492, 280)]),
-                         L("mid", [(785, 222), (795, 250), (812, 290)]),
+                         L("mid", [(785, 222), (795, 250), (812, 290)]),            # only its claw shows: replaced (borrow)
                          L("front", [(683, 228), (700, 200), (718, 180), (745, 220), (765, 255), (788, 300)])],
                 "drop": [L("thorax", [(668, 212), (672, 225)])],
+                "borrow": {"mid": "near"}, "darken": 0.75,
                 "hips": {"hind": (385, 245), "mid": (440, 250), "front": (492, 250)}},
     },
     # ---- stag beetle: the second (cleaner, one piece) body; the near legs come with a whole beetle (thrown away) and the stumps of the far
@@ -108,9 +111,9 @@ SPEC = {
                             [(1160, 100), (1230, 110), (1255, 160)], [(1150, 215), (1200, 230), (1260, 200)], [(1101, 206), (1086, 210)],
                             [(978, 226)]),
                           LP("stumps", [(977, 252), (958, 260), (1004, 253), (1056, 248), (1071, 241), (1088, 252)], None)],
-                 "hips": {"hind": 1372, "mid": 1450, "front": 1528}},
+                 "hips": {"hind": 1372, "mid": 1442, "front": 1505}},
         "far": {"copy": "near", "darken": 0.7, "inset": 17,
-                "hips": {"hind": 1392, "mid": 1470, "front": 1545}},
+                "hips": {"hind": 1395, "mid": 1465, "front": 1525}},
     },
     # ---- centipede: cream legs; the red ovals over the near legs and the row of segments over the far legs are body (thrown away)
     "centipede": {
@@ -122,14 +125,14 @@ SPEC = {
                           LP("n7", [(1563, 265)], (1563, 258)), LP("n8", [(1614, 254)], (1613, 246))],
                  "drop": [LP("ovals", [(1338, 238), (1371, 238), (1406, 232), (1441, 220), (1472, 237), (1503, 217), (1550, 228), (1573, 221),
                                        (1594, 225)], None)],
-                 "hips": {"n1": 52, "n2": 88, "n3": 124, "n4": 160, "n5": 196, "n6": 232, "n7": 268, "n8": 302}},
+                 "hips": {"n1": 52, "n2": 88, "n3": 124, "n4": 160, "n5": 196, "n6": 232, "n7": 266, "n8": 294}},
         "far": {"sheet": "a", "box": (852, 288, 1088, 430), "inset": 13, "leg": {"fit_scale": (0.6, 1.4), "max_rot": 12},
                 "legs": [LP("f1", [(884, 361), (871, 374)], (892, 353)), LP("f2", [(917, 352), (911, 365), (901, 382)], (917, 350)),
                          LP("f3", [(938, 371), (935, 388)], (945, 355)), LP("f4", [(967, 372), (965, 390)], (969, 360)),
                          LP("f5", [(992, 374), (989, 388)], (993, 361)), LP("f6", [(1020, 366), (1020, 376), (1018, 393)], (1020, 362)),
                          LP("f7", [(1051, 362), (1051, 375), (1051, 392)], (1051, 359))],
                 "drop": [LP("segments", [(894, 342), (916, 331), (944, 327), (969, 332), (994, 335), (1019, 343), (1048, 343), (929, 357)], None)],
-                "hips": {"f1": 68, "f2": 107, "f3": 146, "f4": 185, "f5": 224, "f6": 263, "f7": 298}},
+                "hips": {"f1": 68, "f2": 107, "f3": 146, "f4": 185, "f5": 224, "f6": 260, "f7": 288}},
     },
     # ---- scorpion: the walking legs and the big claw (a leg that does not reach the ground: it keeps its size and is not turned)
     "scorpion": {
@@ -196,12 +199,14 @@ SPEC = {
                           LP("mid", [(274, 822), (282, 846), (297, 868)], (268, 797)),
                           LP("front", [(303, 777), (346, 779), (372, 811)], (296, 792))],
                  "drop": [LP("body", [(154, 807), (120, 840), (200, 770), (235, 802), (264, 778), (284, 776)], None)],
+                 "per_leg": {"hind": {"rot": -20}, "front": {"rot": 30}},
                  "hips": {"hind": 535, "mid": 562, "front": 592}},
         "far": {"sheet": "a", "box": (696, 624, 908, 768), "inset": 12,
                 "legs": [LP("hind", [(781, 690), (758, 707), (749, 725)], (788, 673)),
                          LP("mid", [(815, 700), (823, 719)], (812, 681)),
                          LP("front", [(831, 667), (855, 672), (868, 701)], (829, 688))],
                 "drop": [LP("body", [(736, 685), (720, 700), (760, 660), (789, 680), (806, 660)], None)],
+                "per_leg": {"hind": {"rot": -15}, "front": {"rot": 25}},
                 "hips": {"hind": 545, "mid": 572, "front": 600}},
     },
     "redant_soldier": {
@@ -212,12 +217,14 @@ SPEC = {
                           LP("mid", [(713, 816), (724, 841)], (707, 790)),
                           LP("front", [(737, 763), (763, 772), (800, 766), (834, 803)], (716, 790))],
                  "drop": [LP("body", [(551, 796), (520, 820), (600, 760), (617, 782)], None)],
+                 "per_leg": {"hind": {"rot": -20}, "front": {"rot": 30}},
                  "hips": {"hind": 878, "mid": 912, "front": 948}},
         "far": {"sheet": "a", "box": (932, 600, 1228, 768), "inset": 13,
                 "legs": [LP("hind", [(1044, 668), (1036, 684), (1013, 694), (1000, 717)], (1058, 686)),
                          LP("mid", [(1112, 677), (1151, 697), (1169, 719)], (1100, 688)),
                          LP("front", [(1129, 644), (1171, 663), (1182, 693)], (1108, 683))],
                 "drop": [LP("body", [(985, 663), (960, 690), (1010, 640), (1083, 647), (1064, 672), (1094, 674), (1081, 680)], None)],
+                "per_leg": {"hind": {"rot": -15}, "front": {"rot": 25}},
                 "hips": {"hind": 890, "mid": 924, "front": 958}},
     },
     "redant_major": {
@@ -225,15 +232,17 @@ SPEC = {
         "body": {"box": (1150, 645, 1670, 890)},
         "near": {"sheet": "b", "box": (936, 676, 1432, 908), "inset": 10,
                  "legs": [LP("hind", [(1123, 806), (1099, 838), (1063, 876)], (1222, 768)),
-                          LP("mid", [(1244, 748), (1246, 800), (1262, 834), (1290, 872)], (1236, 742)),
+                          LP("mid", [(1244, 748), (1255, 763), (1246, 800), (1262, 834), (1290, 872)], (1236, 742)),
                           LP("front", [(1294, 750), (1355, 769), (1386, 815)], (1262, 782))],
-                 "drop": [LP("body", [(1050, 773), (1000, 820), (1100, 730), (1161, 785), (1255, 763), (1269, 735)], None)],
+                 "drop": [LP("body", [(1050, 773), (1000, 820), (1100, 730), (1161, 785), (1269, 735)], None)],
+                 "per_leg": {"hind": {"rot": -15}, "front": {"rot": 25}},
                  "hips": {"hind": 1385, "mid": 1422, "front": 1458}},
         "far": {"sheet": "a", "box": (1248, 552, 1648, 768), "inset": 17,
                 "legs": [LP("hind", [(1416, 633), (1401, 612), (1375, 657), (1355, 682)], (1440, 655)),
                          LP("mid", [(1465, 647), (1477, 620), (1494, 671), (1505, 707)], (1460, 662)),
                          LP("front", [(1518, 645), (1567, 659), (1587, 684)], (1502, 658))],
                 "drop": [LP("body", [(1334, 616), (1290, 650), (1370, 600), (1442, 635)], None)],
+                "per_leg": {"hind": {"rot": -10}, "front": {"rot": 20}},
                 "hips": {"hind": 1398, "mid": 1434, "front": 1470}},
     },
 }
@@ -360,11 +369,10 @@ def fit_leg(img, pivot, hip, ground, spec):
     vx, vy = fx - pivot[0], fy - pivot[1]
     lo, hi = spec.get("fit_scale", FIT_SCALE)
     best = None
-    if "rot" in spec:
-        cands = [float(spec["rot"])]
-    else:
-        maxr = spec.get("max_rot", FIT_ROT)
-        cands = sorted([i * 0.5 for i in range(-int(maxr * 2), int(maxr * 2) + 1)], key=abs)
+    # the turn: the smallest one away from the preferred turn `rot` (0 = as drawn) that lets the leg reach the ground within the stretch
+    pref = float(spec.get("rot", 0.0))
+    maxr = spec.get("max_rot", FIT_ROT)
+    cands = sorted([pref + i * 0.5 for i in range(-int(maxr * 2), int(maxr * 2) + 1)], key=lambda d: abs(d - pref))
     for deg in cands:
         th = math.radians(deg)
         ry = vx * math.sin(th) + vy * math.cos(th)
@@ -454,7 +462,10 @@ def cut_set(name, side, st, k, debug=None):
         if abs(mult - 1.0) > 1e-3:
             crop_p, pv = affine(crop_p, pv, mult, 0.0)
         pv = snap_inside(crop_p, pv)
-        d = {"name": p["name"], "img": crop_p, "pivot": pv, "spec": dict(st.get("leg", {}), **p), "at": (bb[0], bb[1])}
+        spec = dict(st.get("leg", {}))
+        spec.update(p)
+        spec.update(st.get("per_leg", {}).get(p["name"], {}))
+        d = {"name": p["name"], "img": crop_p, "pivot": pv, "spec": spec, "at": (bb[0], bb[1])}
         (wings if kind == "wings" else legs).append(d)
     if debug:
         pivots = [tr(p["pivot"]) if p.get("pivot") else tr(p["lines"][0][0]) for kind, p in parts]
@@ -560,7 +571,8 @@ def build_one(name, sp, debug=None):
                         continue
                     hip = hip_of(st, lg["name"])
                     fx, fy = foot_of(lg["img"])
-                    ext = fy - lg["pivot"][1]
+                    th = math.radians(float(lg["spec"].get("rot", 0.0)))
+                    ext = (fx - lg["pivot"][0]) * math.sin(th) + (fy - lg["pivot"][1]) * math.cos(th)
                     if ext > 2:
                         ratios.append((ground - hip[1]) / ext)
                 ratios.sort()
@@ -570,6 +582,10 @@ def build_one(name, sp, debug=None):
                 st = dict(st, s=sv)
             legs, wings = cut_set(name, side, st, k, debug)
             cut_cache[side] = (legs, wings)
+            # a leg this side's drawing shows badly (only a claw peeking out) is borrowed from the other side, darker
+            for lname, other in st.get("borrow", {}).items():
+                src_leg = [lg for lg in cut_cache[other][0] if lg["name"] == lname][0]
+                legs = [lg for lg in legs if lg["name"] != lname] + [dict(src_leg, img=darken(src_leg["img"], st.get("darken", 0.72)))]
         for lg in legs:
             hip = hip_of(st, lg["name"])
             img, pv, a, deg = fit_leg(lg["img"], lg["pivot"], hip, ground, lg["spec"])

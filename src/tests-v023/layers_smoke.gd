@@ -108,7 +108,7 @@ func _idle(_delta):
 		sim.will = 100.0
 		sim.cmd_cd.clear()
 		s.command("rally")
-		_check(s.armed == "rally", "a button arms rally for a click")
+		_check(s.armed == "rally" or sim._inside_n > 0, "a button arms rally for a click (or it is refused while raiders are inside)")
 		s.set_armed("")
 		s.hud._on_caste(2)
 		_check(sim.caste_order == 2, "caste order lever reaches the sim")

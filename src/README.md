@@ -1,4 +1,16 @@
-# InfDNA (Brotato mod) - v0.34.0
+# InfDNA (Brotato mod) - v0.35.0 preview
+
+## v0.35.0 preview - movement rules, 10x, hunting critters, the Monstrosity arc, the owner's art and effects
+A preview build while the art and drawing work is still being finished (ants from the part kit, tree close-ups, the Monstrosity meter on screen).
+- **Ants move by one rule set** (core/locomotion.gd): walking the meadow, climbing ledges, crawling tunnels; no ping-pong at cliffs.
+- **Faster sim; 10x holds**: about a third cheaper per game second, longer hops at 10x for unwatched ants, raised further if the PC lags.
+- **The point of the game**: every ant has a mutation score; the five most mutated are the Apex ants; breed from them. The Monstrosity meter leads to
+  Dominion, eight tremors, the ground collapsing into a pit and Void Maws climbing out; sealing the pit rewards you and the next cycle is harder.
+- **Winged ants fight the bird**; a dead bird falls and becomes a carcass that dissolves.
+- **Critters are prey**: ladybirds, snails, caterpillars, grasshoppers, butterflies, honeybees can be attacked (right-click Attack); they never bite back.
+- **Tunnel Borer is the owner's earthworm** with a spine: rears, plunges, bores, leaves a hole.
+- **Owner's art**: spider, Void Maw (every leg now swings on its own), bird, rocks re-cut cleanly; effects (dust, hits, sonic rings, lightning, webs) from the owner's sheets.
+- **Not verified in Brotato**: all of it was checked with the headless tests and 1080p renders only.
 
 ## v0.34.0 - the owner's art goes in: spider, Void Maw, bird, rocks and trees
 The first drawn art (ChatGPT, one transparent PNG per part) is in the game, cut up and animated by code. Pipeline: `art_src/` (originals) -> `tools/art/make_art.py` -> `content/art/` + `art_manifest.json`

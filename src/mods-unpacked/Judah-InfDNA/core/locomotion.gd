@@ -11,12 +11,48 @@ extends Reference
 # task is waiting for: it stops short of the cell where the task would act (a pile, the goal of a field, a fight), and the final approach is always
 # made one cell at a time.
 #
+# How it looks (the gait, colony_sim._step_ant applies it): an ant keeps its line. Among the cells that lead closer it takes the one that turns least
+# from its last step, so it does not zig-zag down a shaft or step back and forth; it prefers a cell no other ant is about to enter (a crowd spreads over
+# floor, ceiling and the other plane instead of piling into one spot); it sets off from standing slowly and gets up to speed in a fraction of a second,
+# slows for a sharp turn, and squeezes through a hole to the other tunnel plane at a crawl. A long hop at high game speed stays a straight walk (two
+# neighbouring directions at most), so the line drawn from its start to its end never cuts through the rock at a bend.
+#
 # Raiders walk by surface_step too (always one cell at a time).
 
 const NO_LEDGE = -9999
 const LEDGE_REACH = 4
 const OX = [-1, 0, 1, -1, 1, -1, 0, 1]
 const OY = [-1, -1, -1, 0, 0, 1, 1, 1]
+# Gait memory, packed into Ant.scout (an int nothing else uses): bits 0-3 the last step (0 none, 1-8 a neighbour index + 1, 9 a crossing to the
+# other plane), bits 4-11 how far the ant has got up to speed since it last stood still (0 standing .. 255 full speed).
+const DIR_MASK = 15
+const PLANE_STEP = 9
+const RAMP_SHIFT = 4
+# DIR_OF[(sy + 1) * 3 + (sx + 1)]: the step code of a unit step
+const DIR_OF = [1, 2, 3, 4, 0, 5, 6, 7, 8]
+# TURN[a * 9 + b]: how sharply step b turns from step a, in eighths of a circle (0 straight on .. 4 straight back; 0 when either is unknown)
+const TURN = [0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 1, 2, 1, 3, 2, 3, 4,
+	0, 1, 0, 1, 2, 2, 3, 4, 3,
+	0, 2, 1, 0, 3, 1, 4, 3, 2,
+	0, 1, 2, 3, 0, 4, 1, 2, 3,
+	0, 3, 2, 1, 4, 0, 3, 2, 1,
+	0, 2, 3, 4, 1, 3, 0, 1, 2,
+	0, 3, 4, 3, 2, 2, 1, 0, 1,
+	0, 4, 3, 2, 3, 1, 2, 1, 0]
+# score added to a candidate step for how sharply it turns from the last one (one step of the distance field is worth 16, so this only ever chooses
+# between cells that are equally close to the goal: progress is never given up)
+const TURN_PEN = [0, 2, 5, 9, 14]
+const CROWD_PEN = 5           # ... and for a cell another ant is about to walk into
+const PLANE_HOP = 2.2         # a crossing to the other tunnel plane takes as long as walking this many cells (the ant squeezes through the hole)
+const NURSE_W = [6, 4, 1, 0, 0]   # a nurse's next step, weighted by how sharply it turns: on along the floor, never straight back mid-walk
+
+
+# The step code of a move (dx, dy): signs only, so a long hop has the code of its general direction.
+static func dir_code(dx: int, dy: int) -> int:
+	var sx = 1 if dx > 0 else (-1 if dx < 0 else 0)
+	var sy = 1 if dy > 0 else (-1 if dy < 0 else 0)
+	return DIR_OF[(sy + 1) * 3 + sx + 1]
 
 
 # One hop along the open ground in the ant's heading: up to `limit` cells (and never more than the game speed allows). Moves the target cell (tx, ty).
@@ -83,9 +119,10 @@ static func _ledge(g, cx: int, cy: int, nx: int) -> int:
 	return NO_LEDGE
 
 
-# One hop down the distance field `f`: the neighbouring cell with the smallest value, preferring cells that touch dirt (ants crawl along surfaces), with a little
-# randomness so a crowd does not march in a line. When the goal is more than a hop away and the game is fast, several steps are taken in one.
-static func descend(sim, a, f: PoolIntArray, macro: bool = true) -> void:
+# One hop down the distance field `f`: of the neighbouring cells that are closer to the goal, the one that turns least from the last step, preferring
+# cells that touch dirt (ants crawl along surfaces) and cells no other ant is about to enter, with a little randomness so a crowd does not march in a
+# line. When the goal is more than a hop away and the game is fast, several steps are taken in one (`ant`: an Ant, which has a gait memory).
+static func descend(sim, a, f: PoolIntArray, macro: bool = true, ant: bool = false) -> void:
 	var g = sim.grid
 	if f.size() != g.PLANES * g.WH:
 		_random_step(sim, a)
@@ -105,6 +142,19 @@ static func descend(sim, a, f: PoolIntArray, macro: bool = true) -> void:
 	var H = g.H
 	var walk = g.walk
 	var rng = sim.rng
+	var prev := 0
+	var occ = sim.occ
+	var crowd := false
+	var qnow := 0
+	if ant:
+		prev = a.scout & DIR_MASK
+		if prev == PLANE_STEP:
+			prev = 0
+		crowd = occ.size() == g.PLANES * WH
+		qnow = int(sim.time * 10.0)
+	var c0 := 0
+	var c1 := 0
+	var zsw := false
 	while done < steps:
 		var xl = cx - ox
 		if xl < 1 or xl >= W - 1 or cy < 1 or cy >= H - 1:
@@ -117,55 +167,80 @@ static func descend(sim, a, f: PoolIntArray, macro: bool = true) -> void:
 		var bx = 0
 		var by = 0
 		var bz = cz
-		var have = false
+		var bc = 0
+		var pt = prev * 9 + 1
 		for i in 8:
 			var d = OX[i] + OY[i] * W
 			if walk[base + d] != 1:
 				continue
 			var v = f[base + d]
-			if v < 0 or (here >= 0 and v >= here):
+			if v < 0 or v >= here:
 				continue
 			var nx = cx + OX[i]
 			var ny = cy + OY[i]
-			var sc = v * 4 + rng.randi_range(0, 2)
+			var sc = v * 16 + rng.randi_range(0, 3)
 			if not g.walled(nx, ny, cz):
-				sc += 3
+				sc += 6
+			if prev != 0:
+				sc += TURN_PEN[TURN[pt + i]]
+			if crowd and occ[base + d] > qnow:
+				sc += CROWD_PEN
 			if sc < best_s:
 				best_s = sc
 				bx = nx
 				by = ny
 				bz = cz
-				have = true
+				bc = i + 1
 		# a hole between the planes is one more step (the same cell in the other plane)
 		if g.is_link(cx, cy) and g.can_walk(cx, cy, 1 - cz):
-			var vz = f[(1 - cz) * WH + cy * W + xl]
+			var bz2 = (1 - cz) * WH + cy * W + xl
+			var vz = f[bz2]
 			if vz >= 0 and vz < here:
-				var scz = vz * 4 + rng.randi_range(0, 2)
+				var scz = vz * 16 + rng.randi_range(0, 3) + 2
 				if not g.walled(cx, cy, 1 - cz):
-					scz += 3
+					scz += 6
+				if crowd and occ[bz2] > qnow:
+					scz += CROWD_PEN
 				if scz < best_s:
 					best_s = scz
 					bx = cx
 					by = cy
 					bz = 1 - cz
-					have = true
-		if not have:
+					bc = PLANE_STEP
+		if bc == 0:
 			break
-		path += 1.4142 if (bx != cx and by != cy) else 1.0
+		# a long hop stays a straight walk: at most two neighbouring directions in it, and a crossing to the other plane is a hop of its own
+		if done > 0:
+			if bc == PLANE_STEP or zsw:
+				break
+			if bc != c0:
+				if c1 == 0 and TURN[c0 * 9 + bc] == 1:
+					c1 = bc
+				elif bc != c1:
+					break
+		else:
+			c0 = bc
+		if bc == PLANE_STEP:
+			path += PLANE_HOP
+			zsw = true
+		else:
+			path += 1.4142 if (bx != cx and by != cy) else 1.0
 		cx = bx
 		cy = by
 		cz = bz
+		prev = bc if bc != PLANE_STEP else 0
 		done += 1
 	if done == 0:
 		_descend_plain(sim, a, f)
 		return
 	sim._go(a, Vector3(cx, cy, cz))
-	if done > 1:
+	if done > 1 or zsw:
 		a.hop = path
 
 
-# A nurse's shuffle: one step to a random open cell inside the nest (within `reach` of home, never out on the grass by the hole), cells that touch a wall
-# twice as likely. Returns false when there is no such cell (the caller then heads home).
+# A nurse's walk: one step to an open cell inside the nest (within `reach` of home, never out on the grass by the hole), going on the way it was going
+# (a turn is likelier the gentler it is, and it never doubles straight back mid-walk), floor cells three times and other cells that touch a wall twice as
+# likely as open ones. Only at a dead end does it turn round. Returns false when there is no such cell (the caller then heads home).
 static func shuffle_home(sim, a, reach: int = 8) -> bool:
 	var g = sim.grid
 	var cx: int = a.x
@@ -182,23 +257,32 @@ static func shuffle_home(sim, a, reach: int = 8) -> bool:
 	var ok = home.size() == g.PLANES * g.WH
 	if not ok:
 		return false
-	var pick = [0, 0, 0, 0, 0, 0, 0, 0]
+	var prev = a.scout & DIR_MASK
+	if prev == PLANE_STEP:
+		prev = 0
 	var wt = [0, 0, 0, 0, 0, 0, 0, 0]
 	var total := 0
-	for i in 8:
-		var d = OX[i] + OY[i] * W
-		if walk[base + d] != 1:
-			continue
-		var nx = cx + OX[i]
-		var ny = cy + OY[i]
-		if ny <= g.surf_y(nx):
-			continue
-		var v = home[cz * g.WH + hb + d]
-		if v < 0 or v > reach:
-			continue
-		var w = 2 if g.walled(nx, ny, cz) else 1
-		wt[i] = w
-		total += w
+	for pass_n in 2:
+		var pt = prev * 9 + 1
+		for i in 8:
+			var d = OX[i] + OY[i] * W
+			if walk[base + d] != 1:
+				continue
+			var nx = cx + OX[i]
+			var ny = cy + OY[i]
+			if ny <= g.surf_y(nx):
+				continue
+			var v = home[cz * g.WH + hb + d]
+			if v < 0 or v > reach:
+				continue
+			var w = 3 if g.is_solid(nx, ny + 1, cz) else (2 if g.walled(nx, ny, cz) else 1)
+			if prev != 0:
+				w *= NURSE_W[TURN[pt + i]]
+			wt[i] = w
+			total += w
+		if total > 0 or prev == 0:
+			break
+		prev = 0          # a dead end: turn round
 	if total == 0:
 		return false
 	var r = sim.rng.randi_range(0, total - 1)

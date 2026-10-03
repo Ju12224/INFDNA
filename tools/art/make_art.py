@@ -135,15 +135,13 @@ def trim(im, pad=2):
     return im.crop(bb)
 
 
-def make_trees(manifest):
-    """The tree sheet: six sprites cut by hand-placed boxes (some of them touch), kept at the drawing's own size. `leafy` ones carry their leaves all year, so
-    the game swaps them for bare trees in winter; the others (dead stump, fallen log, spruce) stand in every season. Each tree comes with a thinned outline
-    plus an `ink` layer that gives it back, close-up `shade` and `detail` layers, and hazy far copies (see tree_art.py, which does the work)."""
-    import tree_art as T
+def tree_cuts():
+    """The owner's tree pictures, cut and trimmed at the drawing's own size: [(name, picture, leafy, kind, seed)]. The first sheet is cut by hand-placed boxes
+    (some of them touch); the second holds two full oaks, cut as its two big connected pieces."""
     sheet = load("trees.png")
     boxes = [("mossoak", True, (0, 0, 925, 670), "moss"), ("stump", False, (900, 50, 1400, 565), "stump"), ("spruce", False, (1395, 0, 1774, 610), "spruce"),
              ("log", False, (20, 625, 940, 887), "log"), ("acacia", True, (825, 568, 1395, 887), "acacia"), ("grove", True, (1395, 585, 1774, 887), "grove")]
-    trees = []
+    out = []
     for nm, leafy, box, kind in boxes:
         c = sheet.crop(box)
         # keep only the big connected pieces of this box (another tree's edge can poke into it)
@@ -154,10 +152,30 @@ def make_trees(manifest):
         c2 = Image.new("RGBA", c.size, (0, 0, 0, 0))
         for q in parts:
             c2.alpha_composite(q["img"], (int(q["x"]), int(q["y"])))
-        c = trim(c2)
-        entry, sizes = T.build_tree(OUT, nm, c, leafy, kind, sum(map(ord, nm)))
+        out.append((nm, trim(c2), leafy, kind, sum(map(ord, nm))))
+    sheet = load("trees2.png")
+    comps, step = components(sheet, step=3, thresh=24)
+    comps = [c for c in comps if len(c) > 900]
+    pieces = cut(sheet, comps, step, grow=3)
+    pieces.sort(key=lambda p: p["x"])
+    for i, p in enumerate(pieces):
+        out.append(("oak%d" % (i + 1), p["img"], True, "oak", 11 + i))
+    return out
+
+
+def make_trees(manifest):
+    """The trees of the first sheet. `leafy` ones carry their leaves all year, so the game swaps them for bare trees in winter; the others (dead stump, fallen
+    log, spruce) stand in every season. Each comes as layers (see tree_art.py, which does the work): the base picture in every leaf look with its lines
+    painted out, the outline as drawn and a thinner crisp close-up one, soft light and shadow, close-up detail, the silhouette (depth fog), the sway grid,
+    and hazy far copies."""
+    import tree_art as T
+    trees = []
+    for nm, img, leafy, kind, seed in tree_cuts():
+        if kind == "oak":
+            continue
+        entry, sizes = T.build_tree(OUT, nm, img, leafy, kind, seed, sways=leafy or nm == "spruce")
         trees.append(entry)
-        print("tree %s: %dx%d%s, %d KB" % (nm, c.size[0], c.size[1], " (leafy)" if leafy else "", sum(sizes.values()) // 1024))
+        print("tree %s: %dx%d%s, %d KB" % (nm, img.size[0], img.size[1], " (leafy)" if leafy else "", sum(sizes.values()) // 1024))
     manifest["trees"] = trees
 
 
@@ -183,17 +201,13 @@ def recolor(im, hue_to, sat_k, val_k, val_add=0.0):
 
 
 def make_oaks(manifest):
-    """Two full oaks with every season of leaf on them (summer green is the drawing; spring, three autumns); winter uses the game's bare tree. Kept at the
-    drawing's own size, with the same thinned outline, ink layer and close-up layers as the other trees."""
+    """The two full oaks of the second sheet, with every season of leaf on them (summer green is the drawing recoloured; spring, three autumns); winter uses
+    the game's bare tree. The same layers as the other trees (see make_trees)."""
     import tree_art as T
-    sheet = load("trees2.png")
-    comps, step = components(sheet, step=3, thresh=24)
-    comps = [c for c in comps if len(c) > 900]
-    pieces = cut(sheet, comps, step, grow=3)
-    pieces.sort(key=lambda p: p["x"])
-    for i, p in enumerate(pieces):
-        nm = "oak%d" % (i + 1)
-        entry, sizes = T.build_tree(OUT, nm, p["img"], True, "oak", 11 + i)
+    for nm, img, leafy, kind, seed in tree_cuts():
+        if kind != "oak":
+            continue
+        entry, sizes = T.build_tree(OUT, nm, img, True, "oak", seed)
         manifest["trees"].append(entry)
         print("oak %s: %dx%d, looks %s, %d KB" % (nm, entry["w"], entry["h"], ",".join(entry["looks"].keys()), sum(sizes.values()) // 1024))
 

@@ -9,7 +9,7 @@ colour fill and nothing behind them.  So there is no background to remove and no
      names a box on its sheet and takes the islands whose middle lies in it.  Where two parts touch (one island holds both: a fore and a hind wing,
      two antennae, a spike clump and a fur tuft) the pieces give seed lines instead, and the island is shared out by a walk from the seeds in which
      a step onto the dark outline costs much more than a step over fill (`partition`), so the border falls in the middle of the outline between
-     them; each piece then takes back a rim of the outline next to it so its own outline stays whole,
+     them; the outline itself is shared out by nearness to each part's fill, so each piece keeps its whole outline and none of its neighbour's,
   3. a piece may lose its thin parts inside a box (the heads without antennae: the antenna stalks are cut off along the head's own outline,
      found by a morphological opening, and the cut ends are capped with outline colour) and may be mirrored (the full-sheet wing, so every wing
      has its root on the right),
@@ -49,7 +49,7 @@ FILM = 250           # alpha from this up is solid
 MIN_ISLAND = 150     # islands smaller than this are dust (the real parts are all far bigger)
 INK_MAX = 70         # a pixel whose brightest channel is under this is outline
 INK_COST = 6.0       # walking onto outline costs this much more than walking over fill (partition)
-RIM = 7              # sheet px of outline a split piece may take back from the neighbour's side of the border
+SHARE = 0.5          # sheet px: where two split parts meet, outline pixels this close to a tie go to both
 RING = 1             # px of outline ring added round every piece (after shrinking)
 BLEED = 3            # px round a piece that get the colour of the nearest visible pixel
 
@@ -85,7 +85,6 @@ class Sheet:
         self.area = ndi.sum(np.ones_like(a), self.lab, index=np.arange(1, n + 1)).astype(int) if n else np.zeros(0, int)
         self.ink_px = (px[..., :3].max(axis=2) < INK_MAX) & (a > 0)
         self.ink = edge_ink(px)
-        self.outline_w = outline_width(px, self.ink_px)
 
     def island_box(self, i):
         sl = self.objs[i - 1]
@@ -124,16 +123,6 @@ def edge_ink(px):
     if not band.any():
         return (21, 18, 26)
     return tuple(int(v) for v in np.median(px[band][:, :3], axis=0))
-
-
-def outline_width(px, ink):
-    """How wide the owner's outline is on this sheet (median, sheet px): the distance to the outside of the fill pixels next to the outline."""
-    solid = px[..., 3] >= 128
-    fill = solid & ~ink
-    edge = fill & ndi.binary_dilation(ink & solid)
-    d = ndi.distance_transform_edt(solid)[edge]
-    d = d[d < 30]
-    return float(np.median(d)) if d.size else 8.0
 
 
 def disk(r):
@@ -200,35 +189,28 @@ def partition(sh, island_ids, seeds):
                 label[j] = li
                 push(heap, (nd, j))
     lab = np.array(label, dtype=np.int32).reshape(h + 2, W)[1:-1, 1:-1]
-    masks = []
-    for k in range(len(seeds)):
-        m = lab == k
-        # keep the part's biggest connected piece; stray crumbs of it (bits of outline the walk reached round a corner) go to their neighbours
-        cl, n = ndi.label(m, structure=np.ones((3, 3), bool))
-        if n > 1:
-            sizes = ndi.sum(m, cl, index=np.arange(1, n + 1))
-            m = cl == (int(np.argmax(sizes)) + 1)
-        masks.append(m)
-    # orphan pixels (crumbs dropped above) join the part they touch most
-    taken = np.zeros_like(isl)
-    for m in masks:
-        taken |= m
-    orphan = isl & ~taken
-    if orphan.any():
-        dists = []
-        for m in masks:
-            dists.append(ndi.distance_transform_edt(~m))
-        nearest = np.argmin(np.stack(dists), axis=0)
-        for k in range(len(masks)):
-            masks[k] = masks[k] | (orphan & (nearest == k))
-    # each part takes back the outline next to it that is its own (outline pixels within one outline width of its own fill), so its outline is
-    # whole where it was cut from its neighbour but none of the neighbour's outline comes along
+    # the fill (everything that is not outline) goes by the walk; every outline pixel goes to the part whose fill is nearest, and where two
+    # parts meet both keep a SHARE px band, so each keeps its whole outline and none of its neighbour's (even where the two outlines only
+    # touch through a soft bridge, as the full-sheet wings do)
+    fills = [(lab == k) & ~ink for k in range(len(seeds))]
+    dist = np.stack([ndi.distance_transform_edt(~f) if f.any() else np.full(isl.shape, 1e9) for f in fills])
+    dmin = dist.min(axis=0)
+    solid = sh.a[y0:y1, x0:x1] >= 128
     out = []
-    for k, m in enumerate(masks):
-        fill = m & ~ink
-        own = ink & (ndi.distance_transform_edt(~fill) <= sh.outline_w + 1.0) if fill.any() else ink
-        grown = ndi.binary_dilation(m, structure=np.ones((3, 3), bool), iterations=RIM, mask=own | m)
-        out.append(grown & isl)
+    for k in range(len(seeds)):
+        # (soft edge pixels, alpha < 128, go only to the nearest part: they are the bridge between two outlines, not outline)
+        m = isl & (fills[k] | (ink & solid & (dist[k] <= dmin + SHARE)) | (~solid & (dist[k] <= dmin)))
+        # crumbs: solid bits of the part not joined to its body (keep pieces of at least a twentieth of the biggest), and soft pixels far from it
+        cl, n = ndi.label(m & solid, structure=np.ones((3, 3), bool))
+        if n > 1:
+            sizes = ndi.sum(np.ones_like(cl), cl, index=np.arange(1, n + 1))
+            keep = np.isin(cl, [i + 1 for i, s in enumerate(sizes) if s >= 0.05 * sizes.max()])
+            m = m & ndi.binary_dilation(keep, structure=np.ones((3, 3), bool), iterations=2)
+        # soft pixels only as the part's own anti-aliased rim (the haze in a narrow gap between two outlines is nobody's)
+        own_solid = m & solid
+        if own_solid.any():
+            m = m & (solid | (ndi.distance_transform_edt(~own_solid) <= 1.5))
+        out.append(m)
     return (x0, y0, x1, y1), out
 
 
@@ -237,7 +219,8 @@ def partition(sh, island_ids, seeds):
 #   box     the islands whose middle lies in it are the piece (sheet px); for a piece of a shared island give seeds=[polyline, ...] instead
 #           (all pieces whose seeds lie on one island share it out between them)
 #   pivot   (x, y) in sheet px, or a rule: "center" (middle of the solid pixels), "top"/"right"/... (middle of that end), "foot_left" (the end of
-#           the left arm: base of an elbowed antenna), "base" (middle of the lowest sixth: a spine row), "neck" (back of a head), "feet"
+#           the left arm: base of an elbowed antenna), "base" (bottom edge under the middle of the lower third: a spine row), "neck" (back of a
+#           head), "feet"
 #   bare    (x0, y0, x1, y1, r): cut the antennae off a head inside this box (see strip_antennae)
 #   flip    mirror left-right
 #   pair    the other piece of a left/right pair
@@ -352,7 +335,7 @@ CATALOGUE = [
     P("horn_curl", "spine", "parts_b", (220, 893, 380, 1010), (262, 905)),
     P("frill", "spine", "parts_b", (345, 835, 545, 1010), "top"),
     P("spine_ridge", "spine", "parts_b", (560, 850, 845, 1015), "base"),
-    P("spine_backbone", "spine", "parts_b", (776, 700, 1070, 892), "base"),
+    P("spine_backbone", "spine", "parts_b", (776, 700, 1070, 892), "center"),
     P("spine_crest", "spine", "parts_b", (940, 580, 1140, 782), "base"),
     P("spine_crest_tall", "spine", "parts_b", (1140, 570, 1305, 782), "base"),
     P("spine_trio", "spine", "parts_b", (1075, 770, 1187, 887), "base"),
@@ -546,7 +529,7 @@ def finish(arr, ink):
         sizes = ndi.sum(np.ones_like(a), lab, index=np.arange(1, n + 1))
         big = sizes.max()
         for i, s in enumerate(sizes):
-            if s < max(12, 0.002 * big):
+            if s < max(30, 0.003 * big):
                 a[lab == i + 1] = 0
     vis = a > 0
     # bleed: clear pixels near the piece take the colour of the nearest visible pixel (so a filtered texture never blends in black)
@@ -593,9 +576,11 @@ def hinge(im, rule, frac=0.06):
         sel = ly >= ly.max() - 0.06 * (ys.max() - ys.min())
         return [round(float(lx[sel].mean()), 1), round(float(ly[sel].mean()), 1)]
     if rule == "base":
-        # the bottom band of a spine row or clump: middle of its lowest sixth
-        sel = ys >= ys.max() - 0.16 * (ys.max() - ys.min())
-        return [round(float(xs[sel].mean()), 1), round(float(ys[sel].mean()), 1)]
+        # the strip a spine row or clump stands on: the middle x of its lower third, at the bottom edge there (inside the outline)
+        sel = ys >= ys.max() - 0.33 * (ys.max() - ys.min())
+        bx = float(xs[sel].mean())
+        col = np.abs(xs - bx) <= 3
+        return [round(bx, 1), round(float(ys[col].max()) - 4.0, 1)]
     dx, dy = DIRS[rule]
     sc = xs * dx + ys * dy
     lo, hi = sc.min(), sc.max()
@@ -611,8 +596,9 @@ def body_metrics(im, xf, sp):
     ground = int(ys.max()) + 1
     nose = xf(*sp["nose"])
     tail = xf(*sp["tail"])
-    # feet on the ground: runs of solid pixels in the bottom 3 rows
-    low = a[ground - 3:ground].max(axis=0) > 128
+    # feet on the ground: runs of solid pixels in the bottom band (5% of the height, at least 4 px): every foot that touches the ground
+    band = max(4, int(round(0.05 * (ground - ys.min()))))
+    low = a[ground - band:ground].max(axis=0) > 128
     feet = []
     x = 0
     while x < len(low):
@@ -622,7 +608,8 @@ def body_metrics(im, xf, sp):
                 x += 1
             feet.append(round((s + x - 1) / 2.0, 1))
         x += 1
-    return {"nose": nose, "tail": tail, "length": round(abs(nose[0] - tail[0]), 1), "ground_y": float(ground), "feet_x": feet}
+    mid = round((feet[0] + feet[-1]) / 2.0, 1) if feet else round(float(xs.mean()), 1)
+    return {"nose": nose, "tail": tail, "length": round(abs(nose[0] - tail[0]), 1), "ground_y": float(ground), "feet_x": feet, "feet": [mid, float(ground)]}
 
 
 # ------------------------------------------------------------------------------------------------------------------ build
@@ -673,7 +660,7 @@ def build(contact=None, debug=None, only=None):
             if sp["kind"] == "body":
                 bm = body_metrics(im, xf, sp)
                 ent.update(bm)
-                ent["pivot"] = [piv[0], bm["ground_y"]]
+                ent["pivot"] = list(bm["feet"])
             entries[sp["name"]] = ent
             pieces[sp["name"]] = (im, ent)
             print("%-20s %4dx%-4d %s" % (sp["name"], im.size[0], im.size[1], "(x%.2f)" % k if k < 1 else ""))
@@ -689,7 +676,7 @@ def build(contact=None, debug=None, only=None):
                   "a piece for the other side when a kind has one drawing. _fore/_hind: front and back wing. 'scale' is how much the piece was "
                   "shrunk from its sheet, 'src' its box on the sheet. Full bodies also carry nose and tail (ends of the body, antennae, mandible "
                   "tips and wings left out), 'length' (nose to tail, px), 'ground_y' (the ground line: bottom of the lowest foot) and 'feet_x' "
-                  "(x of each foot touching the ground)." % (PAD, MAXSIDE),
+                  "(x of each foot touching the ground); 'feet' = 'pivot' = the middle of the feet on the ground line." % (PAD, MAXSIDE),
         "hinges": HINGE,
         "kinds": kinds,
         "pieces": entries,
@@ -711,8 +698,8 @@ def check_coverage(sh, masks):
     for i in range(1, len(sh.objs) + 1):
         if sh.area[i - 1] < MIN_ISLAND:
             continue
-        isl = sh.lab == i
-        share = (isl & taken).sum() / float(sh.area[i - 1])
+        isl = (sh.lab == i) & (sh.a >= 128)          # solid pixels: the soft haze in a gap between two parts belongs to neither
+        share = (isl & taken).sum() / float(max(1, isl.sum()))
         x0, y0, x1, y1 = sh.island_box(i)
         cx, cy = (x0 + x1) / 2.0, (y0 + y1) / 2.0
         if share < 0.98:

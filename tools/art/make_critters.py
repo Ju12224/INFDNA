@@ -9,7 +9,8 @@ one-pixel soft edge in between stays. Each part is then
   * given a thicker outline in the sheet's own ink colour (creature_cuts.thicken), so it still reads at 30-90 game px,
   * cut where one drawn piece holds several moving parts: a wing+leg set into its wings and its legs, a snail's eye-stalk pair into its stalks.
     That uses the seeded split of creature_cuts.partition: seed lines along every part, every pixel goes to the part it reaches first with the
-    dark outlines costing more to cross, so the border falls in the middle of the outline between two parts,
+    dark outlines costing more to cross, so the border falls in the middle of the outline between two parts. Every cut part then gets an outline
+    of its own along the border with the others (`cap_w`), so a wing beaten away from its neighbour shows no raw edge,
   * placed: every leg / stalk / wing gets a hinge (`pivot`, its top or root) and is moved so that hinge sits where it belongs on the body
     (legs: their feet on one ground line with their tops tucked into the body; wings: their root on the top of the thorax).
 The pieces go to content/art/critters/ and content/art/critter_manifest.json gets one entry per critter in the spider format of art_manifest.json

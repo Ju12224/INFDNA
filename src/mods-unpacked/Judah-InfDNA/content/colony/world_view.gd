@@ -40,6 +40,7 @@ var inner: Node2D
 var band: Node2D
 var snow_node: Node2D        # snow over the turf, faded in and out by how much has fallen
 var shade_node: Node2D       # ground shadows, over the snow
+var arc_node: Node2D         # the ground answering the monsters (cracks, the pit), over both
 var day                      # day_cycle.gd (optional)
 
 
@@ -75,6 +76,9 @@ func _ready() -> void:
 	shade_node = Node2D.new()
 	shade_node.connect("draw", self, "_draw_shade")
 	band.add_child(shade_node)
+	arc_node = Node2D.new()          # tremor cracks and the Void pit, over the snow and the shadows (see _step_arc_ground)
+	arc_node.connect("draw", self, "_draw_arc_node")
+	band.add_child(arc_node)
 	for k in [TREE_TEX, ROCK_TEX, FRUIT_TEX, GLOW_TEX, MOTE_TEX, HUSK_TEX]:
 		if ResourceLoader.exists(k):
 			_tex[k] = load(k)
@@ -158,7 +162,7 @@ func _draw_band() -> void:
 		band.draw_circle(Vector2.ZERO, 15.5, Color("#1d120d"))
 		band.draw_circle(Vector2(0, 6), 9.5, Color("#0e0907"))
 		band.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	_draw_arc_ground(band)
+	_step_arc_ground()
 
 
 # ---- the ground answering the monsters (arc.gd): tremor cracks round the nest, and the pit the Void climbs out of
@@ -176,6 +180,7 @@ var _crack_k := 0.0           # tremors felt, eased (0 = no cracks)
 var _pit_k := 0.0             # 0 closed .. 1 open
 var _pit_x := 0
 var _arc_last := 0.0
+var _arc_drawn := false
 
 
 # Where the pit's centre is drawn (world px): the middle of the top face at that column. Shared with the Void Maw's climb out of it (enemy_view).
@@ -186,7 +191,9 @@ static func pit_point(g, x: int) -> Vector2:
 	return Vector2((x + 0.5) * g.CELL, GroundView.lane_y(acc / 5.0 * g.CELL, PIT_LANE))
 
 
-func _draw_arc_ground(ci: CanvasItem) -> void:
+# Stepped with the band (every frame): eases the cracks and the pit, and redraws their node only while there is something to show
+# (and once more after, to clear it).
+func _step_arc_ground() -> void:
 	var dt = clamp(_t - _arc_last, 0.0, 0.1)
 	_arc_last = _t
 	var felt = float(sim.arc_tremors) if sim.arc_stage >= 2 else 0.0
@@ -195,10 +202,17 @@ func _draw_arc_ground(ci: CanvasItem) -> void:
 	if open:
 		_pit_x = sim.void_x
 	_pit_k = move_toward(_pit_k, 1.0 if open else 0.0, dt * (0.75 if open else 0.3))
+	var want = _crack_k > 0.01 or _pit_k > 0.002
+	if want or _arc_drawn:
+		arc_node.update()
+	_arc_drawn = want
+
+
+func _draw_arc_node() -> void:
 	if _crack_k > 0.01:
-		_draw_cracks(ci)
+		_draw_cracks(arc_node)
 	if _pit_k > 0.002:
-		_draw_pit(ci)
+		_draw_pit(arc_node)
 
 
 func _make_cracks() -> void:

@@ -1,5 +1,5 @@
 {
- "_about": "Ant part kit cut from art_src/antkit_*.png by tools/art/make_antkit.py. Every piece is a trimmed transparent PNG with a 3 px margin, long side <= 256 px. All ants face RIGHT. 'pivot' is the suggested hinge in the piece's own pixels (see 'hinges'). _l/_r are the two drawings of a pair (mandibles: left and right jaw; antennae: near and far), 'pair' names the other one; flip_h a piece for the other side when a kind has one drawing. _fore/_hind: front and back wing. 'scale' is how much the piece was shrunk from its sheet, 'src' its box on the sheet. Full bodies also carry nose and tail (ends of the body, antennae, mandible tips and wings left out), 'length' (nose to tail, px), 'ground_y' (the ground line: bottom of the lowest foot) and 'feet_x' (x of each foot touching the ground).",
+ "_about": "Ant part kit cut from art_src/antkit_*.png by tools/art/make_antkit.py. Every piece is a trimmed transparent PNG with a 3 px margin, long side <= 256 px. All ants face RIGHT. 'pivot' is the suggested hinge in the piece's own pixels (see 'hinges'). _l/_r are the two drawings of a pair (mandibles: left and right jaw; antennae: near and far), 'pair' names the other one; flip_h a piece for the other side when a kind has one drawing. _fore/_hind: front and back wing. 'scale' is how much the piece was shrunk from its sheet, 'src' its box on the sheet. Full bodies also carry nose and tail (ends of the body, antennae, mandible tips and wings left out), 'length' (nose to tail, px), 'ground_y' (the ground line: bottom of the lowest foot) and 'feet_x' (x of each foot touching the ground); 'feet' = 'pivot' = the middle of the feet on the ground line.",
  "hinges": {
   "head": "neck: the back of the head, where it joins the thorax",
   "mandible": "back attachment corner: middle of the blunt base end, opposite the tip",
@@ -1134,17 +1134,17 @@
   },
   "antenna_beaded_r": {
    "file": "antkit/antenna_beaded_r.png",
-   "w": 90,
-   "h": 169,
+   "w": 87,
+   "h": 166,
    "kind": "antenna",
    "pivot": [
-    14.2,
-    7.7
+    13.5,
+    7.8
    ],
    "sheet": "antkit_full.png",
    "src": [
-    951,
-    819,
+    954,
+    822,
     1035,
     982
    ],
@@ -1153,34 +1153,34 @@
   },
   "antenna_whip": {
    "file": "antkit/antenna_whip.png",
-   "w": 237,
-   "h": 136,
+   "w": 232,
+   "h": 135,
    "kind": "antenna",
    "pivot": [
     11.9,
-    78.9
+    77.9
    ],
    "sheet": "antkit_parts_b.png",
    "src": [
     1152,
-    275,
-    1383,
+    276,
+    1378,
     405
    ],
    "scale": 1.0
   },
   "antenna_elbow": {
    "file": "antkit/antenna_elbow.png",
-   "w": 163,
+   "w": 158,
    "h": 164,
    "kind": "antenna",
    "pivot": [
-    25.1,
+    22.7,
     122.3
    ],
    "sheet": "antkit_parts_b.png",
    "src": [
-    1362,
+    1367,
     280,
     1519,
     438
@@ -1189,34 +1189,34 @@
   },
   "antenna_bigclub": {
    "file": "antkit/antenna_bigclub.png",
-   "w": 216,
-   "h": 171,
+   "w": 200,
+   "h": 170,
    "kind": "antenna",
    "pivot": [
     11.8,
-    90.5
+    89.5
    ],
    "sheet": "antkit_parts_b.png",
    "src": [
     1149,
-    357,
-    1359,
+    358,
+    1343,
     522
    ],
    "scale": 1.0
   },
   "antenna_fern": {
    "file": "antkit/antenna_fern.png",
-   "w": 172,
+   "w": 170,
    "h": 195,
    "kind": "antenna",
    "pivot": [
-    14.3,
+    12.3,
     150.5
    ],
    "sheet": "antkit_parts_b.png",
    "src": [
-    1342,
+    1344,
     416,
     1508,
     605
@@ -1282,18 +1282,18 @@
   "wing_cell_fore": {
    "file": "antkit/wing_cell_fore.png",
    "w": 256,
-   "h": 84,
+   "h": 83,
    "kind": "wing",
    "pivot": [
-    244.0,
-    42.6
+    244.1,
+    42.4
    ],
    "sheet": "antkit_parts_a.png",
    "src": [
     638,
     701,
     1126,
-    853
+    852
    ],
    "scale": 0.5123,
    "pair": "wing_cell_hind"
@@ -1320,18 +1320,18 @@
   "wing_long_fore": {
    "file": "antkit/wing_long_fore.png",
    "w": 256,
-   "h": 52,
+   "h": 50,
    "kind": "wing",
    "pivot": [
     244.1,
-    14.7
+    14.4
    ],
    "sheet": "antkit_parts_b.png",
    "src": [
     459,
-    529,
+    530,
     979,
-    625
+    621
    ],
    "scale": 0.4808,
    "pair": "wing_long_hind"
@@ -1358,18 +1358,18 @@
   "wing_short_fore": {
    "file": "antkit/wing_short_fore.png",
    "w": 256,
-   "h": 86,
+   "h": 84,
    "kind": "wing",
    "pivot": [
     244.1,
-    57.6
+    57.3
    ],
    "sheet": "antkit_full.png",
    "src": [
     1199,
     786,
     1510,
-    885
+    883
    ],
    "scale": 0.8039,
    "pair": "wing_short_hind",
@@ -1378,16 +1378,16 @@
   "wing_short_hind": {
    "file": "antkit/wing_short_hind.png",
    "w": 256,
-   "h": 96,
+   "h": 88,
    "kind": "wing",
    "pivot": [
     243.7,
-    24.1
+    16.2
    ],
    "sheet": "antkit_full.png",
    "src": [
     1202,
-    874,
+    884,
     1523,
     989
    ],
@@ -1509,8 +1509,8 @@
    "h": 142,
    "kind": "spine",
    "pivot": [
-    146.4,
-    123.9
+    146.7,
+    121.0
    ],
    "sheet": "antkit_parts_b.png",
    "src": [
@@ -1527,8 +1527,8 @@
    "h": 152,
    "kind": "spine",
    "pivot": [
-    229.3,
-    134.7
+    142.3,
+    67.3
    ],
    "sheet": "antkit_parts_b.png",
    "src": [
@@ -1545,7 +1545,7 @@
    "h": 189,
    "kind": "spine",
    "pivot": [
-    140.2,
+    129.9,
     167.0
    ],
    "sheet": "antkit_parts_b.png",
@@ -1563,8 +1563,8 @@
    "h": 197,
    "kind": "spine",
    "pivot": [
-    45.9,
-    174.5
+    59.3,
+    158.0
    ],
    "sheet": "antkit_parts_b.png",
    "src": [
@@ -1581,8 +1581,8 @@
    "h": 112,
    "kind": "spine",
    "pivot": [
-    22.8,
-    99.3
+    46.4,
+    71.0
    ],
    "sheet": "antkit_parts_b.png",
    "src": [
@@ -1599,8 +1599,8 @@
    "h": 132,
    "kind": "spine",
    "pivot": [
-    97.7,
-    115.5
+    97.4,
+    125.0
    ],
    "sheet": "antkit_parts_b.png",
    "src": [
@@ -1613,18 +1613,18 @@
   },
   "spine_knob": {
    "file": "antkit/spine_knob.png",
-   "w": 141,
+   "w": 138,
    "h": 162,
    "kind": "spine",
    "pivot": [
-    73.6,
+    73.1,
     84.7
    ],
    "sheet": "antkit_parts_b.png",
    "src": [
     1177,
     844,
-    1312,
+    1309,
     1000
    ],
    "scale": 1.0
@@ -1757,34 +1757,34 @@
   },
   "fur_tuft": {
    "file": "antkit/fur_tuft.png",
-   "w": 158,
+   "w": 130,
    "h": 116,
    "kind": "fur",
    "pivot": [
-    82.4,
-    58.0
+    64.3,
+    58.2
    ],
    "sheet": "antkit_parts_b.png",
    "src": [
-    1297,
+    1317,
     886,
-    1449,
+    1441,
     996
    ],
    "scale": 1.0
   },
   "fur_tuft_small": {
    "file": "antkit/fur_tuft_small.png",
-   "w": 107,
+   "w": 98,
    "h": 111,
    "kind": "fur",
    "pivot": [
-    55.0,
-    54.3
+    49.1,
+    54.6
    ],
    "sheet": "antkit_parts_b.png",
    "src": [
-    1420,
+    1429,
     887,
     1521,
     992
@@ -1797,7 +1797,7 @@
    "h": 126,
    "kind": "body",
    "pivot": [
-    113.5,
+    150.0,
     124.0
    ],
    "sheet": "antkit_full.png",
@@ -1819,10 +1819,15 @@
    "length": 229.6,
    "ground_y": 124.0,
    "feet_x": [
-    68.5,
-    155.5,
-    201.0,
-    231.0
+    70.5,
+    100.0,
+    154.0,
+    200.0,
+    229.5
+   ],
+   "feet": [
+    150.0,
+    124.0
    ]
   },
   "alate_full": {
@@ -1831,7 +1836,7 @@
    "h": 193,
    "kind": "body",
    "pivot": [
-    159.1,
+    117.2,
     191.0
    ],
    "sheet": "antkit_full.png",
@@ -1853,8 +1858,14 @@
    "length": 181.1,
    "ground_y": 191.0,
    "feet_x": [
-    149.5,
-    198.0
+    40.5,
+    76.5,
+    147.5,
+    194.0
+   ],
+   "feet": [
+    117.2,
+    191.0
    ]
   },
   "soldier_full": {
@@ -1863,7 +1874,7 @@
    "h": 196,
    "kind": "body",
    "pivot": [
-    61.6,
+    103.8,
     194.0
    ],
    "sheet": "antkit_full.png",
@@ -1885,8 +1896,14 @@
    "length": 163.4,
    "ground_y": 194.0,
    "feet_x": [
-    12.0,
-    152.5
+    16.5,
+    68.5,
+    148.0,
+    191.0
+   ],
+   "feet": [
+    103.8,
+    194.0
    ]
   },
   "worker_full": {
@@ -1895,7 +1912,7 @@
    "h": 141,
    "kind": "body",
    "pivot": [
-    109.9,
+    97.8,
     138.0
    ],
    "sheet": "antkit_full.png",
@@ -1917,7 +1934,14 @@
    "length": 156.0,
    "ground_y": 138.0,
    "feet_x": [
-    132.0
+    14.5,
+    63.0,
+    129.5,
+    181.0
+   ],
+   "feet": [
+    97.8,
+    138.0
    ]
   },
   "worker_small_full": {
@@ -1926,7 +1950,7 @@
    "h": 128,
    "kind": "body",
    "pivot": [
-    88.2,
+    95.0,
     126.0
    ],
    "sheet": "antkit_full.png",
@@ -1948,9 +1972,14 @@
    "length": 157.0,
    "ground_y": 126.0,
    "feet_x": [
-    29.5,
-    112.0,
-    161.5
+    31.0,
+    63.0,
+    110.0,
+    159.0
+   ],
+   "feet": [
+    95.0,
+    126.0
    ]
   },
   "egg_cluster": {
