@@ -37,6 +37,9 @@ const DEFS = {
 
 	# v0.29: the anteater is not part of a raid roster. It lumbers in now and then (colony_sim._step_anteater): slow, shaggy
 	# and huge, it sieges the entrance and licks ants off the ground with its tongue.
+	# v0.34: the Void Maw, the owner's drawn boss (art in content/art, rigged in content/colony/rig_art.gd). From the second boss raid on it comes in place of the Butcher.
+	"voidmaw": {"name": "Void Maw", "hp": 1000.0, "dmg": 10.0, "ant_mult": 0.5, "speed": 1.4, "cls": "boss", "food": 260.0, "cost": 22, "tex": [], "art": "voidmaw", "art_scale": 1.0, "h": 215.0},
+
 	"anteater": {"name": "Anteater", "hp": 1000.0, "dmg": 6.5, "ant_mult": 0.3, "speed": 1.5, "cls": "boss", "food": 190.0, "cost": 18, "tex": [], "art": "anteater"},
 
 	# v0.29: the rival colony's ants (drawn procedurally, bigger for the heavier castes)
@@ -57,3 +60,8 @@ const ELITE = ["bruiser", "isopod", "hornet"]
 const REACH = {"small": 1.6, "burrower": 1.9, "brute": 2.4, "elite": 3.0, "boss": 3.6, "prey": 1.8}
 # On-screen height in pixels, by class
 const HEIGHT = {"small": 34.0, "burrower": 50.0, "brute": 58.0, "elite": 96.0, "boss": 140.0, "prey": 42.0}
+
+
+# A raider's height: its own "h" when its definition has one (the Void Maw is far bigger than the Butcher), else its class's.
+static func height_of(e) -> float:
+	return float(e.def.get("h", HEIGHT[e.cls]))

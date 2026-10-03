@@ -9,6 +9,7 @@ extends Reference
 # drawn over every unit. Lane 0 is the back of the band, lane 1 the front lip (the dirt outline).
 
 const MK = preload("res://mods-unpacked/Judah-InfDNA/content/colony/mesh_kit.gd")
+const AL = preload("res://mods-unpacked/Judah-InfDNA/content/colony/art_lib.gd")
 const WF = preload("res://mods-unpacked/Judah-InfDNA/core/world_features.gd")
 const Seasons = preload("res://mods-unpacked/Judah-InfDNA/core/seasons.gd")
 
@@ -252,14 +253,158 @@ func draw_slice(ci: CanvasItem, s: int) -> void:
 		var sw = amp * sin(_t * 1.15 + e[0] * 1.7 + s * 0.45)
 		ci.draw_mesh(m, null, null, Transform2D(Vector2(1, 0), Vector2(sw, 1), Vector2(-sw * e[1]["oy"], 0)))
 	for fe in _vis_f[s]:
+		var sway = 0.0
 		if fe.get("sway", 0.0) > 0.0:
 			# a tree bends in the wind: the base stays put and the crown sways (a shear about the foot), more in rain
 			var gust = 1.0 + 1.6 * sim.rain
 			var ph = fe["x0"] * 0.0137
-			var sw2 = 0.0065 * gust * (sin(_t * 0.85 + ph) + 0.4 * sin(_t * 1.9 + ph * 1.7))
-			ci.draw_mesh(fe["mesh"], null, null, Transform2D(Vector2(1, 0), Vector2(sw2, 1), Vector2(-sw2 * fe["by"], 0)))
-		else:
-			ci.draw_mesh(fe["mesh"], null)
+			sway = 0.0065 * gust * (sin(_t * 0.85 + ph) + 0.4 * sin(_t * 1.9 + ph * 1.7))
+		var xf = Transform2D(Vector2(1, 0), Vector2(sway, 1), Vector2(-sway * fe["by"], 0))
+		if fe.has("spr"):
+			_draw_sprite(ci, fe["spr"], xf)
+		if fe["mesh"] != null:
+			if sway != 0.0:
+				ci.draw_mesh(fe["mesh"], null, null, xf)
+			else:
+				ci.draw_mesh(fe["mesh"], null)
+
+
+# A drawn tree or rock: the picture(s) of the entry at its place, the leaves of a leafy tree blended between the summer green and the spring or autumn
+# look by how far the year has gone (live, every frame, so the colours move smoothly between the rebuilds of the cached entry).
+func _draw_sprite(ci: CanvasItem, sp: Dictionary, xf: Transform2D) -> void:
+	ci.draw_set_transform_matrix(xf)
+	var rect = Rect2(sp["pos"], sp["size"])
+	var mod: Color = sp["mod"]
+	ci.draw_texture_rect(sp["base"], rect, false, mod)
+	if sp.has("looks") and day != null:
+		var ph = Seasons.phase(day.sea_t)
+		var spring = 1.0 - smoothstep(0.06, 0.3, ph)
+		if spring > 0.02 and sp["looks"].has("spring"):
+			ci.draw_texture_rect(sp["looks"]["spring"], rect, false, Color(mod.r, mod.g, mod.b, spring))
+		var au = day.autumn
+		if au > 0.02:
+			ci.draw_texture_rect(sp["looks"][sp["autumn"]], rect, false, Color(mod.r, mod.g, mod.b, au))
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+# The picture entry of a tree or rock feature, or null when the art is not there. `sh` is the ground shadow mesh builder.
+func _sprite_entry(f: Dictionary, spr: Dictionary, sh) -> Dictionary:
+	var lane: float = f["lane"]
+	var b = _base_point(f)
+	var sz: Vector2 = spr["size"]
+	return {"mesh": null, "shade": sh.build(), "slice": slice_of(lane), "x0": b.x - sz.x * 0.6, "x1": b.x + sz.x * 0.6, "sway": spr.get("sway", 0.0), "by": b.y, "spr": spr}
+
+
+func _tint(lane: float) -> Color:
+	return Color.white.linear_interpolate(Color(0.8, 0.87, 0.93), (1.0 - clamp(lane, 0.0, 1.0)) * 0.5)
+
+
+func _tree_sprite(f: Dictionary):
+	var lib = AL.get_lib()
+	var trees = lib.manifest().get("trees", [])
+	if trees.empty():
+		return null
+	var sd: float = f["seed"]
+	var r = MK.hash1(sd + 99.0)
+	var name = "oak1"
+	var hmul = 0.88
+	if r < 0.30:
+		name = "oak1"
+	elif r < 0.58:
+		name = "oak2"
+	elif r < 0.68:
+		name = "mossoak"
+		hmul = 0.55
+	elif r < 0.76:
+		name = "acacia"
+		hmul = 0.4
+	elif r < 0.82:
+		name = "grove"
+		hmul = 0.5
+	elif r < 0.93:
+		name = "spruce"
+		hmul = 0.95
+	elif r < 0.97:
+		name = "stump"
+		hmul = 0.38
+	else:
+		name = "log"
+		hmul = 0.16
+	var def = null
+	for t in trees:
+		if t["name"] == name:
+			def = t
+	if def == null:
+		return null
+	var lane: float = f["lane"]
+	var sc = persp(lane)
+	var leafy = bool(def["leafy"])
+	if leafy and float(_P["leaf"]) < 0.12 + 0.55 * MK.hash1(sd + 98.0):
+		return null                     # this tree has dropped its leaves: the game's own bare tree stands here
+	var base = lib.tex(str(def["looks"]["summer"]))
+	if base == null:
+		return null
+	var H = float(f["h"]) * sc * hmul
+	var aspect = float(def["w"]) / float(def["h"])
+	var size = Vector2(H * aspect, H)
+	if name == "log":
+		size = Vector2(float(f["w"]) * sc * 5.5, float(f["w"]) * sc * 5.5 * float(def["h"]) / float(def["w"]))
+	var b = _base_point(f)
+	var spr = {"base": base, "size": size, "pos": Vector2(b.x - size.x * 0.5, b.y - size.y + 6.0 * sc), "mod": _tint(lane), "sway": 1.0 if (leafy or name == "spruce") else 0.0}
+	if leafy:
+		var looks := {}
+		for k in def["looks"].keys():
+			var tx = lib.tex(str(def["looks"][k]))
+			if tx != null:
+				looks[k] = tx
+		spr["looks"] = looks
+		spr["autumn"] = ["orange", "red", "gold"][int(MK.hash1(sd + 55.0) * 2.99)]
+		if not looks.has(spr["autumn"]):
+			spr.erase("looks")
+	var sh = MK.new()
+	sh.shadow(b + Vector2(-size.x * 0.12, 5.0), size.x * 0.42, 14.0 * sc + size.x * 0.03, Color(0.06, 0.1, 0.04, 0.2), 3)
+	return _sprite_entry(f, spr, sh)
+
+
+func _rock_sprite(f: Dictionary):
+	var lib = AL.get_lib()
+	var rocks = lib.manifest().get("rocks", [])
+	if rocks.size() < 7:
+		return null
+	var sd: float = f["seed"]
+	var w: float = float(f["w"])
+	var lane: float = f["lane"]
+	var sc = persp(lane)
+	# rock_0 is the spire, 1 the dome, 2 the cairn, 3 and 4 low boulders, 5 a slab, 6 a single stone
+	var idx = 6
+	if w > 170.0:
+		idx = [0, 1, 1, 2][int(MK.hash1(sd + 7.0) * 3.99)]
+	elif w > 110.0:
+		idx = [1, 2, 3, 4][int(MK.hash1(sd + 7.0) * 3.99)]
+	elif w > 70.0:
+		idx = [3, 4, 5][int(MK.hash1(sd + 7.0) * 2.99)]
+	elif w > 45.0:
+		idx = [5, 6, 4][int(MK.hash1(sd + 7.0) * 2.99)]
+	var def = rocks[idx]
+	var tx = lib.tex(str(def["file"]))
+	if tx == null:
+		return null
+	var width = w * sc * (0.95 if idx != 0 else 0.6)
+	var size = Vector2(width, width * float(def["h"]) / float(def["w"]))
+	var b = _base_point(f)
+	var flip = MK.hash1(sd + 3.0) > 0.5
+	var spr = {"base": tx, "size": size, "pos": Vector2(b.x - size.x * 0.5, b.y - size.y + 4.0 * sc), "mod": _tint(lane)}
+	var sh = MK.new()
+	sh.shadow(b + Vector2(-size.x * 0.1, 3.0), size.x * 0.62, 6.0 * sc + size.y * 0.07, Color(0.06, 0.1, 0.04, 0.22), 3)
+	var e = _sprite_entry(f, spr, sh)
+	# snow lies on the top of it in winter
+	if float(_P["snow"]) > 0.5:
+		var mk = MK.new()
+		var top = Vector2(b.x, b.y - size.y * 0.97)
+		mk.blob(top + Vector2(0, size.y * 0.05), size.x * 0.34, size.y * 0.1, sd, 0.15, Color(0.62, 0.73, 0.86), 12)
+		mk.blob(top + Vector2(size.x * 0.01, size.y * 0.03), size.x * 0.32, size.y * 0.085, sd + 1.0, 0.15, Color(0.97, 0.985, 1.0), 12)
+		e["mesh"] = mk.build()
+	return e
 
 
 func visible_slices() -> Array:
@@ -650,6 +795,9 @@ func _base_point(f: Dictionary) -> Vector2:
 
 
 func _tree(f: Dictionary) -> Dictionary:
+	var drawn = _tree_sprite(f)
+	if drawn != null:
+		return drawn
 	var mk = MK.new()
 	var sh = MK.new()
 	var lane: float = f["lane"]
@@ -672,7 +820,7 @@ func _tree(f: Dictionary) -> Dictionary:
 	for i in n + 1:
 		var t = float(i) / n
 		pts.append(b + Vector2(lean * t * t + sin(t * 3.4 + sd) * w * 0.12 * t + sin(t * 9.0 + sd * 2.0) * w * 0.025, -top_y * t))
-		var ww = w * (1.0 - 0.42 * t) + w * 0.9 * pow(1.0 - t, 5.0)
+		var ww = w * (1.0 - 0.58 * t) + w * 0.9 * pow(1.0 - t, 5.0)
 		wid.append(ww)
 		wink.append(ww + 12.0)
 	# branches go behind the trunk, so they grow out of its sides instead of being drawn across it. Slim, tapering to a point, forking into
@@ -781,7 +929,7 @@ func _tree(f: Dictionary) -> Dictionary:
 	var N = 34
 	for i in N:
 		var rr = sqrt((i + 0.5) / N)
-		if leafk < 0.999 and rr + 0.3 * (MK.hash1(sd + i * 9.3) - 0.5) > 0.12 + 0.88 * leafk:
+		if leafk < 0.999 and (leafk < 0.04 or rr + 0.3 * (MK.hash1(sd + i * 9.3) - 0.5) > 0.06 + 0.94 * leafk):
 			continue          # leaves not out yet, or already down: the crown thins from the outside in (and the leaves that are left are smaller)
 		var ang2 = i * 2.39996 + sd
 		var jx = (MK.hash1(sd + i * 1.3) - 0.5) * 0.25
@@ -878,6 +1026,9 @@ func _lobe_y(a, b) -> bool:
 
 
 func _boulder(f: Dictionary) -> Dictionary:
+	var drawn = _rock_sprite(f)
+	if drawn != null:
+		return drawn
 	var mk = MK.new()
 	var sh = MK.new()
 	var lane: float = f["lane"]

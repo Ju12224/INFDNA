@@ -4,6 +4,7 @@ extends Node2D
 
 const CreatureArt = preload("res://mods-unpacked/Judah-InfDNA/content/colony/creature_art.gd")
 const GroundView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ground_view.gd")
+const Rig = preload("res://mods-unpacked/Judah-InfDNA/content/colony/rig_art.gd")
 
 var sim
 var cam
@@ -46,4 +47,5 @@ func _draw() -> void:
 	draw_circle(Vector2.ZERO, (95.0 - 25.0 * alt) * ps, Color(0.04, 0.07, 0.03, 0.28 * (1.0 - 0.5 * alt) * fade))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	var fold = clamp(float(b["dive"]) * 1.2 + (1.0 - alt) * 0.45, 0.0, 1.0)
-	CreatureArt.bird(self, pos, 0.95 * ps, _t, face, fold, fade)
+	if not (Rig.bird_available() and Rig.bird(self, pos, 0.95 * ps, _t, face, fold, fade)):
+		CreatureArt.bird(self, pos, 0.95 * ps, _t, face, fold, fade)

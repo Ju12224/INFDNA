@@ -121,7 +121,7 @@ func _ant_pts(a) -> Array:
 func _raider_pts(e) -> Array:
 	var C = sim.grid.CELL
 	var d = ant_view._depth(-e.id, ant_view.lane_of(e, -e.id))
-	var h = EnemyDefs.HEIGHT[e.cls] * d[1]
+	var h = EnemyDefs.height_of(e) * d[1]
 	var feet = sim.enemy_pos(e) + Vector2(0, C * 0.5 + d[0])
 	return [feet, feet - Vector2(0, h * 0.45), h, d[3]]
 

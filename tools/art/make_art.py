@@ -27,10 +27,12 @@ CREATURES = {
                # the cream fangs, cut out by colour inside this box (body-picture pixels) and hinged at their tops
                "jaws": {"kind": "color", "box": [420, 305, 581, 452], "open": [0.2, -0.16], "cavity": (26, 18, 38)},
                "wave": False},
-    "void": {"width": 1180, "outline": 5, "length": 520.0, "order": ["far", "near", "body"], "glow": True,
+    "void": {"width": 1180, "outline": 5, "length": 420.0, "order": ["far", "near", "body"], "glow": True,
              # the lower jaw: the big claws and the lower teeth, everything under the line of the mouth; it swings on the back corner of the mouth
-             "jaws": {"kind": "poly", "poly": [(838, 292), (912, 292), (925, 322), (1070, 322), (1072, 284), (1180, 284), (1180, 570), (838, 570)],
-                      "pivot": (845, 318), "open": [0.34], "cavity": (22, 8, 38)},
+             "jaws": {"kind": "poly", "poly": [(838, 296), (912, 296), (925, 326), (1056, 326), (1062, 440), (1040, 540), (838, 570)],
+                      "pivot": (845, 318), "open": [0.34], "cavity": (22, 8, 38),
+                      # the dark of the throat, drawn behind the jaw so an open mouth looks into the void (and never spills outside the head)
+                      "cavity_poly": [(905, 292), (1040, 288), (1068, 330), (1055, 410), (990, 436), (935, 400), (905, 345)]},
              "wave": True},
 }
 
@@ -198,16 +200,201 @@ def make_jaws(body, spec):
     rest.putalpha(ImageChops.multiply(body.getchannel("A"), ImageChops.invert(cut_mask)))
     # the hollow the jaw leaves behind: the shape of what was cut, filled with the dark of the mouth, so an open mouth looks into the void
     hollow = ImageChops.multiply(body.getchannel("A"), cut_mask).filter(ImageFilter.MaxFilter(5))
+    if jw.get("cavity_poly"):
+        hollow = Image.new("L", body.size, 0)
+        ImageDraw.Draw(hollow).polygon(jw["cavity_poly"], fill=255)
+        hollow = ImageChops.multiply(hollow.filter(ImageFilter.GaussianBlur(3)), body.getchannel("A"))      # never outside the head's outline
     cav = Image.new("RGBA", body.size, tuple(jw["cavity"]) + (0,))
+    if jw.get("cavity_poly"):
+        # the void is not flat: darkest at the edges, a violet glow deep in the throat
+        from PIL import ImageOps
+        xs = [q[0] for q in jw["cavity_poly"]]
+        ys = [q[1] for q in jw["cavity_poly"]]
+        bx0, by0, bx1, by1 = min(xs), min(ys), max(xs), max(ys)
+        rg = Image.radial_gradient("L").resize((int(bx1 - bx0), int(by1 - by0)))
+        rg = ImageOps.invert(rg)
+        glow = ImageOps.colorize(rg, black=tuple(jw["cavity"]), white=(92, 36, 140)).convert("RGBA")
+        cav.paste(glow, (int(bx0), int(by0)))
     cav.putalpha(hollow)
     cbb = cav.getchannel("A").point(lambda v: 255 if v > 8 else 0).getbbox()
     cavity = {"img": cav.crop(cbb), "x": cbb[0], "y": cbb[1]} if cbb else None
     return rest, pieces, cavity
 
 
+def make_rocks(manifest):
+    """The rock sheet: every separate rock (a boulder with its own pebbles round it counts as one) becomes a sprite for the meadow."""
+    sheet = load("rocks.png")
+    k = 0.4
+    sheet = sheet.resize((int(sheet.size[0] * k), int(sheet.size[1] * k)), Image.LANCZOS)
+    sheet = thicken(sheet, 3)
+    comps, step = components(sheet, step=3, thresh=24)
+    comps = [c for c in comps if len(c) > 12]
+    pieces = cut(sheet, comps, step)
+    pieces.sort(key=lambda p: -(p["img"].size[0] * p["img"].size[1]))
+    rocks = []
+    for i, p in enumerate(pieces):
+        fn = "rock_%d.png" % i
+        p["img"].save(os.path.join(OUT, fn), optimize=True)
+        w, h = p["img"].size
+        rocks.append({"file": fn, "w": w, "h": h, "tall": h > 1.25 * w})
+        print("rock %d: %dx%d%s" % (i, w, h, " (spire)" if h > 1.25 * w else ""))
+    manifest["rocks"] = rocks
+
+
+def trim(im, pad=2):
+    bb = im.getchannel("A").point(lambda v: 255 if v > 8 else 0).getbbox()
+    bb = (max(0, bb[0] - pad), max(0, bb[1] - pad), min(im.size[0], bb[2] + pad), min(im.size[1], bb[3] + pad))
+    return im.crop(bb)
+
+
+def make_trees(manifest):
+    """The tree sheet: six sprites cut by hand-placed boxes (some of them touch). `leafy` ones carry their leaves all year, so the game swaps them for
+    bare trees in winter; the others (dead stump, fallen log, spruce) stand in every season."""
+    sheet = load("trees.png")
+    boxes = [("mossoak", True, (0, 0, 925, 670)), ("stump", False, (900, 50, 1400, 565)), ("spruce", False, (1395, 0, 1774, 610)),
+             ("log", False, (20, 625, 940, 887)), ("acacia", True, (825, 568, 1395, 887)), ("grove", True, (1395, 585, 1774, 887))]
+    k = 0.6
+    trees = []
+    for nm, leafy, box in boxes:
+        c = sheet.crop(box)
+        c = c.resize((int(c.size[0] * k), int(c.size[1] * k)), Image.LANCZOS)
+        # keep only the big connected pieces of this box (another tree's edge can poke into it)
+        comps, step = components(c, step=2, thresh=24)
+        biggest = max(len(q) for q in comps)
+        comps = [q for q in comps if len(q) > 0.12 * biggest]
+        parts = cut(c, comps, step, grow=2)
+        c2 = Image.new("RGBA", c.size, (0, 0, 0, 0))
+        for q in parts:
+            c2.alpha_composite(q["img"], (int(q["x"]), int(q["y"])))
+        c = trim(c2)
+        fn = "tree_%s.png" % nm
+        c.save(os.path.join(OUT, fn), optimize=True)
+        entry = {"name": nm, "file": fn, "w": c.size[0], "h": c.size[1], "leafy": leafy, "looks": {"summer": fn}}
+        entry["mist"] = {}
+        if leafy:
+            for lk, args in LOOKS.items():
+                f2 = "tree_%s_%s.png" % (nm, lk)
+                rc = recolor(c, *args)
+                rc.save(os.path.join(OUT, f2), optimize=True)
+                entry["looks"][lk] = f2
+                m2 = "mist_%s_%s.png" % (nm, lk)
+                mist(rc).save(os.path.join(OUT, m2), optimize=True)
+                entry["mist"][lk] = m2
+        else:
+            m2 = "mist_%s.png" % nm
+            mist(c).save(os.path.join(OUT, m2), optimize=True)
+            entry["mist"]["summer"] = m2
+        trees.append(entry)
+        print("tree %s: %dx%d%s" % (nm, c.size[0], c.size[1], " (leafy)" if leafy else ""))
+    manifest["trees"] = trees
+
+
+LOOKS = {"summer": (0.31, 1.05, 1.2, 0.03), "spring": (0.22, 1.0, 1.42, 0.06), "orange": (0.07, 1.25, 1.75, 0.1), "red": (0.0, 1.35, 1.55, 0.04), "gold": (0.13, 1.2, 1.85, 0.12)}
+
+
+def green_center(im):
+    """The average hue of a sprite's leaves, so the recolour keeps the spread of tones around it whatever green the picture started from."""
+    import colorsys
+    px = im.load()
+    w, h = im.size
+    tot = 0.0
+    n = 0
+    for y in range(0, h, 3):
+        for x in range(0, w, 3):
+            r, g, b, a = px[x, y]
+            if a < 200:
+                continue
+            hh, ss, vv = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
+            if 0.18 < hh < 0.5 and ss > 0.25:
+                tot += hh
+                n += 1
+    return tot / n if n else 0.37
+
+
+def mist(im, k=0.45, height=340):
+    """A small, washed-out copy for the far background: the colour pulled toward a pale blue haze."""
+    w = max(8, int(im.size[0] * height / im.size[1]))
+    sm = im.resize((w, height), Image.LANCZOS)
+    haze = Image.new("RGBA", sm.size, (206, 222, 230, 255))
+    out = Image.blend(sm.convert("RGB"), haze.convert("RGB"), k).convert("RGBA")
+    out.putalpha(sm.getchannel("A"))
+    return out
+
+
+def recolor(im, hue_to, sat_k, val_k, val_add=0.0):
+    """Move the green of the leaves to another colour (the trunk, brown and grey, stays): the autumn and spring versions of a tree. The change is blended in by how
+    green a pixel is, so the dark edge where leaves meet shadow shifts smoothly and leaves no speckle."""
+    import colorsys
+    out = im.copy()
+    px = out.load()
+    w, h = out.size
+    center = green_center(im)
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            if a < 8:
+                continue
+            hh, ss, vv = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
+            hw = min(1.0, max(0.0, (hh - 0.13) / 0.07)) * min(1.0, max(0.0, (0.56 - hh) / 0.08))
+            sw = min(1.0, max(0.0, (ss - 0.08) / 0.16))
+            wgt = hw * sw
+            if wgt <= 0.0:
+                continue
+            nh = hue_to + (hh - center) * 0.35
+            ns = min(1.0, ss * sat_k)
+            nv = min(1.0, vv * val_k + val_add * min(1.0, vv * 3.0))
+            r2, g2, b2 = colorsys.hsv_to_rgb(nh % 1.0, ns, nv)
+            px[x, y] = (int((r / 255.0 * (1 - wgt) + r2 * wgt) * 255), int((g / 255.0 * (1 - wgt) + g2 * wgt) * 255), int((b / 255.0 * (1 - wgt) + b2 * wgt) * 255), a)
+    return out
+
+
+def make_oaks(manifest):
+    """Two full oaks with every season of leaf on them (summer green is the drawing; spring, three autumns); winter uses the game's bare tree."""
+    sheet = load("trees2.png")
+    k = 0.8
+    sheet = sheet.resize((int(sheet.size[0] * k), int(sheet.size[1] * k)), Image.LANCZOS)
+    comps, step = components(sheet, step=3, thresh=24)
+    comps = [c for c in comps if len(c) > 900]
+    pieces = cut(sheet, comps, step, grow=3)
+    pieces.sort(key=lambda p: p["x"])
+    for i, p in enumerate(pieces):
+        nm = "oak%d" % (i + 1)
+        entry = {"name": nm, "w": p["img"].size[0], "h": p["img"].size[1], "leafy": True, "looks": {}}
+        entry["mist"] = {}
+        for lk, args in LOOKS.items():
+            fn = "tree_%s_%s.png" % (nm, lk)
+            rc = recolor(p["img"], *args)
+            rc.save(os.path.join(OUT, fn), optimize=True)
+            entry["looks"][lk] = fn
+            m2 = "mist_%s_%s.png" % (nm, lk)
+            mist(rc).save(os.path.join(OUT, m2), optimize=True)
+            entry["mist"][lk] = m2
+        entry["file"] = entry["looks"]["summer"]
+        manifest["trees"].append(entry)
+        print("oak %s: %dx%d, looks %s" % (nm, entry["w"], entry["h"], ",".join(entry["looks"].keys())))
+
+
+def make_bird(manifest):
+    """The bird's five parts, each cropped; the game assembles and flaps them."""
+    parts = {}
+    for nm in ["head", "wing_a", "wing_b", "claw_1", "claw_2"]:
+        im = load("bird_%s.png" % nm)
+        im = im.resize((int(im.size[0] * 0.4), int(im.size[1] * 0.4)), Image.LANCZOS)
+        t = trim(im)
+        fn = "bird_%s.png" % nm
+        t.save(os.path.join(OUT, fn), optimize=True)
+        parts[nm] = {"file": fn, "w": t.size[0], "h": t.size[1]}
+        print("bird %s: %dx%d" % (nm, t.size[0], t.size[1]))
+    manifest["bird"] = parts
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     manifest = {}
+    make_trees(manifest)
+    make_oaks(manifest)
+    make_bird(manifest)
+    make_rocks(manifest)
     for name, spec in CREATURES.items():
         body = load(name + "_body.png")
         la = load(name + "_legs_a.png")
@@ -225,7 +412,7 @@ def main():
             px = [p for p in im.resize((120, 120)).getdata() if p[3] > 200]
             return sum((p[0] + p[1] + p[2]) / 3 for p in px) / max(1, len(px))
         far, near = (la, lb) if bright(la) <= bright(lb) else (lb, la)
-        entry = {"canvas": list(size), "order": spec["order"], "parts": []}
+        entry = {"canvas": list(size), "order": spec["order"], "parts": [], "wave": bool(spec.get("wave", False))}
         union = None
         for layer, im in (("far", far), ("near", near)):
             comps, step = components(im)
@@ -275,6 +462,7 @@ def main():
         # the feet: the middle of everything, on the lowest point of the legs
         entry["feet"] = [round((union[0] + union[2]) / 2.0, 1), float(union[3])]
         entry["width"] = float(union[2] - union[0])
+        entry["height"] = float(union[3] - union[1])
         entry["scale"] = round(spec["length"] / entry["width"], 5)
         manifest[name] = entry
         print("%s: %d parts, canvas %s, game scale %.4f" % (name, len(entry["parts"]), size, entry["scale"]))

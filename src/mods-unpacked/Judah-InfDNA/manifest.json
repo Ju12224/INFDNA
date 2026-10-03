@@ -1,7 +1,7 @@
 {
 	"name": "InfDNA",
 	"namespace": "Judah",
-	"version_number": "0.33.0",
+	"version_number": "0.34.0",
 	"website_url": "",
 	"description": "Evolving ant-colony mode: pick a queen, steer the colony, and watch it evolve past ants.",
 	"dependencies": [],

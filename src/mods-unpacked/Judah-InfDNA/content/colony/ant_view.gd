@@ -257,7 +257,7 @@ func _draw_shadows(items: Array) -> void:
 			air = _air(u)
 		else:
 			pos = sim.enemy_pos(u) + Vector2(0, C * 0.5 + d[0])
-			rx = EnemyDefs.HEIGHT[u.cls] * 0.36 * d[1]
+			rx = EnemyDefs.height_of(u) * 0.36 * d[1]
 			air = sk if u.def.get("fly", false) else 0.0
 		var a = sk * d[3] * (1.0 - 0.5 * air) * (1.0 - 0.8 * (day.night if day != null else 0.0))     # no sun, no shadows
 		if q == 1:
@@ -329,7 +329,7 @@ func pick_enemy(world_pos: Vector2, radius: float = 34.0):
 	var C = sim.grid.CELL
 	for e in sim.enemies:
 		var d = _depth(-e.id, lane_of(e, -e.id))
-		var h = EnemyDefs.HEIGHT[e.cls] * d[1]
+		var h = EnemyDefs.height_of(e) * d[1]
 		var mid = sim.enemy_pos(e) + Vector2(0, C * 0.5 + d[0]) + Vector2(0, -h * 0.5)
 		var q = mid.distance_squared_to(world_pos)
 		var rr = max(radius, h * 0.6)

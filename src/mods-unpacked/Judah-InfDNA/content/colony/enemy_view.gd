@@ -66,7 +66,7 @@ func _process(delta: float) -> void:
 
 
 func draw_enemy(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade: float, alpha: float = 1.0, air: float = 0.0) -> void:
-	var h = EnemyDefs.HEIGHT[e.cls] * depth_scale
+	var h = EnemyDefs.height_of(e) * depth_scale
 	var tex = _tex.get(e.kind)
 	var moving = e.tx != e.x or e.ty != e.y
 	var bob = sin(_t * (12.0 if moving else 4.0) + e.id) * (0.06 if moving else 0.025)
@@ -78,7 +78,8 @@ func draw_enemy(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade: flo
 	elif art != "":
 		var fly = e.def.get("fly", false)
 		var lift = 6.0 + 22.0 * air if fly else 0.0
-		CreatureArt.draw(art, ci, feet, depth_scale * float(e.def.get("art_scale", 1.0)), shade, alpha * (0.75 if e.state == 2 else 1.0), _t, e.facing, e.id, moving, e.flash > 0.0, lift)
+		var mouth = (0.5 + 0.5 * sin(_t * 8.0 + e.id)) if (e.engaged and e.state != 2) else (0.12 + 0.12 * sin(_t * 1.6 + e.id))
+		CreatureArt.draw(art, ci, feet, depth_scale * float(e.def.get("art_scale", 1.0)), shade, alpha * (0.75 if e.state == 2 else 1.0), _t, e.facing, e.id, moving, e.flash > 0.0, lift, mouth)
 		if fly:
 			feet = feet - Vector2(0, (lift + 14.0) * depth_scale)     # marks and bars ride with the flyer
 	elif tex != null:

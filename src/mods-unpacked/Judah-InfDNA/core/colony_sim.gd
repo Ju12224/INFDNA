@@ -2472,9 +2472,10 @@ func _launch_raid() -> void:
 	if raid_n >= 6:
 		pool += EnemyDefs.ELITE
 	var kinds := []
+	var boss_kind = "voidmaw" if raid_n >= BOSS_EVERY * 2 else "butcher"
 	if raid_n % BOSS_EVERY == 0:
-		kinds.append("butcher")
-		budget -= EnemyDefs.DEFS["butcher"]["cost"]
+		kinds.append(boss_kind)
+		budget -= EnemyDefs.DEFS[boss_kind]["cost"]
 	# tunnel borers: from raid 4, every other raid (never on a Butcher raid), one at a time
 	# until raid 12, then two. They dig their own way to the queen, so they ARE the queen threat.
 	var borers := _borer_plan(budget)
@@ -2520,7 +2521,9 @@ func _launch_raid() -> void:
 			banner = "Raid %d  -  your own descendants, the %s, attack from the %s!  (%d)" % [raid_n, rival.name, "west" if side < 0 else "east", kinds.size()]
 	if borers > 0:
 		banner += "  -  %d BORING toward the queen!" % borers
-	_sfx("boss" if kinds.has("butcher") else "raid")
+	if kinds.has("voidmaw"):
+		banner = "Raid %d  -  something climbs up out of the void!  (%d raiders)" % [raid_n, kinds.size()]
+	_sfx("boss" if (kinds.has("butcher") or kinds.has("voidmaw")) else "raid")
 	banner_t = 6.0
 
 
@@ -2590,7 +2593,7 @@ func _spawn_enemy(kind: String, side: int, from_x: int = 0, guard_at: int = 0) -
 	e.facing = e.heading
 	e.lane = rng.randf_range(0.45, 0.9)
 	enemies.append(e)
-	if kind == "butcher" or kind == "anteater":
+	if kind == "butcher" or kind == "anteater" or kind == "voidmaw":
 		shake = max(shake, 0.7)
 		fx.append({"kind": "ring", "pos": grid.center(e.x, e.y - 2), "t": 0.0, "color": Color("#ff8a5c")})
 

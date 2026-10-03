@@ -1,4 +1,20 @@
-# InfDNA (Brotato mod) - v0.33.0
+# InfDNA (Brotato mod) - v0.34.0
+
+## v0.34.0 - the owner's art goes in: spider, Void Maw, bird, rocks and trees
+The first drawn art (ChatGPT, one transparent PNG per part) is in the game, cut up and animated by code. Pipeline: `art_src/` (originals) -> `tools/art/make_art.py` -> `content/art/` + `art_manifest.json`
+-> `content/colony/art_lib.gd` (reads the PNGs with Image.load, since mod PNGs carry no import files) -> `rig_art.gd` (assembles and moves the pieces).
+- **Spider**: body, two sets of legs (a darker far side behind, a lighter near side in front) and three fangs. The legs swing on their hips in a diagonal gait while it walks, the body bobs, the fangs
+  open and shut (wide open while it is fighting, a slow breath while it is not). Same size as before relative to an ant.
+- **Void Maw** (new boss): the cracked bone-white worm with violet light in its cracks. Its body is drawn in strips that ripple from tail to head as it crawls, its lower jaw swings open and shut on a hinge
+  over a violet throat, the cracks and eyes pulse, and the legs swing. From the second boss raid (raid 16) it comes in place of the Butcher ("something climbs up out of the void!"). About 215 px tall.
+- **Bird**: head, a shoulder with its wing, a second wing, two feet. The wings flap about the shoulder (the far one a little behind and darker), the talons thrust forward in a stoop. Falls back to the old
+  drawn bird if the art is missing.
+- **Rocks**: the seven rocks (a spire, a dome, a cairn, low boulders, a slab, a single stone) are the meadow's boulders now, picked by size; snow lies on top in winter.
+- **Trees**: the two clean oaks and the moss oak, acacia and grove are the big trees, with a spring green, a summer green and three autumn colours (orange, red, gold) that the leaves blend into as autumn
+  comes (live, every frame). Each tree drops its leaves at its own time: it is swapped for the game's own bare tree at that moment (and back in spring). The spruce, the hollow stump and the fallen log
+  stand in every season. Hazy, small copies of all of them stand on the far ridges in the mist, fading out in winter if leafy.
+- `tools/art/make_art.py` regenerates everything from `art_src/` (needs Pillow). The mod grew to 15 MB (the tree colour versions are most of it).
+- **Not verified in Brotato**: the art loads from the release zip in a headless test, and all of it looks right in 1920x1080 renders. The art was sent as images; I have not seen it next to Brotato's own art.
 
 ## v0.33.0 - look and feel: readable fights, grounded trees, real seasons, smoother everything
 From the second playtest. The big items (a self-steering movement system, a faster sim, the zoom-into-the-grass view, the mutation score and the world-takeover arc) are next.

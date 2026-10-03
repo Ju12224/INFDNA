@@ -9,6 +9,7 @@ extends Node2D
 # closes the world off.
 
 const MK = preload("res://mods-unpacked/Judah-InfDNA/content/colony/mesh_kit.gd")
+const AL = preload("res://mods-unpacked/Judah-InfDNA/content/colony/art_lib.gd")
 const Seasons = preload("res://mods-unpacked/Judah-InfDNA/core/seasons.gd")
 
 var cam
@@ -258,6 +259,8 @@ func _layer(v: Rect2, i: int) -> void:
 	# ambient ants marching along the farmland and hedge ridges (the idea comes from the v0.22 sky)
 	if (i == 3 or i == 6) and s > 0.38 and (perf == null or perf.backdrop >= 2):
 		_bg_ants(i, s, p0, p1)
+	if (i == 3 or i == 4) and (perf == null or perf.backdrop >= 2):
+		_mist_trees(i, p0, p1)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if _cache.size() > 160:
 		_cache.clear()
@@ -384,6 +387,79 @@ func _meadow(mk, i: int, x0: float, col: Color, hz: float) -> void:
 			mk.ellipse(Vector2(x, y - 3.0 * scale), 2.0 * scale, 2.0 * scale, fc.linear_interpolate(HAZE, hz * 0.6), 6)
 		elif r > 0.93 and autumn > 0.3:
 			mk.ellipse(Vector2(x, y), 5.0 * scale, 1.7 * scale, Color("#c8661e").linear_interpolate(HAZE, hz), 7)
+
+
+# The owner's big trees standing far off in the mist: hazy, a little blue, on the ridge of the farmland and pine layers. Leafy ones follow the year (their
+# autumn colours, and they fade out as the winter strips them); the spruces, stumps and fallen logs stand all year.
+const MIST_SPAN = 430.0
+
+
+func _mist_trees(i: int, p0: float, p1: float) -> void:
+	var lib = AL.get_lib()
+	var trees = lib.manifest().get("trees", [])
+	if trees.empty():
+		return
+	var L = LAYERS[i]
+	var f: float = L["f"]
+	var hz: float = L["hz"]
+	var haze = Color(1, 1, 1).linear_interpolate(Color(0.74, 0.84, 0.9), clamp(hz * 2.6, 0.0, 0.8))
+	var leaf = day.leaf if day != null else 1.0
+	var au = day.autumn if day != null else 0.0
+	for ci in range(int(floor(p0 / MIST_SPAN)) - 1, int(ceil(p1 / MIST_SPAN)) + 1):
+		var hh = _hh(ci * 41.3, f * 7.7)
+		if hh < 0.38:
+			continue
+		var x = ci * MIST_SPAN + _hh(ci, 3.3 + f) * MIST_SPAN * 0.8
+		var r = _hh(ci * 7.1, 5.0 + f)
+		var name = "oak1"
+		var hgt = 190.0 + 90.0 * _hh(ci, 9.0)
+		if r < 0.25:
+			name = "oak1"
+		elif r < 0.48:
+			name = "oak2"
+		elif r < 0.58:
+			name = "mossoak"
+			hgt *= 0.62
+		elif r < 0.66:
+			name = "acacia"
+			hgt *= 0.5
+		elif r < 0.72:
+			name = "grove"
+			hgt *= 0.6
+		elif r < 0.9:
+			name = "spruce"
+			hgt *= 1.05
+		elif r < 0.96:
+			name = "stump"
+			hgt *= 0.45
+		else:
+			name = "log"
+			hgt *= 0.22
+		var def = null
+		for t in trees:
+			if t["name"] == name:
+				def = t
+		if def == null:
+			continue
+		var a = 1.0
+		var look = "summer"
+		if bool(def["leafy"]):
+			var thr = 0.15 + 0.5 * _hh(ci, 11.0)
+			a = smoothstep(thr - 0.08, thr + 0.08, leaf)
+			if au > 0.5:
+				look = ["orange", "red", "gold"][int(_hh(ci, 12.0) * 2.99)]
+			elif day != null and Seasons.phase(day.sea_t) < 0.12:
+				look = "spring"
+		if a < 0.03:
+			continue
+		var mfile = str(def["mist"].get(look, def["mist"].get("summer", "")))
+		var tex = lib.tex(mfile) if mfile != "" else null
+		if tex == null:
+			continue
+		var w = hgt * float(def["w"]) / float(def["h"])
+		var ry = _ridge_y(i, x) + 14.0
+		var mod = Color(1, 1, 1, a * 0.9)
+		draw_texture_rect(tex, Rect2(x - w * 0.5, ry - hgt, w, hgt), false, mod)
 
 
 # Columns of tiny ants marching along a layer's ridge, some carrying a leaf. Deterministic in x and time,
