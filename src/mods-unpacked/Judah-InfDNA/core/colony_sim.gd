@@ -12,6 +12,7 @@ extends Reference
 
 const Genome = preload("res://mods-unpacked/Judah-InfDNA/core/genome.gd")
 const Arc = preload("res://mods-unpacked/Judah-InfDNA/core/arc.gd")
+const UG = preload("res://mods-unpacked/Judah-InfDNA/core/underground.gd")
 const Phenotype = preload("res://mods-unpacked/Judah-InfDNA/core/phenotype.gd")
 const WorldGrid = preload("res://mods-unpacked/Judah-InfDNA/core/world_grid.gd")
 const EnemyDefs = preload("res://mods-unpacked/Judah-InfDNA/core/enemy_defs.gd")
@@ -1295,6 +1296,7 @@ func _step_director(dt: float) -> void:
 	_step_bird(dt)
 	_step_apex(dt)
 	Arc.step(self, dt)
+	UG.get_reg().step(self, dt)
 	_step_anteater_spawn(dt)
 	strike_t = max(0.0, strike_t - dt)
 	will = min(will_max(), will + WILL_REGEN * (1.0 + mod("will_regen")) * dt)
@@ -2039,6 +2041,8 @@ func _finish_dig(a) -> void:
 	var job = planner.job_by_id(a.job_id)
 	var r = planner.radius_for(job) if job != null else 1.25
 	var n = grid.carve(a.dig_cell.x, a.dig_cell.y, r, a.dig_z)
+	if n > 0:
+		UG.get_reg().on_carve(self, int(a.dig_cell.x), int(a.dig_cell.y), a.dig_z)
 	if job != null:
 		planner.note_dug(job, n)
 		planner.after_carve(job, a.dig_cell)

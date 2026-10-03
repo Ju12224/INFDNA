@@ -26,6 +26,7 @@ const Wild = preload("res://mods-unpacked/Judah-InfDNA/core/wild.gd")
 const Orders = preload("res://mods-unpacked/Judah-InfDNA/core/orders.gd")
 const SelectView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/select_view.gd")
 const ContextMenu = preload("res://mods-unpacked/Judah-InfDNA/content/colony/context_menu.gd")
+const UgView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ug_view.gd")
 const DayCycle = preload("res://mods-unpacked/Judah-InfDNA/content/colony/day_cycle.gd")
 const WatchCam = preload("res://mods-unpacked/Judah-InfDNA/content/colony/watch_cam.gd")
 const SELECT_SCENE = "res://mods-unpacked/Judah-InfDNA/content/colony/queen_select.tscn"
@@ -53,6 +54,7 @@ var selected = null
 var speed := 1.0
 var eff_speed := 1.0           # sim seconds actually simulated per real second (HUD shows it when it falls short)
 var _debt := 0.0
+var _ug_view           # ug_view.gd: draws the underground structures
 var _fast_k := 4               # how many cells an unwatched ant covers per decision at 10x (raised when the machine lags)
 var _lag_t := 0.0
 var _since_speed := 99.0
@@ -104,6 +106,10 @@ func _ready() -> void:
 	world_view.day = day
 	world_view.ground.day = day
 
+	var ugv = UgView.new()          # underground structures (roots, caverns, buried things...): on the soil, under the units
+	ugv.sim = sim
+	add_child(ugv)
+	_ug_view = ugv
 	rival_view = RivalView.new()   # the rival colony's mound, under the units
 	rival_view.sim = sim
 	rival_view.ground = world_view.ground
@@ -135,6 +141,7 @@ func _ready() -> void:
 
 	cam = CameraRig.new()
 	add_child(cam)
+	_ug_view.cam = cam
 	cam.setup(world_view.world_size())
 	ant_view.cam = cam
 	rival_view.cam = cam

@@ -19,6 +19,7 @@ extends Reference
 # plane (floor, wall or ceiling), or on the ground-level rim across a shaft mouth.
 # The back plane exists only underground.
 
+const UG = preload("res://mods-unpacked/Judah-InfDNA/core/underground.gd")
 const CELL = 6.0
 const CHUNK = 64          # render + growth step (columns)
 const PAD = 2             # render padding so chunk seams filter cleanly
@@ -321,6 +322,11 @@ func _stamp_stones(xa: int, xb: int) -> void:
 						mat[j] = s[4]
 
 
+# Underground structures (core/underground.gd: roots, caverns, buried things, veins, ruins) written into new sim columns.
+func _stamp_features(xa: int, xb: int) -> void:
+	UG.get_reg().stamp_range(self, xa, xb)
+
+
 # Material anywhere (outside the sim range it is computed from the generators).
 func mat_at(x: int, y: int) -> int:
 	if inb(x, y):
@@ -376,6 +382,7 @@ func _alloc_fresh() -> void:
 	for i in W:
 		pher[i] = 0.0
 	_stamp_stones(ox, ox + W - 1)
+	_stamp_features(ox, ox + W - 1)
 	_make_neg()
 	layout += 1
 
@@ -450,8 +457,10 @@ func _extend(add_l: int, add_r: int) -> void:
 	WH = W * H
 	if add_l > 0:
 		_stamp_stones(ox, old_l - 1)
+		_stamp_features(ox, old_l - 1)
 	if add_r > 0:
 		_stamp_stones(old_r + 1, ox + W - 1)
+		_stamp_features(old_r + 1, ox + W - 1)
 	_make_neg()
 	layout += 1
 	if add_l > 0:
