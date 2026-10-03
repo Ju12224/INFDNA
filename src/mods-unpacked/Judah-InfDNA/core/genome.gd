@@ -89,6 +89,47 @@ var traits: Dictionary = {
 }
 
 
+# How far this body is from a plain ant: the number the player breeds for. 0 is the founder's plan; a thoroughly strange line
+# (extra segments, grown organs, a fusion, wings, spikes, a long ancestry) is 150 or more. Cached: a genome never changes once made.
+var _ms := -1.0
+const MS_MONSTER = 150.0       # the score that counts as a full monstrosity
+
+
+func mutation_score() -> float:
+	if _ms >= 0.0:
+		return _ms
+	var sc := 2.0 * max(0, ancestry().size() - 1)          # every visible branch is one step from the founder
+	sc += 7.0 * abs(segments.size() - 3)
+	for s in segments:
+		sc += 2.5 * s.get("armor", 0) + 2.0 * s.get("spikes", 0) + abs(float(s.get("r", 24.0)) - 24.0) / 8.0
+		var limb = s.get("limb", "")
+		if limb == "leg":
+			sc += 2.0 * max(0, int(s.get("n", 3)) - 3)
+		elif limb != "":
+			sc += 4.0 + int(s.get("n", 1))                  # tentacles, claws, fins: not an ant's legs
+	var h = head()
+	sc += 3.0 * max(0, int(h.get("eyes", 1)) - 1)
+	if h.get("jaw", "mandible") != "mandible":
+		sc += 4.0
+	for k in MORPH_BOOL:
+		if int(m(k)) == 1:
+			sc += 8.0
+	for k in ["major", "replete", "camo", "hair", "phero"]:
+		sc += 10.0 * float(m(k))
+	if int(m("petiole")) == 2:
+		sc += 3.0
+	if int(m("pattern")) != 0:
+		sc += 2.0
+	for fam in FORMS.keys():
+		if form(fam) != 0:
+			sc += 5.0
+	for ln in ORGANS.keys():
+		sc += 5.0 * organ(ln)
+	sc += 15.0 * fusions().size()
+	_ms = sc
+	return sc
+
+
 static func make_ant():
 	var g = load(SELF_PATH).new()
 	g.segments = [

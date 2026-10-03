@@ -104,6 +104,9 @@ func _idle(_delta):
 		sim.cast("surge")
 		var before = sim.will
 		_check(not sim.cast("surge") and sim.will == before, "a command on cooldown costs nothing")
+		sim.food = max(sim.food, 300.0)
+		sim.will = 100.0
+		sim.cmd_cd.clear()
 		s.command("rally")
 		_check(s.armed == "rally", "a button arms rally for a click")
 		s.set_armed("")

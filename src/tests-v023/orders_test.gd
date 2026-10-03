@@ -66,8 +66,16 @@ func _init():
 	ok(Orders.paused(sim), "orders give way during a Recall")
 	sim.recall_t = 0.0
 	# ---- release
+	var still_n := 0
+	for a in squad:
+		if sim.ants.has(a) and a.squad != 0:
+			still_n += 1
 	var n_rel = Orders.release(sim, squad)
-	ok(n_rel > 0 and squad[0].squad == 0, "releasing sets the ants free (%d)" % n_rel)
+	var free_n := 0
+	for a in squad:
+		if a.squad == 0:
+			free_n += 1
+	ok((n_rel > 0 or still_n == 0) and free_n == squad.size(), "releasing sets the ants free (%d released, %d had stood down already)" % [n_rel, squad.size() - still_n])
 	run(sim, 30.0)
 	var back := 0
 	for a in squad:
@@ -188,6 +196,7 @@ func _init():
 	for a in young:
 		if party.size() < 26 and a.squad == 0 and a.carry <= 0.0 and a.spoil <= 0.0 and a.dig_timer <= 0.0:
 			party.append(a)
+	sim.food = max(sim.food, 300.0)
 	var r6 = Orders.issue(sim, party, "move", rv.x, g.surf_y(rv.x) - 2)
 	ok(r6["ok"], "a guard order on the rival's mound is accepted: " + r6["msg"])
 	var guards_seen := false

@@ -53,6 +53,9 @@ var selected = null
 var speed := 1.0
 var eff_speed := 1.0           # sim seconds actually simulated per real second (HUD shows it when it falls short)
 var _debt := 0.0
+var _fast_k := 4               # how many cells an unwatched ant covers per decision at 10x (raised when the machine lags)
+var _lag_t := 0.0
+var _since_speed := 99.0
 var _prune_timer := 10.0
 var _overlay: Node2D
 var shop_open := false
@@ -255,12 +258,27 @@ func _process(delta: float) -> void:
 	# Fixed-budget stepping: simulate what the speed asks for, but never spend more than BUDGET_US
 	# per frame. A slow frame used to make the engine run extra ticks (each running more sim), so
 	# 4x snowballed into a stutter. Now the frame rate holds and the effective speed bends instead.
+	# at high speeds nobody follows single ants: they cover more cells per decision (locomotion.gd) and turn their bodies less often
+	# and at 10x, when the machine cannot keep up, they cover still more (K 4, then 6, then 8, with a longer step): the colony keeps its pace, single ants look no different
+	if speed < 10.0:
+		_fast_k = 4
+		_lag_t = 0.0
+	elif not shop_open and not sim.collapsed and eff_speed < speed * 0.9 and _since_speed > 2.0:
+		_lag_t += delta
+		if _lag_t > 1.5 and _fast_k < 8:
+			_fast_k += 2
+			_lag_t = 0.0
+	else:
+		_lag_t = 0.0
+	_since_speed += delta
+	sim.hop_k = 1 if speed <= 2.0 else (2 if speed <= 4.0 else _fast_k)
+	sim.rot_every = 1 if speed <= 2.0 else (2 if speed <= 4.0 else 3 + (_fast_k - 4) / 2)
 	var done := 0.0
 	if shop_open or speed <= 0.0 or sim.collapsed:
 		_debt = 0.0
 	else:
 		_debt += min(delta, 0.1) * speed
-		var step = MAX_STEP if speed <= 4.0 else FAST_STEP
+		var step = MAX_STEP if speed <= 4.0 else FAST_STEP * (1.0 + (_fast_k - 4) * 0.25)
 		var t0 = OS.get_ticks_usec()
 		while _debt > 0.0005:
 			var dt = min(_debt, step)
@@ -682,6 +700,7 @@ func set_layer(key: String, on: bool) -> void:
 
 func set_speed(s: float) -> void:
 	speed = s
+	_since_speed = 0.0
 	if hud != null:
 		hud.sync_speed(s)
 

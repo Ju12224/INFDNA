@@ -11,6 +11,7 @@ extends Reference
 # fitness rate (food delivered + digging per second alive), then mutate.
 
 const Genome = preload("res://mods-unpacked/Judah-InfDNA/core/genome.gd")
+const Arc = preload("res://mods-unpacked/Judah-InfDNA/core/arc.gd")
 const Phenotype = preload("res://mods-unpacked/Judah-InfDNA/core/phenotype.gd")
 const WorldGrid = preload("res://mods-unpacked/Judah-InfDNA/core/world_grid.gd")
 const EnemyDefs = preload("res://mods-unpacked/Judah-InfDNA/core/enemy_defs.gd")
@@ -23,6 +24,7 @@ const WF = preload("res://mods-unpacked/Judah-InfDNA/core/world_features.gd")
 const Seasons = preload("res://mods-unpacked/Judah-InfDNA/core/seasons.gd")
 const Legacy = preload("res://mods-unpacked/Judah-InfDNA/core/legacy.gd")
 const Orders = preload("res://mods-unpacked/Judah-InfDNA/core/orders.gd")
+const Loco = preload("res://mods-unpacked/Judah-InfDNA/core/locomotion.gd")
 const Rival = preload("res://mods-unpacked/Judah-InfDNA/core/rival.gd")
 
 enum Task { NURSE, FORAGE, DIG, HOME, DEFEND }
@@ -81,6 +83,7 @@ class Ant:
 	var dig_cell := Vector2()
 	var rot := 0.0
 	var facing := 1
+	var hop := 0.0           # length (in cells) of the hop in progress when it covers several cells at once (locomotion.gd); 0 = one cell
 	var hp := 10.0
 	var scout := 0
 	var lane := 0.5          # depth lane on the surface (0 back, 1 front) - visual 2.5D
@@ -124,6 +127,8 @@ class Ant:
 
 
 class Raider:
+	var hop := 0.0
+	var void_born := false      # a Void Maw that climbed out of the collapse pit (arc.gd)
 	var id: int
 	var kind: String
 	var def: Dictionary
@@ -321,6 +326,8 @@ const FOOD_COST = {"rally": 6.0, "harvest": 4.0, "recall": 3.0, "surge": 5.0, "b
 const BEACON_FOOD = 2.0
 const FOOD_RESERVE = 5.0
 var will := 50.0
+var hop_k := 1                    # cells an ant covers in one hop when nothing needs it nearby (1 = every cell; the scene raises it with the game speed: locomotion.gd)
+var rot_every := 1                # ants turn their bodies to the ground's slope every this many ticks (a few at high speed, where nobody sees)
 var cmd_cd := {}                  # command id -> seconds left
 var rally_x := 0
 var rally_t := 0.0
@@ -355,7 +362,28 @@ const GOALS = [
 	{"id": "raid15", "name": "Survive 15 raids", "food": 120, "mut": 1},
 	{"id": "winter1", "name": "Live through a winter", "food": 70, "mut": 1},
 	{"id": "winter3", "name": "Hardened: live through three winters", "food": 140, "mut": 1},
+	{"id": "ms40", "name": "Strange: breed an ant of mutation 40", "food": 45, "mut": 1},
+	{"id": "ms90", "name": "Aberration: breed an ant of mutation 90", "food": 90, "mut": 1},
+	{"id": "ms150", "name": "Monstrosity: breed an ant of mutation 150", "food": 160, "mut": 1},
 ]
+# ---- The point of the game: breed monstrosities. Every body has a mutation score (genome.gd); the colony's Apex ants are the
+# most mutated ones alive, and the Monstrosity meter (0..100) is how far its strangest ants have come from a plain ant.
+var apex: Array = []              # the five most mutated ants alive, most first
+var apex_ids := {}                # id -> rank (0 = the most mutated), for the views
+var monstrosity := 0.0            # 0..100: mean score of the top eight, against Genome.MS_MONSTER (smoothed)
+var peak_ms := 0.0                # the highest mutation score any ant of this run has had
+var arc_stage := 0                # arc.gd: 0 growing, 1 dominion, 2 tremors, 3 the void
+var arc_t := 0.0
+var arc_hold := 0.0
+var arc_calm := 0.0
+var arc_tremors := 0
+var arc_cool := 0.0
+var void_left := 0                # Void Maws still to climb out of the pit
+var void_next_t := 0.0
+var void_x := 0
+var void_cycles := 0              # voids sealed this run
+var _apex_t := 0.0
+const MONSTROSITY_STAGES = [[0.0, "Ordinary"], [20.0, "Unusual"], [45.0, "Aberrant"], [70.0, "Monstrous"], [95.0, "Dominion"]]
 var _n_foragers := 0
 var _n_defenders := 0
 
@@ -560,6 +588,16 @@ var _tick_n := 0
 func _pb() -> void:
 	if prof != null:
 		_pt = OS.get_ticks_usec()
+
+
+# Finer profiling inside the ant step (only when `prof` is set): _qb() starts a timer, _qe(key, t0) adds the time to prof[key].
+func _qb() -> int:
+	return OS.get_ticks_usec() if prof != null else 0
+
+
+func _qe(k: String, t0: int) -> void:
+	if prof != null:
+		prof[k] = prof.get(k, 0) + OS.get_ticks_usec() - t0
 
 
 func _pe(k: String) -> void:
@@ -832,6 +870,12 @@ func _goal_met(id: String) -> bool:
 			return winters >= 1
 		"winter3":
 			return winters >= 3
+		"ms40":
+			return peak_ms >= 40.0
+		"ms90":
+			return peak_ms >= 90.0
+		"ms150":
+			return peak_ms >= 150.0
 	return false
 
 
@@ -1004,9 +1048,16 @@ var _bird_timer := 170.0
 const BIRD_LEN = 32.0
 const BIRD_SPEED = 38.0            # cells per second
 const BIRD_STRIKE_CD = 3.6
+const BIRD_HP = 90.0
+const BIRD_REACH = 90              # winged ants this close (cells) fly out to meet it
+const BIRD_BITE = 14.0             # and bite it from this close
+const CARCASS_FOOD = 45.0          # what a dead bird is worth to the colony
+const CARCASS_LIFE = 110.0         # seconds until the rest of it has dissolved
+var bird_fall = null               # a bird just shot down: {"x", "alt", "face", "t", "spin"}; the view draws it dropping, then it lands as a carcass pile
 
 
 func _step_bird(dt: float) -> void:
+	_step_bird_fall(dt)
 	if bird == null:
 		_bird_timer -= dt
 		if _bird_timer <= 0.0 and time > 150.0:
@@ -1017,7 +1068,8 @@ func _step_bird(dt: float) -> void:
 					far.append(a)
 			if far.size() >= 6:
 				var t = far[rng.randi_range(0, far.size() - 1)]
-				bird = {"x": float(t.x) + rng.randf_range(-60.0, 60.0), "t": BIRD_LEN * clamp(ants.size() / 120.0, 0.5, 1.0) * max(0.3, 1.0 - 0.5 * mod("bird_ward")), "cd": 2.0, "dive": 0.0, "alt": 1.0, "face": 1, "kills": 0}
+				bird = {"x": float(t.x) + rng.randf_range(-60.0, 60.0), "t": BIRD_LEN * clamp(ants.size() / 120.0, 0.5, 1.0) * max(0.3, 1.0 - 0.5 * mod("bird_ward")), "cd": 2.0, "dive": 0.0, "alt": 1.0, "face": 1, "kills": 0, "hp": BIRD_HP + 0.5 * ants.size(), "hit": 0.0}
+				bird["hp0"] = bird["hp"]
 				bird["x"] = clamp(bird["x"], float(ex - RANGE_MAX + 20), float(ex + RANGE_MAX - 20))
 				banner = "A bird is hunting over the %s meadow!  (Recall brings the foragers home)" % ("west" if bird["x"] < ex else "east")
 				banner_t = 5.0
@@ -1030,12 +1082,23 @@ func _step_bird(dt: float) -> void:
 	bird["dive"] = max(0.0, bird["dive"] - dt * 1.4)
 	var target = null
 	var bd = 1e9
+	var bite := 0.0
+	bird["hit"] = max(0.0, bird["hit"] - dt)
 	for a in ants:
 		if not grid.is_under(a.x, a.y) and a.shelter_t <= 0.0:
 			var d = abs(a.x - bird["x"])
 			if d < bd:
 				bd = d
 				target = a
+			if d <= BIRD_BITE and a.ph["wings"] > 0:
+				bite += a.ph["attack"] * 0.9
+	if bite > 0.0:
+		# winged ants fly up and tear at it
+		bird["hp"] -= bite * dt
+		bird["hit"] = 0.3
+		if bird["hp"] <= 0.0:
+			_bird_down()
+			return
 	if target == null or bd > 500.0 or bird["t"] <= 0.0:
 		toasts.append({"text": "The bird flies off.", "t": 3.0})
 		bird = null
@@ -1061,6 +1124,90 @@ func _step_bird(dt: float) -> void:
 			bird["kills"] += 1
 		if not victims.empty():
 			shake = max(shake, 0.25)
+
+
+func ms_of(a) -> float:
+	return a.genome.mutation_score()
+
+
+func is_apex(a) -> bool:
+	return apex_ids.has(a.id)
+
+
+func monstrosity_stage() -> String:
+	var name = MONSTROSITY_STAGES[0][1]
+	for st in MONSTROSITY_STAGES:
+		if monstrosity >= st[0]:
+			name = st[1]
+	return name
+
+
+# Every second or so: who are the most mutated ants alive, and how monstrous is the colony.
+func _step_apex(dt: float) -> void:
+	_apex_t -= dt
+	if _apex_t > 0.0:
+		return
+	_apex_t = 1.2
+	var top := []          # [score, ant], at most 8, best first
+	for a in ants:
+		var v = a.genome.mutation_score()
+		if top.size() < 8 or v > top[top.size() - 1][0]:
+			var i = top.size()
+			while i > 0 and top[i - 1][0] < v:
+				i -= 1
+			top.insert(i, [v, a])
+			if top.size() > 8:
+				top.pop_back()
+	apex.clear()
+	apex_ids.clear()
+	var sum := 0.0
+	for i in top.size():
+		sum += top[i][0]
+		if i < 5:
+			apex.append(top[i][1])
+			apex_ids[top[i][1].id] = i
+	if not top.empty():
+		var best = top[0][0]
+		if best > peak_ms:
+			if int(best / 10.0) > int(peak_ms / 10.0) and best >= 20.0:
+				toasts.append({"text": "A new most-mutated ant: mutation %d. Breed from it (right-click it, Breed)." % int(best), "t": 6.0})
+			peak_ms = best
+	var target = clamp(sum / max(1, top.size()) / (Genome.MS_MONSTER * (1.0 + 0.5 * void_cycles)) * 100.0, 0.0, 100.0) if top.size() >= 3 else 0.0
+	monstrosity = lerp(monstrosity, target, 0.3)
+
+
+# The bird is dead: it drops out of the sky (bird_fall, drawn by the view), lands as a carcass pile the foragers carry off, and what is left dissolves.
+func _bird_down() -> void:
+	bird_fall = {"x": float(bird["x"]), "alt": float(bird["alt"]), "face": int(bird["face"]), "t": 0.0, "spin": rng.randf_range(-1.0, 1.0)}
+	toasts.append({"text": "The bird is down! The colony will eat well.", "t": 5.0})
+	banner = "A winged ant brought the bird down!"
+	banner_t = 4.0
+	_sfx("repelled")
+	shake = max(shake, 0.35)
+	bird = null
+	_bird_timer = rng.randf_range(200.0, 320.0) * (1.0 + 0.8 * mod("bird_ward"))
+
+
+func _step_bird_fall(dt: float) -> void:
+	for p in piles:
+		if p.get("kind", "") == "carcass":
+			p["amount"] -= dt * p["max"] / CARCASS_LIFE      # it dissolves whether or not it is eaten
+			p["rot"] = clamp(p["amount"] / max(1.0, p["max"]), 0.0, 1.0)
+	if bird_fall == null:
+		return
+	bird_fall["t"] += dt
+	if bird_fall["t"] < 1.3:
+		return
+	var x = int(clamp(bird_fall["x"], grid.arena_l + 3, grid.arena_r - 3))
+	for p in piles:
+		if p.get("kind", "") == "carcass" and abs(p["x"] - x) <= 2:
+			p["amount"] += CARCASS_FOOD
+			p["max"] = max(p["max"], p["amount"])
+			bird_fall = null
+			return
+	piles.append({"x": x, "amount": CARCASS_FOOD, "max": CARCASS_FOOD, "kind": "carcass", "rot": 1.0, "face": bird_fall["face"], "spin": bird_fall["spin"]})
+	fx.append({"kind": "puff", "pos": grid.center(x, grid.surf_y(x) - 1), "t": 0.0, "color": Color("#c9a37a")})
+	bird_fall = null
 
 
 # ---- Predator two: the anteater. Every ten minutes or so one lumbers in from the edge of the meadow (enemy kind "anteater": slow,
@@ -1146,6 +1293,8 @@ func _rally_order(a, b) -> bool:
 
 func _step_director(dt: float) -> void:
 	_step_bird(dt)
+	_step_apex(dt)
+	Arc.step(self, dt)
 	_step_anteater_spawn(dt)
 	strike_t = max(0.0, strike_t - dt)
 	will = min(will_max(), will + WILL_REGEN * (1.0 + mod("will_regen")) * dt)
@@ -1458,26 +1607,29 @@ func _step_ant(a, dt: float) -> void:
 		kill(a, "old")
 		return
 	# footing check staggered over 5 ticks (the rescue itself waits 0.5 s anyway)
+	var q0 = _qb()
 	if (_tick_n + a.id) % 5 == 0:
 		_footing_fix(a, dt * 5.0)
 	if (_tick_n + a.id) % 40 == 0:
 		_rescue(a)
+	_qe("a_misc", q0)
 
 	# smooth body rotation toward the local ground normal
 	# (in a narrow tunnel floor and ceiling nearly cancel; one extra ceiling cell used to
 	# flip the normal and turn the ant upside down. A floor under the feet wins.)
 	# (cached per target cell: the normal only changes when the ant enters a new cell)
-	var rk = a.tx * 7919 + a.ty * 31 + a.tz
-	if rk != a.rot_key:
-		a.rot_key = rk
-		if grid.is_surface_cell(a.tx, a.ty):
-			a.trot = grid.surface_tilt(a.tx)      # open ground: follow the smoothed hill, not the 6 px stair steps
-		else:
-			var n = grid.ground_normal(a.tx, a.ty, a.tz)
-			a.trot = atan2(-n.x, n.y)
-			if grid.is_solid(a.tx, a.ty + 1, a.tz) or grid.is_solid(a.x, a.y + 1, a.z):
-				a.trot = clamp(a.trot, -1.1, 1.1)
-	a.rot = lerp_angle(a.rot, a.trot, clamp(dt * 8.0, 0.0, 1.0))
+	if rot_every <= 1 or (_tick_n + a.id) % rot_every == 0:
+		var rk = a.tx * 7919 + a.ty * 31 + a.tz
+		if rk != a.rot_key:
+			a.rot_key = rk
+			if grid.is_surface_cell(a.tx, a.ty):
+				a.trot = grid.surface_tilt(a.tx)      # open ground: follow the smoothed hill, not the 6 px stair steps
+			else:
+				var n = grid.ground_normal(a.tx, a.ty, a.tz)
+				a.trot = atan2(-n.x, n.y)
+				if grid.is_solid(a.tx, a.ty + 1, a.tz) or grid.is_solid(a.x, a.y + 1, a.z):
+					a.trot = clamp(a.trot, -1.1, 1.1)
+		a.rot = lerp_angle(a.rot, a.trot, clamp(dt * 8.0 * rot_every, 0.0, 1.0))
 
 	if a.dig_timer > 0.0:
 		a.dig_timer -= dt
@@ -1485,7 +1637,7 @@ func _step_ant(a, dt: float) -> void:
 			_finish_dig(a)
 		return
 
-	var dist = 1.4142 if (a.tx != a.x and a.ty != a.y) else 1.0
+	var dist = a.hop if a.hop > 0.0 else (1.4142 if (a.tx != a.x and a.ty != a.y) else 1.0)
 	if a.tx == a.x and a.ty == a.y and a.tz == a.z:
 		dist = 1.0
 		a.t = 1.0
@@ -1507,7 +1659,12 @@ func _step_ant(a, dt: float) -> void:
 		a.y = a.ty
 		a.z = a.tz
 		a.t = 0.0
+		a.hop = 0.0
+		var q1 = _qb()
 		_on_arrive(a)
+		if prof != null:
+			_qe("a_arrive", q1)
+			prof["n_hops"] = prof.get("n_hops", 0) + 1
 		var moved = a.tx != a.x or a.ty != a.y
 		if moved:
 			var move = Vector2(a.tx - a.x, a.ty - a.y)
@@ -1520,7 +1677,7 @@ func _step_ant(a, dt: float) -> void:
 			if abs(d) > 0.1:
 				a.facing = 1 if d > 0 else -1
 		if (moved or a.tz != a.z) and a.dig_timer <= 0.0:
-			dist = 1.4142 if (a.tx != a.x and a.ty != a.y) else 1.0
+			dist = a.hop if a.hop > 0.0 else (1.4142 if (a.tx != a.x and a.ty != a.y) else 1.0)
 			a.t = min(over / dist, 1.6)
 		else:
 			break
@@ -1543,15 +1700,20 @@ func _on_arrive(a) -> void:
 
 	if a.squad != 0 and Orders.obey(self, a):
 		return
+	var q2 = _qb()
 	match a.task:
 		Task.FORAGE:
 			_forage(a)
+			_qe("t_forage", q2)
 		Task.DIG:
 			_dig(a)
+			_qe("t_dig", q2)
 		Task.NURSE:
 			_nurse(a)
+			_qe("t_nurse", q2)
 		Task.DEFEND:
 			_defend(a)
+			_qe("t_defend", q2)
 		Task.HOME:
 			if grid.field(grid.dist_home, a.x, a.y, a.z) <= 1:
 				_choose_task(a)
@@ -1560,6 +1722,7 @@ func _on_arrive(a) -> void:
 
 
 func _go(a, c) -> void:
+	a.hop = 0.0
 	a.tx = int(c.x)
 	a.ty = int(c.y)
 	a.tz = int(c.z) if typeof(c) == TYPE_VECTOR3 else a.z
@@ -1569,35 +1732,7 @@ func _go(a, c) -> void:
 # progress); among those, prefer cells touching dirt so ants crawl along surfaces.
 # Holes between the planes are one more step (the same cell in the other plane).
 func _descend(a, f: PoolIntArray) -> void:
-	var nb = grid.neighbors(a.x, a.y, a.z)
-	if grid.is_link(a.x, a.y) and grid.can_walk(a.x, a.y, 1 - a.z):
-		nb.append(Vector3(a.x, a.y, 1 - a.z))
-	if nb.empty():
-		return
-	var cur = grid.field(f, a.x, a.y, a.z)
-	var best = null
-	var best_s = 1 << 30
-	var f_ok = f.size() == grid.PLANES * grid.WH
-	var gw = grid.W
-	var gwh = grid.WH
-	var gox = grid.ox
-	for c in nb:
-		var cz = int(c.z) if typeof(c) == TYPE_VECTOR3 else a.z
-		var cx = int(c.x)
-		var cy = int(c.y)
-		# neighbours are always inside the grid; direct read of grid.field()
-		var d = f[cz * gwh + cy * gw + (cx - gox)] if f_ok else -1
-		if d < 0 or (cur >= 0 and d >= cur):
-			continue
-		var sc = d * 4 + rng.randi_range(0, 2)
-		if not grid.walled(int(c.x), int(c.y), cz):
-			sc += 3
-		if sc < best_s:
-			best_s = sc
-			best = c
-	if best == null:
-		best = nb[rng.randi_range(0, nb.size() - 1)]
-	_go(a, best)
+	Loco.descend(self, a, f, a is Ant)
 
 
 func _forage(a) -> void:
@@ -1653,12 +1788,21 @@ func _forage(a) -> void:
 		a.flee -= 1
 		_walk_surface(a)
 		return
-	var threat = _nearest_surface_enemy(a.x, 5)
+	var threat = _nearest_surface_enemy(a.x, 5 + hop_k)
 	if threat != null:
 		a.heading = -1 if threat.x > a.x else 1
-		a.flee = 10
+		a.flee = max(3, 10 / hop_k)
 		_walk_surface(a)
 		return
+	# a winged ant that is not carrying anything goes for a bird in reach
+	if bird != null and a.carry <= 0.0 and a.ph["wings"] > 0:
+		var bdx = int(bird["x"]) - a.x
+		if abs(bdx) <= BIRD_REACH and abs(bdx) > 2:
+			a.heading = 1 if bdx > 0 else -1
+			_walk_surface_k(a, max(1, abs(bdx) - 2))
+			return
+		elif abs(bdx) <= 2:
+			return
 	# food in reach?
 	for p in piles:
 		if p["amount"] > 0.0 and abs(p["x"] - a.x) <= 1:
@@ -1691,15 +1835,21 @@ func _forage(a) -> void:
 		if e.cls == "prey" and abs(e.x - a.x) <= sense * 0.6 and (nearest == null or abs(e.x - a.x) < nd):
 			nearest = {"x": e.x}
 			nd = abs(e.x - a.x)
+	var lim = 99
 	if nearest != null:
 		if nd <= 1:
 			return          # on top of it: stand and fight (the combat step is range-based) instead of stepping back and forth
 		a.heading = 1 if nearest["x"] > a.x else -1
 		a.leg = 0
 		a.local_t = 0
+		lim = max(1, int(nd) - 1)
 	elif _search(a, ex, off):
 		return
-	_walk_surface(a)
+	else:
+		lim = max(1, int(sense) - 2)
+		if a.site != NO_SITE:
+			lim = min(lim, max(1, abs(a.site - a.x) - 2))
+	_walk_surface_k(a, lim)
 
 
 # Searching with nothing in sense range. Returns true if the ant gave up (and turned for home).
@@ -1707,8 +1857,8 @@ func _forage(a) -> void:
 # following, then long persistent scouting legs out to this trip's search radius.
 func _search(a, ex: int, off: int) -> bool:
 	if a.local_t > 0:
-		a.local_t -= 1
-		a.leg -= 1
+		a.local_t -= hop_k
+		a.leg -= hop_k
 		if a.leg <= 0:          # short sweeps, not a coin flip every hop: the ant visibly casts about instead of vibrating
 			a.heading = -a.heading
 			a.leg = rng.randi_range(14, 24)
@@ -1730,7 +1880,7 @@ func _search(a, ex: int, off: int) -> bool:
 	if off != 0 and grid.pher_at(a.x) > 0.35:
 		a.heading = 1 if off > 0 else -1     # on a trail: follow it out, away from the nest
 		return false
-	a.leg -= 1
+	a.leg -= hop_k
 	if a.leg <= 0:
 		a.leg = 25 + int(-log(max(0.001, rng.randf())) * LEG_MEAN)
 		if rng.randf() < 0.4:
@@ -1826,27 +1976,12 @@ func _update_trails() -> void:
 
 
 func _walk_surface(a) -> void:
-	var best = null
-	# Walk on the open ground, never along the top row of the soil where it is marked as nest ("under") around a shaft:
-	# an ant standing on such a cell is treated as underground and sent back down the way out, so a forager could shuffle
-	# in and out of an outpost mouth for ever (every forager from that mouth, with the colony starving). Only if there is
-	# no other way on is an "under" cell accepted.
-	for pass_n in 2:
-		for c in grid.neighbors(a.x, a.y):
-			if int(c.x) - a.x == a.heading and grid.is_surface_cell(int(c.x), int(c.y)) and (pass_n == 1 or not grid.is_under(int(c.x), int(c.y))):
-				# prefer the cell hugging the ground
-				if best == null or c.y > best.y:
-					best = c
-		if best != null:
-			break
-	if best == null:
-		a.heading = -a.heading
-		for c in grid.neighbors(a.x, a.y):
-			if grid.is_surface_cell(int(c.x), int(c.y)):
-				best = c
-				break
-	if best != null:
-		_go(a, best)
+	Loco.surface_step(self, a)
+
+
+# A walking hop that may cover several cells (never farther than `limit`): for foragers out on the open ground.
+func _walk_surface_k(a, limit: int) -> void:
+	Loco.surface_step(self, a, limit, true)
 
 
 func _dig(a) -> void:
@@ -1973,6 +2108,8 @@ func _nurse(a) -> void:
 		_choose_task(a)
 		if a.task != Task.NURSE:
 			return
+	if Loco.shuffle_home(self, a):
+		return
 	var nb := []
 	for c in grid.neighbors(a.x, a.y, a.z):
 		if grid.is_surface_cell(int(c.x), int(c.y)):

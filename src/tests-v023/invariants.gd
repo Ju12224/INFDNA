@@ -47,6 +47,11 @@ func _init():
 					if sim.buy(i):
 						n_buy += 1
 			sim.shop_pending = false
+		if OS.get_environment("BREED") != "" and not sim.apex.empty() and sim.blessed_left <= 0:
+			sim.will = 100.0
+			sim.cmd_cd.clear()
+			sim.food = max(sim.food, 100.0)
+			sim.cast("breed", 0, sim.apex[0])
 		if sim.time >= next_player:
 			next_player = sim.time + rng.randf_range(10.0, 25.0)
 			_player(sim, rng, ex)
@@ -57,7 +62,7 @@ func _init():
 		if sim.time >= next_check:
 			next_check = sim.time + 1.0
 			_check(sim, ex)
-	print("INVARIANTS seed=%d t=%.0f ants=%d raids=%d collapsed=%s squads=%d" % [seed_v, sim.time, sim.ants.size(), sim.raid_n, str(sim.collapsed), sim.squads.size()])
+	print("INVARIANTS seed=%d t=%.0f ants=%d raids=%d collapsed=%s squads=%d arc=%d cycles=%d peak_ms=%.0f" % [seed_v, sim.time, sim.ants.size(), sim.raid_n, str(sim.collapsed), sim.squads.size(), sim.arc_stage, sim.void_cycles, sim.peak_ms])
 	var cats = found.keys()
 	cats.sort()
 	for c in cats:
