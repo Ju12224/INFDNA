@@ -1616,7 +1616,7 @@ const LADEN_K = 0.93           # on open ground a forager with a load walks this
 const OUT_K = 1.08             # ... and one going out light this much faster, so a round trip takes as long as before
 const SPOIL_K = 0.95           # a digger with a dirt pellet
 var _pause_req := 0.0          # a pause the deciding ant's task asked for (_on_arrive applies it once the task has chosen where to go)
-var occ := PoolIntArray()      # tunnel cells (both planes) an ant is about to enter or stands in: taken until this time (tenths of a sim second)
+var occ := PoolIntArray()      # tunnel cells (both planes) an ant is about to enter or stands in: (taken until, in tenths of a sim second) << 12 | id & 4095
 
 
 func _step_ant(a, dt: float) -> void:
@@ -1713,8 +1713,8 @@ func _step_ant(a, dt: float) -> void:
 		if (moved or a.tz != a.z) and a.dig_timer <= 0.0:
 			dist = a.hop if a.hop > 0.0 else (1.4142 if (a.tx != a.x and a.ty != a.y) else 1.0)
 			a.t = min(over / dist, 1.6)
-			if occ.size() == grid.PLANES * grid.WH and grid.is_under(a.tx, a.ty):
-				_occupy(a.tx, a.ty, a.tz, 3)
+			if occ.size() == grid.PLANES * grid.WH:
+				_mark_step(a)
 		else:
 			a.scout = a.scout & Loco.DIR_MASK     # standing: it will set off slowly
 			break
@@ -1784,11 +1784,39 @@ func _floor_dir(x: int, y: int, z: int) -> Vector3:
 	return n
 
 
-# Mark a tunnel cell as taken for `tenths` tenths of a second (other ants then prefer a free cell next to it).
-func _occupy(x: int, y: int, z: int, tenths: int) -> void:
-	var i = z * grid.WH + y * grid.W + (x - grid.ox)
-	if i >= 0 and i < occ.size():
-		occ[i] = int(time * 10.0) + tenths
+# Crowding in the tunnels. An ant marks the cell it is about to enter as taken by it for a moment (or the cell it stands in, for as long as it stands);
+# others then choose a free cell beside it where there is one (Loco.descend), and one that has to follow into a taken cell slows down behind it, or
+# squeezes past it slowly, instead of walking on through it.
+func _mark_step(a) -> void:
+	if not grid.inb(a.tx, a.ty):
+		return
+	var j = a.ty * grid.W + (a.tx - grid.ox)
+	if grid.under[j] != 1:
+		return
+	var i = a.tz * grid.WH + j
+	var q = int(time * 10.0)
+	var o = occ[i]
+	var me = a.id & 4095
+	if (o >> 12) > q and (o & 4095) != me:
+		var gait = a.scout
+		a.scout = (gait & Loco.DIR_MASK) | (int(min((gait >> Loco.RAMP_SHIFT) & 255, 115)) << Loco.RAMP_SHIFT)
+	occ[i] = ((q + 3) << 12) | me
+
+
+# Is the tunnel cell (x, y, z) taken by an ant other than `a` (see _mark_step)?
+func _taken(x: int, y: int, z: int, a) -> bool:
+	if occ.size() != grid.PLANES * grid.WH or not grid.inb(x, y):
+		return false
+	var o = occ[z * grid.WH + y * grid.W + (x - grid.ox)]
+	return (o >> 12) > int(time * 10.0) and (o & 4095) != (a.id & 4095)
+
+
+func _occupy(a, tenths: int) -> void:
+	if occ.size() != grid.PLANES * grid.WH or not grid.inb(a.x, a.y):
+		return
+	var j = a.y * grid.W + (a.x - grid.ox)
+	if grid.under[j] == 1:
+		occ[a.z * grid.WH + j] = ((int(time * 10.0) + tenths) << 12) | (a.id & 4095)
 
 
 # The ant stands where it is for `secs` (see _step_ant).
@@ -1799,8 +1827,7 @@ func _pause(a, secs: float) -> void:
 	a.tz = a.z
 	a.t = -secs
 	a.scout = a.scout & Loco.DIR_MASK
-	if occ.size() == grid.PLANES * grid.WH and grid.is_under(a.x, a.y):
-		_occupy(a.x, a.y, a.z, int(secs * 10.0) + 1)
+	_occupy(a, int(secs * 10.0) + 1)
 
 
 func _on_arrive(a) -> void:
@@ -2266,6 +2293,10 @@ func _nurse(a) -> void:
 	# another walk (they used to step to a random neighbour five times a second, and vibrated)
 	if a.leg > 8:
 		a.leg = 0                 # (left over from a foraging leg)
+	if occ.size() != grid.PLANES * grid.WH:
+		occ = grid._neg
+	if a.leg <= 0 and _taken(a.x, a.y, a.z, a):
+		a.leg = 1                 # somebody is standing here already: one more step
 	if a.leg <= 0:
 		a.leg = rng.randi_range(2, 7)
 		a.scout = 0               # after standing it may set off either way

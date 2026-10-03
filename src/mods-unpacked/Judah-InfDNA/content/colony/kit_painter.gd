@@ -39,6 +39,7 @@ const KIT_META = "infdna_antkit"
 const KIT_BASE = Color(0.60, 0.52, 0.46)    # mean fill colour of the kit's pieces
 const RING = 3.4                            # extra ink round every piece, painter units
 const RING_N = 10                           # ink copies per piece
+const STING_TINT = Color(1.45, 1.5, 1.1)     # the kit's sting in body_painter's sting cream (#e3cf86 / KIT_BASE)
 const FIT_W = 150.0                         # half the bake width in painter units at k = paint_scale (SIZE/FEET of sprite_baker)
 const FIT_UP = 222.0                        # room above the feet
 const FIT_DOWN = 16.0                       # room below the feet
@@ -130,12 +131,12 @@ const HEAD_RIG = {
 const HEAD_RIG_N = {"dome": [0.03, 0.4, 0.85, 0.98], "sock": [0.5, 0.45], "jaw": [0.78, 0.82], "eye": [0.55, 0.62], "top": [0.4, 0.42]}
 # Thorax: fractions of the piece (all the kit's thoraxes share one layout: tufted rear, pronotum lobe in front, coxae below).
 const THX_RIG = {"core": [0.52, 0.42], "waist": [0.1, 0.5], "neck": [0.9, 0.36], "top": [0.5, 0.08],
-	"hips": [[0.3, 0.8], [0.56, 0.84], [0.86, 0.84]]}
+	"hips": [[0.3, 0.72], [0.55, 0.74], [0.8, 0.72]]}
 
 # draw layers, back to front
 const K_FAR = 0       # far-side legs, antenna, jaw
-const K_LEG = 1       # near legs (the coxae of the thorax overlap their tops)
-const K_BODY = 2      # waist, gaster, thoraxes, head and what sits on them
+const K_BODY = 1      # waist, gaster, thoraxes, head and what sits on them
+const K_LEG = 2       # near legs, over the body (their tops overlap the coxae, as in the owner's drawings)
 const K_DECO = 3      # procedural organs, venom, glow (body_painter)
 const K_NEAR = 4      # near jaw and antenna, raptorial forelegs
 const K_WING = 5
@@ -215,8 +216,8 @@ static func _info(k: Dictionary, name: String) -> Dictionary:
 	var inf := {}
 	var e = k["pieces"].get(name)
 	if e is Dictionary:
-		var img = Image.new()
-		if img.load(KIT_ART + str(e.get("file", ""))) == OK:
+		var img = _load_png(KIT_ART + str(e.get("file", "")))
+		if img != null:
 			var tex = ImageTexture.new()
 			tex.create_from_image(img, Texture.FLAG_FILTER | Texture.FLAG_MIPMAPS)
 			var sz = Vector2(img.get_width(), img.get_height())
@@ -231,6 +232,19 @@ static func _info(k: Dictionary, name: String) -> Dictionary:
 			_landmarks(img, inf)
 	k["info"][name] = inf
 	return inf
+
+
+# The PNGs ship in the mod without import files: read the bytes (Image.load on a res:// path warns on every call).
+static func _load_png(path: String):
+	var f = File.new()
+	if f.open(path, File.READ) != OK:
+		return null
+	var buf = f.get_buffer(f.get_len())
+	f.close()
+	var img = Image.new()
+	if img.load_png_from_buffer(buf) != OK:
+		return null
+	return img
 
 
 # far: the opaque point farthest from the hinge (tip of a leg, jaw, antenna, wing, abdomen); low: the lowest opaque point (a foot).
@@ -389,7 +403,7 @@ func _build(k: Dictionary, animate: bool) -> float:
 		if segs[i]["limb"] == "leg" and segs[i]["n"] > 0:
 			has_legs = true
 			lmax = max(lmax, float(segs[i]["len"]) * stilt)
-	var yb = -(lmax * 0.82 + RY[1 if ns > 2 else 0] * 0.55 + 10.0) if has_legs else -(max_ry * 0.95 + 6.0)
+	var yb = -(lmax * 0.9 + RY[1 if ns > 2 else 0] * 0.45 + 8.0) if has_legs else -(max_ry * 0.95 + 6.0)
 	yb = min(yb, -(max_ry * 0.75 + 8.0))
 
 	# --- layout rear (left) -> head (right), as body_painter ---
@@ -442,7 +456,7 @@ func _build(k: Dictionary, animate: bool) -> float:
 	# --- body pieces ---
 	var thx := {}     # segment index -> {"xf", "inf"} for thoraxes (legs, wings and spines hang from their rig)
 	# waist nodes between gaster and thorax
-	var g_attach = pos[0] + Vector2(HX[0] * 0.86, -RY[0] * 0.32).rotated(ang[0])
+	var g_attach = pos[0] + Vector2(HX[0] * 1.0, -RY[0] * 0.3).rotated(ang[0])
 	if ns > 2:
 		var t_inf = _info(k, _thorax_role(k, segs[1], RY[1], hair, f_spike))
 		var t_xf = _thorax_xf(t_inf, pos[1], HX[1], ang[1])
@@ -459,8 +473,8 @@ func _build(k: Dictionary, animate: bool) -> float:
 	var g_xf = Transform2D()
 	if not g_inf.empty():
 		var gax: Vector2 = g_inf["far"] - g_inf["pivot"]
-		var gs = HX[0] * 2.05 / max(1.0, gax.length())
-		var droop = 0.42 + 0.1 * repl
+		var gs = HX[0] * 2.35 / max(1.0, gax.length())
+		var droop = 0.62 + 0.1 * repl
 		var grot = (PI - droop) - gax.angle() + ang[0]
 		g_xf = _xf_piece(g_inf, g_attach, grot, gs)
 		g_tip = g_xf.xform(g_inf["far"])
@@ -492,7 +506,7 @@ func _build(k: Dictionary, animate: bool) -> float:
 		var hs = hhx * 2.0 / max(1.0, dome.size.x)
 		h_sheet = hs * h_inf["scale"]
 		var dc = dome.position + dome.size * 0.5
-		h_xf = Transform2D(ha, hp) * Transform2D(Vector2(hs, 0), Vector2(0, hs), Vector2.ZERO) * Transform2D(0.0, -dc)
+		h_xf = Transform2D(ha, hp + Vector2(-hhx * 0.22, hry * 0.08)) * Transform2D(Vector2(hs, 0), Vector2(0, hs), Vector2.ZERO) * Transform2D(0.0, -dc)
 		sock = h_xf.xform(rig["sock"])
 		jawp = h_xf.xform(rig["jaw"])
 		eyep = h_xf.xform(rig["eye"])
@@ -663,13 +677,13 @@ func _build(k: Dictionary, animate: bool) -> float:
 			_bp._sting(g_tip, f_sting, gp0, HX[0], RY[0])
 		else:
 			var sv: Vector2 = st["far"] - st["pivot"]
-			var slen = RY[0] * (1.0 if f_sting == 1 else 0.8)
+			var slen = RY[0] * (1.35 if f_sting == 1 else 1.1)
 			var ssc = slen / max(1.0, sv.length())
 			var base_a = gdir.angle() + 0.25
 			var nst = 2 if f_sting == 3 else 1
 			for q in nst:
 				var da = 0.0 if nst == 1 else (q - 0.5) * 0.55
-				_kit_op(K_BODY, st, _xf_piece(st, g_tip - gdir * slen * 0.12, base_a + da - sv.angle(), ssc), tint.lightened(0.15))
+				_kit_op(K_BODY, st, _xf_piece(st, g_tip - gdir * slen * 0.2, base_a + da - sv.angle(), ssc), STING_TINT)
 	if int(M.get("acid", 0)) == 1:
 		match f_acid:
 			1:
@@ -775,7 +789,7 @@ func _npt(inf: Dictionary, f: Array) -> Vector2:
 func _thorax_xf(inf: Dictionary, p: Vector2, hx: float, a: float) -> Transform2D:
 	if inf.empty():
 		return Transform2D()
-	var s = hx * 2.1 / inf["size"].x
+	var s = hx * 2.3 / inf["size"].x
 	var core = _npt(inf, THX_RIG["core"])
 	return Transform2D(a, p) * Transform2D(Vector2(s, 0), Vector2(0, s), Vector2.ZERO) * Transform2D(0.0, -core)
 
@@ -834,8 +848,8 @@ func _leg_kit(k: Dictionary, hip: Vector2, L: float, t: float, i: int, j: int, s
 			return
 	var layer = K_FAR if side == 0 else K_LEG
 	if side == 0:
-		hip += Vector2(-6.0, -5.0)
-	var hip_h = max(4.0, -hip.y - (4.0 if side == 0 else 0.0))
+		hip += Vector2(-7.0, -6.0)
+	var hip_h = max(4.0, -hip.y - (5.0 if side == 0 else 0.0))
 	var mirror = t < -0.34 and not (role == 1)
 	if role == 1 and form == 3:
 		# raptorial foreleg: held up and folded in front of the head, never on the ground
@@ -850,7 +864,7 @@ func _leg_kit(k: Dictionary, hip: Vector2, L: float, t: float, i: int, j: int, s
 	if role == 2:
 		half *= 0.6
 	var reach = clamp(t, -1.0, 1.0)
-	var base_off = (reach * 0.62 - 0.08) * hip_h
+	var base_off = (reach * (0.95 if reach > 0.0 else 1.05) - 0.12) * hip_h
 	if role == 2:
 		base_off = -0.95 * hip_h
 	var fx: float
@@ -861,7 +875,7 @@ func _leg_kit(k: Dictionary, hip: Vector2, L: float, t: float, i: int, j: int, s
 		var u = (cyc - 0.5) / 0.5
 		fx = lerp(-half, half, u * u * (3.0 - 2.0 * u))
 		lift = sin(u * PI) * hip_h * (0.3 if role != 2 else 0.12)
-	var ground = -4.0 if side == 0 else 0.0
+	var ground = -5.0 if side == 0 else 0.0
 	var foot = Vector2(hip.x + base_off + fx, ground - lift)
 	# leg vector in its own (mirrored) pixels; its length at rest is the mean hip-foot distance of the stance
 	var pre = Transform2D(Vector2(-1.0 if mirror else 1.0, 0), Vector2(0, 1), Vector2.ZERO) * Transform2D(0.0, -inf["pivot"])
@@ -873,16 +887,16 @@ func _leg_kit(k: Dictionary, hip: Vector2, L: float, t: float, i: int, j: int, s
 	var tv = foot - hip
 	var d = tv.length()
 	var stretch = clamp(d / D, 0.68, 1.16)
-	var thick = 1.0
+	var thick = 0.86
 	if form == 4:
-		thick = 0.8
+		thick = 0.7
 	elif role == 2:
 		thick = 1.2
 	elif role == 1:
 		thick = 1.12
 	var xf = Transform2D(tv.angle(), hip) * Transform2D(Vector2(stretch, 0), Vector2(0, thick), Vector2.ZERO) * Transform2D(-v0.angle(), Vector2.ZERO) \
 		* Transform2D(Vector2(sc, 0), Vector2(0, sc), Vector2.ZERO) * pre
-	_kit_op(layer, inf, xf, tint)
+	_kit_op(layer, inf, xf, tint, true, true)
 
 
 func _spikes_kit(k: Dictionary, kd: String, n: int, form: int, top: Vector2, wdt: float, ry: float, a: float, th, tint: Color) -> void:
@@ -942,7 +956,8 @@ func _node(c: Vector2, rx: float, ry: float, base: Color, dark: Color) -> void:
 
 # ------------------------------------------------------------------------------------------------ ops
 
-func _kit_op(layer: int, inf: Dictionary, xf: Transform2D, mod: Color, ink: bool = true) -> void:
+# feet_ok: the piece is a leg standing on the ground, its rect corners below the feet do not count for the fit.
+func _kit_op(layer: int, inf: Dictionary, xf: Transform2D, mod: Color, ink: bool = true, feet_ok: bool = false) -> void:
 	if inf.empty():
 		return
 	_L[layer].append({"t": "kit", "tex": inf["tex"], "xf": xf, "size": inf["size"], "m": mod, "ink": ink})
@@ -950,6 +965,8 @@ func _kit_op(layer: int, inf: Dictionary, xf: Transform2D, mod: Color, ink: bool
 		var sz: Vector2 = inf["size"]
 		for c in [Vector2.ZERO, Vector2(sz.x, 0), sz, Vector2(0, sz.y)]:
 			var p = xf.xform(c)
+			if feet_ok:
+				p.y = min(p.y, 0.0)
 			if _bb.size == Vector2.ZERO and _bb.position == Vector2.ZERO:
 				_bb = Rect2(p, Vector2(0.001, 0.001))
 			else:

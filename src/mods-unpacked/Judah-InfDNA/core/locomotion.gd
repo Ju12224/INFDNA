@@ -146,12 +146,14 @@ static func descend(sim, a, f: PoolIntArray, macro: bool = true, ant: bool = fal
 	var occ = sim.occ
 	var crowd := false
 	var qnow := 0
+	var me := 0
 	if ant:
 		prev = a.scout & DIR_MASK
 		if prev == PLANE_STEP:
 			prev = 0
 		crowd = occ.size() == g.PLANES * WH
 		qnow = int(sim.time * 10.0)
+		me = a.id & 4095
 	var c0 := 0
 	var c1 := 0
 	var zsw := false
@@ -183,8 +185,10 @@ static func descend(sim, a, f: PoolIntArray, macro: bool = true, ant: bool = fal
 				sc += 6
 			if prev != 0:
 				sc += TURN_PEN[TURN[pt + i]]
-			if crowd and occ[base + d] > qnow:
-				sc += CROWD_PEN
+			if crowd:
+				var o = occ[base + d]
+				if (o >> 12) > qnow and (o & 4095) != me:
+					sc += CROWD_PEN
 			if sc < best_s:
 				best_s = sc
 				bx = nx
@@ -199,8 +203,10 @@ static func descend(sim, a, f: PoolIntArray, macro: bool = true, ant: bool = fal
 				var scz = vz * 16 + rng.randi_range(0, 3) + 2
 				if not g.walled(cx, cy, 1 - cz):
 					scz += 6
-				if crowd and occ[bz2] > qnow:
-					scz += CROWD_PEN
+				if crowd:
+					var o2 = occ[bz2]
+					if (o2 >> 12) > qnow and (o2 & 4095) != me:
+						scz += CROWD_PEN
 				if scz < best_s:
 					best_s = scz
 					bx = cx
@@ -260,6 +266,10 @@ static func shuffle_home(sim, a, reach: int = 8) -> bool:
 	var prev = a.scout & DIR_MASK
 	if prev == PLANE_STEP:
 		prev = 0
+	var occ = sim.occ
+	var crowd = occ.size() == g.PLANES * g.WH
+	var qnow = int(sim.time * 10.0)
+	var me = a.id & 4095
 	var wt = [0, 0, 0, 0, 0, 0, 0, 0]
 	var total := 0
 	for pass_n in 2:
@@ -278,6 +288,11 @@ static func shuffle_home(sim, a, reach: int = 8) -> bool:
 			var w = 3 if g.is_solid(nx, ny + 1, cz) else (2 if g.walled(nx, ny, cz) else 1)
 			if prev != 0:
 				w *= NURSE_W[TURN[pt + i]]
+			if crowd:
+				var o = occ[base + d]
+				if (o >> 12) > qnow and (o & 4095) != me:
+					w = (w + 2) / 3        # a cell another ant stands in or is entering
+
 			wt[i] = w
 			total += w
 		if total > 0 or prev == 0:
