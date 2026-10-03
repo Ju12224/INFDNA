@@ -220,6 +220,7 @@ func _ready() -> void:
 	sv.anchor_bottom = 1.0
 	sv.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	sl.add_child(sv)
+	_build_void_tint()
 
 	hud = Hud.new()
 	hud.scene = self
@@ -303,6 +304,7 @@ func _process(delta: float) -> void:
 		var d = ant_view._depth(selected.id, ant_view.lane_of(selected, selected.id))
 		cam.position = cam.position.linear_interpolate(sim.ant_pos(selected) + Vector2(0, d[0] - 30.0), clamp(delta * 5.0, 0.0, 1.0))
 	_overlay.update()
+	_step_void_tint(delta)
 	ant_view.selected = selected
 	_prune_timer -= delta
 	if _prune_timer <= 0.0:
@@ -327,6 +329,45 @@ func _process(delta: float) -> void:
 
 func _draw_overlay() -> void:
 	world_view.draw_overlay(_overlay)
+
+
+# While the Void is open (arc stage 3) the whole screen takes on a faint purple cast, deepest at the edges, breathing slowly; it eases in
+# when the ground collapses and out when the pit is sealed. Under the HUD and the drag-box. Nothing is drawn the rest of the time.
+var _void_tint: Control
+var _void_a := 0.0
+
+
+func _build_void_tint() -> void:
+	var vl = CanvasLayer.new()
+	vl.layer = 8
+	add_child(vl)
+	_void_tint = Control.new()
+	_void_tint.anchor_right = 1.0
+	_void_tint.anchor_bottom = 1.0
+	_void_tint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_void_tint.visible = false
+	_void_tint.connect("draw", self, "_draw_void_tint")
+	vl.add_child(_void_tint)
+
+
+func _step_void_tint(delta: float) -> void:
+	_void_a = move_toward(_void_a, 1.0 if sim.arc_stage == 3 else 0.0, delta * 0.4)
+	_void_tint.visible = _void_a > 0.003
+	if _void_tint.visible:
+		_void_tint.update()
+
+
+func _draw_void_tint() -> void:
+	var s = _void_tint.rect_size
+	var a = _void_a * (0.85 + 0.15 * sin(OS.get_ticks_msec() * 0.0009))
+	_void_tint.draw_rect(Rect2(Vector2.ZERO, s), Color(0.4, 0.16, 0.6, 0.07 * a))
+	var edge = Color(0.3, 0.08, 0.45, 0.2 * a)
+	var clear = Color(0.3, 0.08, 0.45, 0.0)
+	var d = min(s.x, s.y) * 0.3
+	_void_tint.draw_polygon(PoolVector2Array([Vector2(0, 0), Vector2(s.x, 0), Vector2(s.x, d), Vector2(0, d)]), PoolColorArray([edge, edge, clear, clear]))
+	_void_tint.draw_polygon(PoolVector2Array([Vector2(0, s.y - d), Vector2(s.x, s.y - d), Vector2(s.x, s.y), Vector2(0, s.y)]), PoolColorArray([clear, clear, edge, edge]))
+	_void_tint.draw_polygon(PoolVector2Array([Vector2(0, 0), Vector2(d, 0), Vector2(d, s.y), Vector2(0, s.y)]), PoolColorArray([edge, clear, clear, edge]))
+	_void_tint.draw_polygon(PoolVector2Array([Vector2(s.x - d, 0), Vector2(s.x, 0), Vector2(s.x, s.y), Vector2(s.x - d, s.y)]), PoolColorArray([clear, edge, edge, clear]))
 
 
 func _unhandled_input(event: InputEvent) -> void:

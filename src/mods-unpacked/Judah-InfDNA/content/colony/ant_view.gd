@@ -18,6 +18,7 @@ const Kit = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ui_kit.gd")
 const MS_PLAIN = 12.0
 const MS_RICH = 70.0
 const APEX_GOLD = Color(1.0, 0.82, 0.32)
+const APEX_TAG_ZOOM = 0.62     # the APEX tags show over every Apex ant in view only this close (camera zoom below it); the selected one always
 
 const CASTE_COLORS = [Color("#6cc644"), Color("#c9863b"), Color("#e8483b")]
 const CASTE_ICONS = ["res://items/all/fruit_basket/fruit_basket_icon.png", "res://items/all/improved_tools/improved_tools_icon.png",
@@ -261,13 +262,18 @@ func _draw() -> void:
 		if it[1] == 0 and show_castes and (badges_visible or it[2] == selected):
 			_draw_caste_badge(it[2])
 	if not sim.apex.empty():
+		# the selected one first, then the rest best first; only zoomed in close, and never one tag over another
 		var z = cam.zoom.x if cam != null else 1.0
-		for ap in sim.apex:
-			if ap == selected or z < 0.8:
+		var taken := []
+		var order = sim.apex
+		if selected != null and sim.apex_ids.has(selected.id) and sim.apex[0] != selected:
+			order = [selected] + sim.apex
+		for ap in order:
+			if ap == selected or z < APEX_TAG_ZOOM:
 				var ax = (ap.x + 0.5) * C0
 				var ay = (ap.y + 0.5) * C0
 				if ax >= vr.position.x and ax <= vr.end.x and ay >= vr.position.y and ay <= vr.end.y:
-					_draw_apex_tag(ap, z)
+					_draw_apex_tag(ap, z, taken)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
@@ -382,18 +388,24 @@ func _draw_apex_aura(a, feet: Vector2, n: Vector2, d: Array, rank: int) -> void:
 
 
 # The tag over an Apex ant when it is selected or the camera is close: "APEX 148", about the same size on screen at any zoom.
-func _draw_apex_tag(a, z: float) -> void:
+func _draw_apex_tag(a, z: float, taken: Array) -> void:
 	var d = _depth(a.id, lane_of(a, a.id))
 	var C = sim.grid.CELL
 	var pos = sim.ant_pos(a) + Vector2(0, d[0])
 	var sc = clamp(z, 0.4, 1.5)
-	var lift = 27.0 * d[1] + 6.0
+	var lift = 27.0 * d[1] + 6.0 + _air(a) * 32.0 * d[1]
 	if show_castes:
 		lift += 2.0 * clamp(6.0 * z, 2.0, 9.0) + 8.0       # above the caste badge
 	var txt = "APEX %d" % int(sim.ms_of(a))
 	var w = _tag_font.get_string_size(txt).x + 14.0
 	var al = d[3]
-	draw_set_transform(pos + Vector2(0, C * 0.5 - lift), 0.0, Vector2(sc, sc))
+	var at = pos + Vector2(0, C * 0.5 - lift)
+	var r = Rect2(at + Vector2(-w * 0.5 - 2.0, -24.0) * sc, Vector2(w + 4.0, 22.0) * sc)
+	for o in taken:
+		if o.intersects(r):
+			return
+	taken.append(r)                    # (the selected ant, listed twice, is skipped the second time by this too)
+	draw_set_transform(at, 0.0, Vector2(sc, sc))
 	draw_rect(Rect2(-w * 0.5 - 2.0, -24.0, w + 4.0, 22.0), Color(INK.r, INK.g, INK.b, 0.95 * al))
 	draw_rect(Rect2(-w * 0.5, -22.0, w, 18.0), Color(0.34, 0.24, 0.05, 0.95 * al))
 	draw_rect(Rect2(-w * 0.5, -22.0, w, 2.0), Color(APEX_GOLD.r, APEX_GOLD.g, APEX_GOLD.b, al))

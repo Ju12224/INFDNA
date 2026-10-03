@@ -18,8 +18,11 @@ const FEATHER_CREAM = Color(0.83, 0.77, 0.66)
 # The dead bird, in the art's own pixels: the point it tumbles about (the middle of the body, measured from the neck / shoulder origin the
 # live bird is drawn from), and how far below that point the pose reaches the ground (measured; it varies about +-10 with the tilt).
 const DEAD_PIVOT = Vector2(-60, 20)
-const DEAD_REACH = 196.0
-const DEAD_TILT = 2.85                  # radians: lies on its back, head down, wings fanned out behind
+const DEAD_REACH = 198.0
+const DEAD_REACH_K = -86.0              # ... which shrinks this much per radian of extra tilt (measured over 2.70..3.00)
+const DEAD_SINK = 10.0                  # art px the carcass settles into the grass
+const DEAD_TILT = 2.85                  # radians: lies on its back, feet up, head down, wings fanned out behind (a quarter turn reads as a nose-dive)
+const DEPTH = GroundView.DEPTH
 const WING_B_DEAD = -0.5                # the near and far wing when limp, in rig_art's wing angles
 const WING_A_DEAD = -0.1
 const HEAD_DEAD = 0.15                  # the head dropped about the neck
@@ -38,8 +41,10 @@ var _px := 0.0
 var _hover := 0.0     # 1 while the bird is over its prey and not travelling: it then wheels about instead of hanging still
 var _feathers := []   # loose feathers: {p, v, a, w, age, life, sz, ph, cream}
 var _spawn := 0.0
-var _last_origin := Vector2.ZERO    # where the live bird was last drawn (the fall starts from it)
+var _last_origin := Vector2.ZERO    # where the live bird was last drawn
 var _last_ok := false
+var _had_fall := false
+var _fall_origin = null             # where the falling bird starts: the live bird's last drawn spot, taken once when the fall begins
 var _rng := RandomNumberGenerator.new()
 
 
@@ -49,8 +54,16 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_t += delta
-	var b = sim.bird if sim != null else null
-	var f = sim.bird_fall if sim != null else null
+	if sim == null or ground == null:
+		return
+	var b = sim.bird
+	var f = sim.bird_fall
+	if f != null and not _had_fall:
+		# a fall has just begun: it starts where the bird was last seen (circling included), if that was this bird
+		_fall_origin = _last_origin if (_last_ok and abs(_px - float(f["x"])) < 3.0) else null
+	_had_fall = f != null
+	if f == null:
+		_fall_origin = null
 	if b != null:
 		_hover = lerp(_hover, 0.0 if abs(float(b["x"]) - _px) > 0.05 else 1.0, clamp(delta * 3.0, 0.0, 1.0))
 		_px = float(b["x"])
@@ -93,19 +106,18 @@ func _fall_pose(f: Dictionary) -> Dictionary:
 	var g = sim.grid
 	var u = clamp(float(f["t"]) / FALL_T, 0.0, 1.0)
 	var face = int(f["face"])
-	var landx = int(clamp(float(f["x"]), g.arena_l + 3, g.arena_r - 3))      # where the sim puts the carcass
-	var gp = _ground_at(float(landx))
-	var gy = float(gp[0])
-	var ps = float(gp[1])
-	var sc = bird_scale(ps)
-	var origin = _last_origin if _last_ok else Vector2((float(f["x"]) + 0.5) * C, gy - (34.0 + 230.0 * float(f["alt"])) * ps)
-	var p0 = origin + Vector2(face * sc * DEAD_PIVOT.x, sc * DEAD_PIVOT.y)       # the middle of the body, where the live bird had it
-	var rest = sc * DEAD_REACH
-	var drop = u * u
-	var x1 = (float(landx) + 0.5) * C
-	var pos = Vector2(lerp(p0.x, x1, smoothstep(0.0, 1.0, u)), lerp(p0.y, gy - rest, drop))
-	# it tumbles forward or back (which one is the sim's `spin`) and ends on its back
 	var spin = float(f["spin"])
+	var landx = int(clamp(float(f["x"]), g.arena_l + 3, g.arena_r - 3))      # where the sim puts the carcass
+	var ps = GroundView.persp(LANE)
+	var sc = bird_scale(ps)
+	var base = carcass_base(g, landx)                                        # the carcass pile's own foot (world_view draws it from here)
+	var gy = base.y
+	var origin = _fall_origin if _fall_origin != null else Vector2((float(f["x"]) + 0.5) * C, gy - (34.0 + 230.0 * float(f["alt"])) * ps)
+	var p0 = origin + Vector2(face * sc * DEAD_PIVOT.x, sc * DEAD_PIVOT.y)       # the middle of the body, where the live bird had it
+	var p1 = carcass_pivot(base, sc, spin)
+	var drop = u * u                                                          # let go: it falls faster and faster
+	var pos = Vector2(lerp(p0.x, p1.x, smoothstep(0.0, 1.0, u)), lerp(p0.y, p1.y, drop))
+	# it tumbles forward or back (which one is the sim's `spin`), turning faster as it goes, and ends on its back at the carcass's angle
 	var total = DEAD_TILT + 0.15 * spin
 	if spin < 0.0:
 		total -= TAU
@@ -150,10 +162,20 @@ func _draw_bird(b: Dictionary) -> void:
 func _draw_fall(f: Dictionary) -> void:
 	var fp = _fall_pose(f)
 	var pos: Vector2 = fp["pos"]
-	draw_dead_shadow(self, Vector2(pos.x, float(fp["gy"])), float(fp["ps"]), float(fp["drop"]), 1.0)       # it gathers under the bird as it comes down
-	var limp = smoothstep(0.0, 0.3, float(fp["u"]))
-	if not draw_dead(self, pos, float(fp["sc"]), int(f["face"]), float(fp["ang"]), limp, float(fp["fold"]) * (1.0 - limp), _t, 1.0, Color.white):
-		draw_circle(pos, 30.0 * float(fp["ps"]), FEATHER_DARK)
+	var u = float(fp["u"])
+	var ps = float(fp["ps"])
+	var gp = Vector2(pos.x, float(fp["gy"]))
+	# the live bird's broad shadow hands over to one that gathers under the body as it comes down
+	var alt = float(f["alt"])
+	if u < 1.0:
+		draw_set_transform(gp, 0.0, Vector2(1.0, 0.28))
+		draw_circle(Vector2.ZERO, (95.0 - 25.0 * alt) * ps, Color(0.04, 0.07, 0.03, 0.28 * (1.0 - 0.5 * alt) * (1.0 - u) * (1.0 - u)))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	draw_dead_shadow(self, gp, ps, float(fp["drop"]), smoothstep(0.0, 0.5, u))
+	# the wings go limp at once and flop about in the rush of air, settling into the carcass's pose as it lands
+	var limp = smoothstep(0.0, 0.3, u)
+	if not draw_dead(self, pos, float(fp["sc"]), int(f["face"]), float(fp["ang"]), limp, float(fp["fold"]) * (1.0 - limp), _t, 1.0, Color.white, null, 0.3 * (1.0 - u)):
+		draw_circle(pos, 30.0 * ps, FEATHER_DARK)
 
 
 func _draw_feathers() -> void:
@@ -235,6 +257,21 @@ static func dead_angle(face: int, spin: float) -> float:
 	return float(face) * (DEAD_TILT + 0.15 * spin)
 
 
+# The foot of a carcass pile at cell column x: the same point world_view draws every pile from (the ground five columns
+# about it, at the middle lane), so the falling bird lands exactly where the carcass then lies.
+static func carcass_base(g, x: int) -> Vector2:
+	var acc := 0.0
+	for k in range(-2, 3):
+		acc += g.surf_y(x + k)
+	return Vector2((float(x) + 0.5) * g.CELL, acc / 5.0 * g.CELL - DEPTH * 0.45)
+
+
+# Where the middle of the dead bird's body sits for it to lie on the ground at `base` (its lowest feathers just into the grass).
+# `sc` as for draw_dead; the reach depends on how far it is turned, i.e. on the sim's spin.
+static func carcass_pivot(base: Vector2, sc: float, spin: float) -> Vector2:
+	return base + Vector2(0.0, -sc * (DEAD_REACH + DEAD_REACH_K * 0.15 * spin - DEAD_SINK))
+
+
 # The dead bird's soft shadow on the ground: `near` 0 (high up: small, faint) to 1 (lying there). `ground` is the point on the ground under it.
 static func draw_dead_shadow(ci: CanvasItem, ground: Vector2, ps: float, near: float, alpha: float) -> void:
 	var sr = lerp(46.0, 66.0, near) * ps
@@ -253,8 +290,9 @@ static func _put(ci: CanvasItem, base: Transform2D, tex, pos: Vector2, pivot: Ve
 # The bird from the same five drawn pieces as the live one (rig_art.gd), but dead: wings fallen open and limp (`limp` 0 keeps the
 # wing-beat pose it died in, 1 lets them hang and loll; `flutter` is the time they stir in the wind of the fall), the head dropped, the eye
 # crossed out. Turned by `ang` about the middle of the body, which sits at `piv`; `scale` as for Rig.bird. `pa` is an optional list of five
-# alphas (far foot, far wing, near wing, head, near foot) for a bird coming apart. Returns false when the art is missing.
-static func draw_dead(ci: CanvasItem, piv: Vector2, scale: float, face: int, ang: float, limp: float, fold: float, flutter: float, alpha: float, tint: Color, pa = null) -> bool:
+# alphas (far foot, far wing, near wing, head, near foot) for a bird coming apart; `flop` (radians) lets the limp wings flap loosely with
+# `flutter`, as in the wind of a fall. Returns false when the art is missing.
+static func draw_dead(ci: CanvasItem, piv: Vector2, scale: float, face: int, ang: float, limp: float, fold: float, flutter: float, alpha: float, tint: Color, pa = null, flop: float = 0.0) -> bool:
 	var lib = Lib.get_lib()
 	var th = lib.tex("bird_head.png")
 	var twb = lib.tex("bird_wing_b.png")
@@ -279,9 +317,10 @@ static func draw_dead(ci: CanvasItem, piv: Vector2, scale: float, face: int, ang
 	var pos_b = -org
 	var pos_a = hinge_b + Vector2(-8, -10) - hinge_a_src
 	var beat = 0.5 + 0.5 * sin(flutter * 9.0)
-	var stir = sin(flutter * 5.0) * 0.1 * limp
-	var ang_b = lerp(lerp(-0.95 * beat, 0.55, fold), WING_B_DEAD + stir, limp)
-	var ang_a = lerp(lerp(-0.95 * (0.5 + 0.5 * sin(flutter * 9.0 - 0.7)), 0.45, fold), WING_A_DEAD - stir, limp)
+	var stir_b = sin(flutter * 7.0) * flop * limp
+	var stir_a = sin(flutter * 7.0 + 1.9) * flop * limp
+	var ang_b = lerp(lerp(-0.95 * beat, 0.55, fold), WING_B_DEAD + stir_b, limp)
+	var ang_a = lerp(lerp(-0.95 * (0.5 + 0.5 * sin(flutter * 9.0 - 0.7)), 0.45, fold), WING_A_DEAD + stir_a, limp)
 	var c2 = Vector2(-150, -10) + Vector2(-15, 5) * limp
 	var c1 = Vector2(-105, -30) + Vector2(-15, 5) * limp
 	if al[0] > 0.01:

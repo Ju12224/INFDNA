@@ -1,0 +1,104 @@
+{
+ "_about": "Walking rigs for the fauna, cut by tools/art/make_fauna_rig.py from art_src/fauna_bodies.png (bodies without legs) and fauna_legs_a.png / fauna_legs_b.png (far and near leg sets). Same format as the spider in art_manifest.json, read the same way as content/colony/rig_art.gd does: draw the layers in 'order'; every part at (x, y) of the canvas, swung about 'pivot' (canvas px) in its 'phase' (0/1; more than five legs a side = a wave from tail to head, by pivot x); 'body' at (x, y); 'feet' = the canvas point that stands on the world position (middle of the body, on the ground line under the feet); the pictures face RIGHT. 'scale' = game_len / length_px (length_px = the body's nose-to-tail span in canvas px, antennae excluded; game_len for a worker ant drawn about 40 px long). 'width'/'height' = size of the whole drawing (legs and antennae included). 'leg' names the leg (hind / mid / front ...). 'wings' (hornet, moth): the flight wings, drawn behind the body ('far') or in front of it ('near'), flapped about 'pivot' (suggested amplitude 'flap' radians, the far wing in the opposite phase); rig_art.gd does not draw them yet. The single-picture fallbacks are in fauna/ (fauna_manifest.json).",
+ "worker_ref_px": 40.0,
+ "queen": {
+  "canvas": [
+   376,
+   170
+  ],
+  "order": [
+   "far",
+   "body",
+   "near"
+  ],
+  "parts": [
+   {
+    "layer": "far",
+    "file": "queen_far_0.png",
+    "x": 32,
+    "y": 23,
+    "pivot": [
+     202.8,
+     92.5
+    ],
+    "phase": 1,
+    "leg": "hind"
+   },
+   {
+    "layer": "far",
+    "file": "queen_far_1.png",
+    "x": 213,
+    "y": 77,
+    "pivot": [
+     232.3,
+     95.1
+    ],
+    "phase": 0,
+    "leg": "mid"
+   },
+   {
+    "layer": "far",
+    "file": "queen_far_2.png",
+    "x": 247,
+    "y": 49,
+    "pivot": [
+     260.1,
+     95.1
+    ],
+    "phase": 1,
+    "leg": "front"
+   },
+   {
+    "layer": "near",
+    "file": "queen_near_0.png",
+    "x": 88,
+    "y": 60,
+    "pivot": [
+     194.8,
+     97.8
+    ],
+    "phase": 0,
+    "leg": "hind"
+   },
+   {
+    "layer": "near",
+    "file": "queen_near_1.png",
+    "x": 173,
+    "y": 85,
+    "pivot": [
+     224.2,
+     101.6
+    ],
+    "phase": 1,
+    "leg": "mid"
+   },
+   {
+    "layer": "near",
+    "file": "queen_near_2.png",
+    "x": 243,
+    "y": 81,
+    "pivot": [
+     253.7,
+     101.6
+    ],
+    "phase": 0,
+    "leg": "front"
+   }
+  ],
+  "wave": false,
+  "body": {
+   "file": "queen_body.png",
+   "x": 3,
+   "y": 3
+  },
+  "feet": [
+   187.5,
+   160.5
+  ],
+  "width": 370.0,
+  "height": 164.0,
+  "length_px": 369.0,
+  "game_len": 90.0,
+  "scale": 0.2439
+ }
+}

@@ -2,6 +2,7 @@ extends CanvasLayer
 # The right-click menu. Right-click anywhere (without dragging) and a short list of options opens at the cursor:
 #   with ants selected    what they can do about the thing under the cursor (attack it, harvest it, guard here, dig here) and free them
 #   always                the director's powers, with their cost (Rally here, Harvest this pile, Recall, Surge, Breed, Strike, scent flag)
+#   on an Apex ant        (one of the five most mutated) "Breed from this ant" comes first, in gold: key 1 breeds from it
 # Click an option (or press its number) to use it; click anywhere else or press Esc to close. Shift + right-click skips the menu and does
 # the first order on the list. The menu takes every click while it is open, so it never starts a drag-box or a camera move by accident.
 #
@@ -62,6 +63,18 @@ func build(target: Dictionary) -> Array:
 	var sel = scene.live_selection()
 	var kind: String = target["kind"]
 	var col = int(target["col"])
+	# an ant under the cursor can be bred from with one click; on one of the Apex ants (the most mutated alive) that comes first, in gold
+	var under = target.get("ant")
+	if under != null and not sim.ants.has(under):
+		under = null
+	var apex_under = under != null and sim.is_apex(under)
+	if apex_under:
+		out.append(head("Apex ant #%d      mutation %d" % [int(sim.apex_ids[under.id]) + 1, int(sim.ms_of(under))]))
+		var hb = _power("breed", "Breed from this ant", col)
+		hb["act"]["ant"] = under.id
+		hb["hero"] = true
+		out.append(hb)
+		out.append(sep())
 	if sel.empty():
 		out.append(head("Drag a box over ants to order them"))
 	else:
@@ -99,12 +112,12 @@ func build(target: Dictionary) -> Array:
 	out.append(harvest)
 	out.append(_power("recall", "Recall every ant", col))
 	out.append(_power("surge", "Surge: sprint", col))
-	var breed = _power("breed", "Breed from this ant" if not sel.empty() else "Breed: mutate hard", col)
-	var under = target.get("ant")           # an ant under the cursor (apex ones above all) can be bred from with one click
-	if under != null and sim.ants.has(under):
-		breed["label"] = "Breed from this ant   mutation %d%s" % [int(sim.ms_of(under)), "  APEX" if sim.is_apex(under) else ""]
-		breed["act"]["ant"] = under.id
-	out.append(breed)
+	if not apex_under:
+		var breed = _power("breed", "Breed from this ant" if (not sel.empty() or under != null) else "Breed: mutate hard", col)
+		if under != null:
+			breed["label"] = "Breed from this ant   mutation %d" % int(sim.ms_of(under))
+			breed["act"]["ant"] = under.id
+		out.append(breed)
 	if sim.rival.found:
 		var st = _power("strike", "Strike the %s" % sim.rival.name, col)
 		if not sim.rival.can_strike():
@@ -263,9 +276,13 @@ func _paint() -> void:
 				if n <= MAX_KEYS:
 					_ui.draw_string(_fs, Vector2(r.position.x + 12.0, r.position.y + 24.0), str(n), Color(1, 1, 1, 0.45 * a))
 				var c: Color = it["col"]
+				var hero = it.get("hero", false)
+				if hero and i != _hover:
+					_ui.draw_rect(r, Color(0.95, 0.76, 0.3, 0.13 * a))
+					_ui.draw_rect(Rect2(r.position.x, r.position.y, 3.0, r.size.y), Color(0.95, 0.76, 0.3, 0.7 * a))
 				_ui.draw_rect(Rect2(r.position.x + 34.0, r.position.y + 12.0, 12.0, 12.0), Kit.INK)
 				_ui.draw_rect(Rect2(r.position.x + 35.0, r.position.y + 13.0, 10.0, 10.0), Color(c.r, c.g, c.b, a))
-				_ui.draw_string(_f, Vector2(r.position.x + 56.0, r.position.y + 26.0), it["label"], Color(1, 1, 1, a))
+				_ui.draw_string(_f, Vector2(r.position.x + 56.0, r.position.y + 26.0), it["label"], Color(1.0, 0.9, 0.62, a) if hero else Color(1, 1, 1, a))
 				if it["sub"] != "":
 					var sw = _fs.get_string_size(it["sub"]).x
 					_ui.draw_string(_fs, Vector2(r.end.x - sw - 12.0, r.position.y + 25.0), it["sub"], Color(1, 1, 1, 0.6 * a))

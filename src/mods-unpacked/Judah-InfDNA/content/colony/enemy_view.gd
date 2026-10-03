@@ -91,7 +91,11 @@ func draw_enemy(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade: flo
 		var fly = e.def.get("fly", false)
 		var lift = 6.0 + 22.0 * air if fly else 0.0
 		var mouth = (0.5 + 0.5 * sin(_t * 8.0 + e.id)) if (e.engaged and e.state != 2) else (0.12 + 0.12 * sin(_t * 1.6 + e.id))
-		CreatureArt.draw(art, ci, feet, depth_scale * float(e.def.get("art_scale", 1.0)), shade, alpha * (0.75 if e.state == 2 else 1.0), _t, e.facing, e.id, moving, e.flash > 0.0, lift, mouth)
+		var em = _emerge_k(e) if e.void_born else 1.0
+		if em < 1.0:
+			_draw_emerging(ci, e, feet, depth_scale, shade, alpha, h, em, moving, mouth)
+		else:
+			CreatureArt.draw(art, ci, feet, depth_scale * float(e.def.get("art_scale", 1.0)), shade, alpha * (0.75 if e.state == 2 else 1.0), _t, e.facing, e.id, moving, e.flash > 0.0, lift, mouth)
 		if fly:
 			feet = feet - Vector2(0, (lift + 14.0) * depth_scale)     # marks and bars ride with the flyer
 	elif tex != null:
@@ -126,6 +130,76 @@ func draw_enemy(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade: flo
 		var top = feet + Vector2(-w * 0.5, -h - 14.0)
 		ci.draw_rect(Rect2(top - Vector2(2, 2), Vector2(w + 4, 10)), INK)
 		ci.draw_rect(Rect2(top, Vector2(w * clamp(e.hp / e.max_hp, 0.0, 1.0), 6)), Color("#e8483b"))
+
+
+# ---- a Void Maw climbing out of the collapse pit (arc.gd: void_born). For its first EMERGE_T sim seconds it rises out of the pit (world_view
+# draws the pit): young and small, sunk to the chest, dark as the void it came from and lit violet from below, the front rim of the pit and
+# a cloud of dust over its lower body, clods flying. Then it is the plain Void Maw. The clock is the sim's, so a paused game holds it.
+const WorldView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/world_view.gd")
+const EMERGE_T = 4.5
+var _born := {}       # void-born raider id -> sim time it began to climb out (first seen at the pit), or -1e9 when first seen already out
+var _glow = null      # soft radial light (loaded when first wanted; false when missing)
+
+
+func _emerge_k(e) -> float:
+	var b = _born.get(e.id)
+	if b == null:
+		b = sim.time if (sim.arc_stage == 3 and abs(e.x - sim.void_x) <= 6) else -1e9
+		if _born.size() > 12:
+			_born.clear()
+		_born[e.id] = b
+	return clamp((sim.time - float(b)) / EMERGE_T, 0.0, 1.0)
+
+
+func _draw_emerging(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade: float, alpha: float, h: float, em: float, moving: bool, mouth: float) -> void:
+	var q = 1.0 - pow(1.0 - em, 2.2)
+	var pc = WorldView.pit_point(sim.grid, sim.void_x)
+	var on = smoothstep(0.55, 1.0, em)                         # held over the middle of the pit until it is nearly out
+	var f2 = Vector2(lerp(pc.x, feet.x, on), lerp(pc.y, feet.y, on) + (1.0 - q) * h * 0.46)
+	var sc = depth_scale * float(e.def.get("art_scale", 1.0)) * lerp(0.7, 1.0, q)
+	var lit = smoothstep(0.05, 0.85, em)
+	var tint = Color(lerp(0.3, 1.0, lit), lerp(0.2, 1.0, lit), lerp(0.42, 1.0, lit)) * shade
+	tint.a = alpha
+	var vv = WorldView.VOID_VIOLET
+	var gt = _dust[0] if not _dust.empty() else null
+	if not (CreatureArt.Rig.available("void") and CreatureArt.Rig.draw(ci, "void", f2, sc, e.facing, _t + e.id * 0.7, moving or em < 0.8, mouth, tint, e.flash > 0.0)):
+		CreatureArt.draw("voidmaw", ci, f2, sc, shade * lerp(0.35, 1.0, lit), alpha, _t, e.facing, e.id, moving, e.flash > 0.0, 0.0, mouth)
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	var fade = 1.0 - smoothstep(0.55, 1.0, em)
+	var rx = WorldView.PIT_RX
+	var ry = rx * WorldView.PIT_FLAT
+	# violet light from the pit on its underside
+	if _glow == null:
+		_glow = load(WorldView.GLOW_TEX) if ResourceLoader.exists(WorldView.GLOW_TEX) else false
+	if _glow:
+		var lw = Vector2(h * 1.7, h * 0.9)
+		ci.draw_texture_rect(_glow, Rect2(pc + Vector2(0, -h * 0.12) - lw * 0.5, lw), false, Color(vv.r, vv.g, vv.b, 0.4 * fade * alpha))
+	# the front rim of the pit, in front of its sunk body: earth and turf heaped along the near edge
+	for j in 11:
+		var ang = PI * (0.06 + 0.88 * (j + 0.5) / 11.0)
+		var hj = fmod(abs(sin(j * 12.9898 + 3.0) * 43758.5453), 1.0)
+		var p = pc + Vector2(cos(ang) * rx * (1.02 + 0.1 * hj), sin(ang) * ry * (1.02 + 0.1 * hj))
+		var s = (12.0 + 10.0 * hj) * (0.5 + 0.5 * fade)
+		ci.draw_circle(p + Vector2(0, 2.0), s, Color(0.12, 0.08, 0.06, 0.7 * alpha))
+		ci.draw_circle(p, s, Color(0.42, 0.29, 0.19, alpha) if j % 3 != 1 else Color(0.33, 0.48, 0.2, alpha))
+		ci.draw_circle(p + Vector2(-s * 0.25, -s * 0.3), s * 0.45, Color(0.55, 0.4, 0.27, alpha) if j % 3 != 1 else Color(0.45, 0.62, 0.28, alpha))
+	# dust billowing up round it (the thickest at the start), and clods thrown out of the pit
+	if gt != null:
+		for j in 10:
+			var hj = fmod(abs(sin(j * 7.31 + 1.0) * 43758.5453), 1.0)
+			var ph = fmod(_t * (0.35 + 0.25 * hj) + hj, 1.0)
+			var bx = (float(j) / 9.0 - 0.5) * rx * 1.9
+			var dp = pc + Vector2(bx + sin(_t + j) * 8.0, ry * 0.7 - ph * (40.0 + 90.0 * hj))
+			var ds = (60.0 + 70.0 * hj) * (0.6 + 0.6 * ph)
+			var dc = Color(0.62, 0.52, 0.45).linear_interpolate(Color(0.55, 0.42, 0.7), 0.3 * hj)
+			dc.a = sin(PI * ph) * 0.75 * fade * alpha
+			ci.draw_texture_rect(_dust[j % _dust.size()] if _dust[j % _dust.size()] != null else gt, Rect2(dp - Vector2(ds, ds) * 0.5, Vector2(ds, ds)), false, dc)
+	for j in 7:
+		var hj = fmod(abs(sin(j * 3.77 + 5.0) * 43758.5453), 1.0)
+		var ph = fmod(_t * 0.9 + hj, 1.0)
+		var vx = (hj - 0.5) * 2.0 * rx * 1.4
+		var cp = pc + Vector2(vx * ph, -ph * 150.0 * (0.6 + hj) + ph * ph * 190.0)
+		ci.draw_circle(cp, 3.0 + 3.0 * hj, Color(0.3, 0.2, 0.13, (1.0 - ph) * fade * alpha))
 
 
 # The meadow's critters (prey: they run, they never bite). Ground ones walk with legs keyed to the distance travelled; the grasshopper
@@ -369,11 +443,11 @@ func _draw() -> void:
 		var c: Color = f["color"]
 		var pos: Vector2 = f["pos"]
 		var seed_i = int(abs(pos.x)) + int(abs(pos.y))
-		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)     # the sprite effects leave their transform set; lines and arcs are in world px
 		if (f["kind"] in UNDER_KINDS) and _fx_hit_kind(self, f, k, true):
 			continue
 		if _fx_over_kind(f, k, seed_i):
 			continue
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)     # the sprite effects leave their transform set; lines and arcs are in world px
 		match f["kind"]:
 			"puff":
 				for j in 6:
@@ -519,6 +593,7 @@ func _fx_fp(k: float, marks: Array = []) -> float:
 # Draws an effect animation at frame position fp: that frame, cross-faded into the next near the end of its slot (both stay at full strength
 # through the middle of the fade, so it never dips). scl: picture px -> world px, rot turns it about its anchor. stretch > 0 draws each frame's
 # bolt axis that long instead (lightning from one point to another): scl.y is then the most the thickness may scale (its sign flips it).
+# Leaves its transform set, like _sprite (the draw functions reset it).
 func _fx_draw(ci: CanvasItem, an: Dictionary, fp: float, pos: Vector2, rot: float, scl: Vector2, col: Color, stretch: float = 0.0) -> void:
 	if col.a <= 0.01:
 		return
@@ -533,7 +608,6 @@ func _fx_draw(ci: CanvasItem, an: Dictionary, fp: float, pos: Vector2, rot: floa
 		_fx_frame(ci, frames[i], pos, rot, scl, Color(col.r, col.g, col.b, col.a * min(1.0, 2.0 * (1.0 - b))), stretch)
 	if b > 0.0:
 		_fx_frame(ci, frames[i + 1], pos, rot, scl, Color(col.r, col.g, col.b, col.a * min(1.0, 2.0 * b)), stretch)
-	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _fx_frame(ci: CanvasItem, fr: Dictionary, pos: Vector2, rot: float, scl: Vector2, col: Color, stretch: float) -> void:
@@ -593,7 +667,7 @@ func _fx_over_kind(f: Dictionary, k: float, seed_i: int) -> bool:
 			if an.empty():
 				return false
 			var s = 2.2 * (12.0 + f.get("r", 100.0)) / an["ref"] * (0.65 + 0.35 * k)
-			var tint = white.linear_interpolate(c, 0.5)
+			var tint = white.linear_interpolate(c, 0.8)      # the pale ring takes the pulse's colour (cyan thunder, warm plain pulse)
 			tint.a = 0.85 * (1.0 - k * k)
 			_fx_draw(self, an, k * 4.0, pos, fmod(seed_i * 0.9, TAU), Vector2(s, s), tint)
 			return true
@@ -616,14 +690,19 @@ func _fx_over_kind(f: Dictionary, k: float, seed_i: int) -> bool:
 			if an3.empty():
 				return false
 			if not f.has("face"):
+				# first sight of this web: which way it was shot, and an older web on the same raider gives way to it (webs never stack
+				# into a white blob over the fight)
 				f["face"] = 1.0
 				for g in sim.fx:
 					if g["kind"] == "beam" and g.get("to", Vector2.INF).distance_to(pos) < 2.0:
 						f["face"] = -1.0 if g["to"].x < g["pos"].x else 1.0
-						break
-			var s3 = 64.0 / an3["ref"]
+					elif g["kind"] == "web" and g != f and g["t"] > f["t"] and g["pos"].distance_to(pos) < 10.0:
+						g["gone"] = true
+			if f.get("gone", false):
+				return true
+			var s3 = 54.0 / an3["ref"]
 			var tint3 = c
-			tint3.a = 0.8 * (1.0 - k * k * k)
+			tint3.a = 0.75 * (1.0 - k * k * k) * (1.0 - 0.25 * smoothstep(0.16, 0.4, k))    # the hanging web settles fainter than the hit
 			_fx_draw(self, an3, _fx_fp(k, [0.07, 0.16, 0.72]), pos, 0.0, Vector2(s3 * f["face"], s3), tint3)
 			return true
 		"acid":

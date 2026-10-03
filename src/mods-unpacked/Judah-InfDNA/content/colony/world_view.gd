@@ -158,6 +158,178 @@ func _draw_band() -> void:
 		band.draw_circle(Vector2.ZERO, 15.5, Color("#1d120d"))
 		band.draw_circle(Vector2(0, 6), 9.5, Color("#0e0907"))
 		band.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	_draw_arc_ground(band)
+
+
+# ---- the ground answering the monsters (arc.gd): tremor cracks round the nest, and the pit the Void climbs out of
+# The cracks open one by one as the tremors come (sim.arc_tremors) and widen with each one, and heal slowly once the ground is
+# calm again; from the fifth tremor a faint violet light shows in the widest. The pit opens at sim.void_x when the ground
+# collapses (stage 3): a dark crater with a violet rim, light glowing in its depths and motes rising out of it; it closes again
+# when the void is sealed. All of it is drawn on the top face under every unit, only while it is there and in view.
+const CRACK_N = 11
+const PIT_LANE = 0.5          # the pit is centred on this lane of the top face...
+const PIT_RX = 132.0          # ...this wide (px, half), and flattened by the view onto the top face
+const PIT_FLAT = 0.36
+const VOID_VIOLET = Color(0.72, 0.42, 1.0)
+var _cracks := []             # built once: [{"pts": [Vector2(cells from the entrance, lane)], "br": [...], "thr", "w"}]
+var _crack_k := 0.0           # tremors felt, eased (0 = no cracks)
+var _pit_k := 0.0             # 0 closed .. 1 open
+var _pit_x := 0
+var _arc_last := 0.0
+
+
+# Where the pit's centre is drawn (world px): the middle of the top face at that column. Shared with the Void Maw's climb out of it (enemy_view).
+static func pit_point(g, x: int) -> Vector2:
+	var acc := 0.0
+	for k in range(-2, 3):
+		acc += g.surf_y(x + k)
+	return Vector2((x + 0.5) * g.CELL, GroundView.lane_y(acc / 5.0 * g.CELL, PIT_LANE))
+
+
+func _draw_arc_ground(ci: CanvasItem) -> void:
+	var dt = clamp(_t - _arc_last, 0.0, 0.1)
+	_arc_last = _t
+	var felt = float(sim.arc_tremors) if sim.arc_stage >= 2 else 0.0
+	_crack_k = move_toward(_crack_k, felt, dt * (1.6 if felt > _crack_k else 0.5))
+	var open = sim.arc_stage == 3
+	if open:
+		_pit_x = sim.void_x
+	_pit_k = move_toward(_pit_k, 1.0 if open else 0.0, dt * (0.75 if open else 0.3))
+	if _crack_k > 0.01:
+		_draw_cracks(ci)
+	if _pit_k > 0.002:
+		_draw_pit(ci)
+
+
+func _make_cracks() -> void:
+	_cracks = []
+	for i in CRACK_N:
+		var side = 1.0 if i % 2 == 0 else -1.0
+		var x0 = side * (10.0 + 56.0 * _hash(i * 3.71 + 1.3))
+		var dir = side if _hash(i * 9.13 + 0.4) > 0.3 else -side          # most run outward from the nest
+		var ln = 14.0 + 24.0 * _hash(i * 2.93 + 4.1)
+		var lane = 0.16 + 0.74 * _hash(i * 5.37 + 2.2)
+		var drift = (_hash(i * 6.1 + 7.0) - 0.5) * 0.05
+		var n = int(ln / 2.0)
+		var pts := []
+		for k in n + 1:
+			pts.append(Vector2(x0 + dir * k * ln / n, clamp(lane + (_hash(i * 13.0 + k * 1.77) - 0.5) * 0.07, 0.04, 0.98)))
+			lane += drift
+		# one short fork off the middle
+		var bk = int(n * (0.35 + 0.3 * _hash(i * 4.4 + 9.0)))
+		var bp: Vector2 = pts[bk]
+		var bl = (1.0 if _hash(i * 8.2) > 0.5 else -1.0) * 0.045
+		var br := []
+		for k in 5:
+			br.append(Vector2(bp.x + dir * k * 1.6, clamp(bp.y + bl * k + (_hash(i * 17.0 + k) - 0.5) * 0.03, 0.03, 0.99)))
+		_cracks.append({"pts": pts, "br": br, "bk": float(bk) / n, "thr": 0.55 + i * 0.66, "w": 2.0 + 2.4 * _hash(i * 7.7 + 5.0)})
+
+
+func _draw_cracks(ci: CanvasItem) -> void:
+	if _cracks.empty():
+		_make_cracks()
+	var g = sim.grid
+	var ex = float(g.entrance.x)
+	var vc = _view_cols(g)
+	if ex + 70.0 < vc[0] or ex - 70.0 > vc[1]:
+		return
+	var glow = smoothstep(4.5, 7.0, _crack_k) * (0.6 + 0.4 * sin(_t * 1.4))
+	for c in _cracks:
+		var age = _crack_k - float(c["thr"])
+		if age <= 0.0:
+			continue
+		var grow = clamp(age / 1.6, 0.0, 1.0)                    # it runs out to its full length over a tremor or two...
+		var w = float(c["w"]) * clamp(0.3 + 0.24 * age, 0.3, 1.5)  # ...and gapes wider with every one after
+		_crack_line(ci, c["pts"], grow, w, ex, glow)
+		if grow > c["bk"] + 0.1:
+			_crack_line(ci, c["br"], clamp((grow - c["bk"]) * 2.0, 0.0, 1.0), w * 0.55, ex, 0.0)
+
+
+# One crack: a tapering dark gap along the top face, its near lip catching the light, and (late) the violet light far down in it.
+func _crack_line(ci: CanvasItem, pts: Array, grow: float, w: float, ex: float, glow: float) -> void:
+	var g = sim.grid
+	var C = g.CELL
+	var m = int(ceil((pts.size() - 1) * grow))
+	if m < 1:
+		return
+	var sp := []
+	for k in m + 1:
+		var p: Vector2 = pts[k]
+		var col = int(round(ex + p.x))
+		sp.append(Vector2((ex + p.x + 0.5) * C, GroundView.lane_y(ground.smooth_px(col), p.y)))
+	var dark = Color(0.11, 0.07, 0.05, 0.85)
+	var lip = Color(0.86, 0.72, 0.5, 0.35)
+	var prev_a := Vector2.ZERO
+	var prev_b := Vector2.ZERO
+	for k in m + 1:
+		var u = float(k) / m
+		var taper = pow(sin(PI * clamp(u * 0.92 + 0.04, 0.0, 1.0)), 0.6)
+		var lanek = GroundView.persp(pts[k].y)
+		var half = w * taper * lanek * 0.5
+		var d = (sp[min(k + 1, m)] - sp[max(k - 1, 0)]).normalized()
+		var nrm = Vector2(-d.y, d.x) * half
+		var a = sp[k] - nrm
+		var b = sp[k] + nrm
+		if k > 0:
+			ci.draw_colored_polygon(PoolVector2Array([prev_a, a, b, prev_b]), dark)
+			ci.draw_line(prev_b + Vector2(0, 1.0), b + Vector2(0, 1.0), lip, 1.0)
+			if glow > 0.02 and taper > 0.5:
+				ci.draw_line(sp[k - 1], sp[k], Color(VOID_VIOLET.r, VOID_VIOLET.g, VOID_VIOLET.b, 0.5 * glow * taper), max(1.0, half * 0.6))
+		prev_a = a
+		prev_b = b
+
+
+func _draw_pit(ci: CanvasItem) -> void:
+	var g = sim.grid
+	var vc = _view_cols(g)
+	if _pit_x + 40 < vc[0] or _pit_x - 40 > vc[1]:
+		return
+	var k = _pit_k
+	var ke = 1.0 - pow(1.0 - k, 3.0)
+	var c = pit_point(g, _pit_x)
+	var rx = PIT_RX * (0.25 + 0.75 * ke)
+	var pulse = 0.5 + 0.5 * sin(_t * 1.3)
+	var vv = VOID_VIOLET
+	var gt = _tex.get(GLOW_TEX)
+	# a violet haze over the torn ground around it
+	if gt != null:
+		var hw = Vector2(rx * 3.4, rx * 3.4 * PIT_FLAT * 1.5)
+		ci.draw_texture_rect(gt, Rect2(c - hw * 0.5, hw), false, Color(vv.r, vv.g, vv.b, (0.22 + 0.08 * pulse) * k))
+	# churned earth, the rim, the hole and the far wall of it, the void at the bottom
+	ci.draw_set_transform(c, 0.0, Vector2(1.0, PIT_FLAT))
+	ci.draw_circle(Vector2(0, rx * 0.06), rx * 1.42, Color(0.33, 0.23, 0.15, 0.4 * k))
+	ci.draw_circle(Vector2(0, rx * 0.04), rx * 1.2, Color(0.4, 0.27, 0.17, 0.85 * k))
+	ci.draw_circle(Vector2.ZERO, rx * 1.07, Color(0.27, 0.17, 0.11, k))
+	ci.draw_circle(Vector2.ZERO, rx, Color(INK.r, INK.g, INK.b, k))
+	ci.draw_circle(Vector2(0, -rx * 0.07), rx * 0.95, Color(0.19, 0.12, 0.09, k))
+	ci.draw_circle(Vector2(0, rx * 0.1), rx * 0.88, Color(0.05, 0.03, 0.07, k))
+	ci.draw_circle(Vector2(0, rx * 0.2), rx * 0.62, Color(0.09, 0.04, 0.15, k))
+	ci.draw_arc(Vector2.ZERO, rx * 1.005, 0.0, TAU, 56, Color(vv.r, vv.g, vv.b, (0.5 + 0.3 * pulse) * k), 4.0, true)
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	# light far down in it, breathing
+	if gt != null:
+		var dw = Vector2(rx * 1.5, rx * 1.5 * PIT_FLAT * 1.3)
+		ci.draw_texture_rect(gt, Rect2(c + Vector2(0, rx * PIT_FLAT * 0.2) - dw * 0.5, dw), false, Color(0.62, 0.3, 0.95, (0.45 + 0.3 * pulse) * k))
+	# clods of turf and earth thrown up round the edge
+	for j in 16:
+		var ang = TAU * (j + 0.5 * _hash(j * 2.3 + 1.0)) / 16.0
+		var rr = rx * (1.1 + 0.26 * _hash(j * 3.9 + 2.0))
+		var p = c + Vector2(cos(ang) * rr, sin(ang) * rr * PIT_FLAT)
+		var s = (3.5 + 5.5 * _hash(j * 5.1 + 3.0)) * (0.6 + 0.4 * ke)
+		ci.draw_circle(p + Vector2(0, 1.5), s, Color(0.12, 0.08, 0.06, 0.6 * k))
+		ci.draw_circle(p, s, Color(0.45, 0.31, 0.2, k) if j % 3 != 0 else Color(0.35, 0.5, 0.22, k))
+	# motes of violet light rising out of it
+	for j in 16:
+		var h1 = _hash(j * 1.31 + 0.7)
+		var h2 = _hash(j * 2.17 + 1.9)
+		var ph = fmod(_t * (0.1 + 0.09 * h1) + h2, 1.0)
+		var p0 = c + Vector2((_hash(j * 3.3 + 4.0) - 0.5) * rx * 1.4, (_hash(j * 4.7) - 0.5) * rx * PIT_FLAT * 0.9)
+		var p2 = p0 + Vector2(sin(_t * 0.8 + j * 1.7) * 9.0, -ph * (110.0 + 170.0 * h1))
+		var a = sin(PI * ph) * 0.8 * k
+		if j % 4 == 0 and gt != null:
+			var gs = Vector2(16.0, 16.0) * (1.0 + h1)
+			ci.draw_texture_rect(gt, Rect2(p2 - gs * 0.5, gs), false, Color(vv.r, vv.g, vv.b, a * 0.7))
+		ci.draw_circle(p2, (1.4 + 2.0 * h2) * (1.0 - 0.4 * ph), Color(0.85, 0.66, 1.0, a))
 
 
 func _draw_snow() -> void:
@@ -743,7 +915,7 @@ func _draw_carcass(ci: CanvasItem, pile: Dictionary, base: Vector2) -> void:
 	# the bird: its pieces drop away in turn as it rots
 	var tint = Color.white.linear_interpolate(Color(0.62, 0.72, 0.58), clamp(e * 0.9, 0.0, 0.8))
 	var pa = [smoothstep(0.52, 0.66, rot), smoothstep(0.28, 0.46, rot), smoothstep(0.0, 0.22, rot), smoothstep(0.18, 0.36, rot), smoothstep(0.44, 0.58, rot)]
-	var piv = base + Vector2(0.0, -sc * PredatorView.DEAD_REACH + sc * 10.0)         # lying on the ground, a touch sunk into the grass
+	var piv = PredatorView.carcass_pivot(base, sc, float(pile.get("spin", 0.0)))     # lying on the ground, a touch sunk into the grass
 	var ang = PredatorView.dead_angle(face, float(pile.get("spin", 0.0)))
 	if not PredatorView.draw_dead(ci, piv, sc, face, ang, 1.0, 0.0, 0.0, alpha, tint, pa):
 		ci.draw_circle(base + Vector2(0, -14.0 * ps), 22.0 * ps * k, Color(0.3, 0.26, 0.24, alpha))

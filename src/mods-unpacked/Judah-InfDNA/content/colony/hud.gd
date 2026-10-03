@@ -22,6 +22,7 @@ const APEX_COL = Color("#f2c14e")        # the most mutated ants, and their scor
 const ARC_COLS = [Color("#b58cff"), Color("#f2c14e"), Color("#ff8a4a"), Color("#c25cff")]    # growing, dominion, tremors, the void
 const APEX_ROW = 32.0
 const APEX_Y0 = 66.0
+const STRIP2_Y = 38.0                # the status strip's second line (Monstrosity, the arc, the best score)
 const VIEW_SHIFT = 44.0          # in view mode the pause chip, banner and toasts sit this much higher (no minimap above them)
 const REVEAL_IN = 38.0           # the mouse this near the top or bottom edge (HUD units) slides the minimap or the speed bar in
 const REVEAL_OUT = 140.0         # ...and it slides away again once the mouse is this far from the edge
@@ -35,6 +36,7 @@ var _f_s: Font
 var _f_m: Font
 var _f_l: Font
 var _f_xl: Font
+var _f_xs: Font
 var root: Control
 
 var _portrait_bg: TextureRect
@@ -167,6 +169,7 @@ func _ready() -> void:
 	_f_m = Kit.font(24, 2)
 	_f_l = Kit.font(34, 3)
 	_f_xl = Kit.font(52, 4)
+	_f_xs = Kit.font(16, 1)
 	root = Control.new()
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
@@ -706,7 +709,7 @@ func _refresh_squad() -> void:
 func _build_view() -> void:
 	_strip = Control.new()
 	_strip.rect_position = Vector2(20, 14)
-	_strip.rect_size = Vector2(1500, 36)
+	_strip.rect_size = Vector2(1200, STRIP2_Y + 28.0)
 	_strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_strip.connect("draw", self, "_draw_strip")
 	root.add_child(_strip)
@@ -778,56 +781,71 @@ func _draw_strip() -> void:
 	x += 28.0 + _f_s.get_string_size(rt).x + 20.0
 	ops.append(["icon", x, "luck"])
 	ops.append(["bar", x + 28.0, clamp(sim.will / max(1.0, sim.will_max()), 0.0, 1.0), Kit.GOLD, 64.0])
-	x += 28.0 + 64.0 + 20.0
-	# the point of the game: how monstrous the colony is (or, once it has taken the meadow, how far along the arc is) and its strangest ant
+	x += 28.0 + 64.0 + 12.0
+	_strip.draw_rect(Rect2(0, 0, x, 34), Color(0.08, 0.07, 0.11, 0.55))
+	_strip.draw_rect(Rect2(0, 0, 3, 34), Color(0.95, 0.76, 0.3, 0.8))
+	_strip_ops(ops, 0.0, 24.0, 12.0, 10.0, 8.0, _f_s)
+	# a second, smaller line under it, the point of the game: how monstrous the colony is (once it has taken the meadow, how far along
+	# the arc it is) and the score of its most mutated ant (click it to look at that ant)
+	var f = _f_xs
+	var ops2 := []
+	var x2 := 12.0
 	var mp = _mono_pct(sim)
 	var arc = _arc_line(sim)
-	ops.append(["icon", x, "power"])
 	if arc["text"] == "":
 		var mt = "Monstrosity %d%%" % mp
-		ops.append(["text", x + 28.0, mt, Color(1, 1, 1, 0.85)])
-		x += 28.0 + _f_s.get_string_size(mt).x + 10.0
-		ops.append(["bar", x, mp / 100.0, MONO_COL, 72.0])
-		x += 72.0 + 10.0
+		ops2.append(["text", x2, mt, Color(1, 1, 1, 0.8)])
+		x2 += f.get_string_size(mt).x + 10.0
+		ops2.append(["bar", x2, mp / 100.0, MONO_COL, 80.0])
+		x2 += 80.0 + 10.0
 		var sn = sim.monstrosity_stage()
-		ops.append(["text", x, sn, Color(MONO_COL.r, MONO_COL.g, MONO_COL.b, 0.85)])
-		x += _f_s.get_string_size(sn).x + 20.0
+		if sim.arc_hold > 0.5 and sim.monstrosity >= Sim.Arc.ENTER_AT:
+			sn = "taking the meadow  %ds" % int(ceil(max(0.0, Sim.Arc.ENTER_HOLD - sim.arc_hold)))
+		ops2.append(["text", x2, sn, Color(MONO_COL.r, MONO_COL.g, MONO_COL.b, 0.9)])
+		x2 += f.get_string_size(sn).x + 18.0
 	else:
 		var ac: Color = arc["col"]
-		var pulse = 0.82 + 0.18 * sin(_t * 4.0) if sim.arc_stage >= 2 else 1.0
-		ops.append(["text", x + 28.0, arc["text"], Color(ac.r, ac.g, ac.b, pulse)])
-		x += 28.0 + _f_s.get_string_size(arc["text"]).x + 10.0
-		ops.append(["bar", x, arc["frac"], ac, 72.0])
-		x += 72.0 + 10.0
+		var pulse = 0.8 + 0.2 * sin(_t * 3.0) if sim.arc_stage >= 2 else 1.0
+		ops2.append(["text", x2, arc["text"], Color(ac.r, ac.g, ac.b, pulse)])
+		x2 += f.get_string_size(arc["text"]).x + 10.0
+		ops2.append(["bar", x2, arc["frac"], ac, 80.0])
+		x2 += 80.0 + 10.0
 		var mt2 = "Monstrosity %d%%" % mp
-		ops.append(["text", x, mt2, Color(1, 1, 1, 0.5)])
-		x += _f_s.get_string_size(mt2).x + 20.0
+		ops2.append(["text", x2, mt2, Color(1, 1, 1, 0.5)])
+		x2 += f.get_string_size(mt2).x + 18.0
 	var best_r = Rect2()
 	if not sim.apex.empty():
 		var bt = "%d" % int(sim.ms_of(sim.apex[0]))
-		ops.append(["text", x, "best", Color(1, 1, 1, 0.6)])
-		var bx = x + _f_s.get_string_size("best ").x
-		ops.append(["text", bx, bt, APEX_COL])
-		best_r = Rect2(x - 4.0, 2.0, bx - x + _f_s.get_string_size(bt).x + 8.0, 30.0)
-		x = bx + _f_s.get_string_size(bt).x + 12.0
+		ops2.append(["text", x2, "best", Color(1, 1, 1, 0.55)])
+		var bx = x2 + f.get_string_size("best ").x
+		ops2.append(["text", bx, bt, APEX_COL])
+		best_r = Rect2(x2 - 5.0, STRIP2_Y, bx - x2 + f.get_string_size(bt).x + 10.0, 26.0)
+		x2 = bx + f.get_string_size(bt).x + 12.0
+	else:
+		x2 -= 6.0
 	if best_r != _strip_best_r:
 		_strip_best_r = best_r
 		_strip_best.rect_position = best_r.position
 		_strip_best.rect_size = best_r.size
 		_strip_best.mouse_filter = Control.MOUSE_FILTER_STOP if best_r.size.x > 0.0 else Control.MOUSE_FILTER_IGNORE
-	_strip.draw_rect(Rect2(0, 0, x, 34), Color(0.08, 0.07, 0.11, 0.55))
-	_strip.draw_rect(Rect2(0, 0, 3, 34), Color(0.95, 0.76, 0.3, 0.8))
+	_strip.draw_rect(Rect2(0, STRIP2_Y, x2, 26), Color(0.08, 0.07, 0.11, 0.45))
+	_strip.draw_rect(Rect2(0, STRIP2_Y, 3, 26), Color(MONO_COL.r, MONO_COL.g, MONO_COL.b, 0.8))
+	_strip_ops(ops2, STRIP2_Y, 19.0, 10.0, 7.0, 5.0, f)
+
+
+# Draws one line of the status strip: text at the baseline, 24 px icons, bars of the given heights (outer, inner).
+func _strip_ops(ops: Array, y0: float, base: float, bar_y: float, bar_h: float, fill_h: float, f: Font) -> void:
 	for o in ops:
 		match o[0]:
 			"text":
-				_strip.draw_string(_f_s, Vector2(o[1], 24.0), o[2], o[3])
+				_strip.draw_string(f, Vector2(o[1], y0 + base), o[2], o[3])
 			"icon":
 				var tx = Kit.icon(o[2])
 				if tx != null:
-					_strip.draw_texture_rect(tx, Rect2(o[1], 5.0, 24, 24), false)
+					_strip.draw_texture_rect(tx, Rect2(o[1], y0 + 5.0, 24, 24), false)
 			"bar":
-				_strip.draw_rect(Rect2(o[1], 12.0, o[4], 10.0), Kit.INK)
-				_strip.draw_rect(Rect2(o[1] + 1.0, 13.0, (o[4] - 2.0) * o[2], 8.0), o[3])
+				_strip.draw_rect(Rect2(o[1], y0 + bar_y, o[4], bar_h), Kit.INK)
+				_strip.draw_rect(Rect2(o[1] + 1.0, y0 + bar_y + (bar_h - fill_h) * 0.5, (o[4] - 2.0) * o[2], fill_h), o[3])
 
 
 func _on_strip_best(ev: InputEvent) -> void:
@@ -1354,8 +1372,11 @@ func _process(delta: float) -> void:
 	else:
 		_banner.visible = false
 		_banner_text = ""
-	if sim.arc_stage >= 2 and _strip.visible:
-		_strip.update()
+	if sim.arc_stage >= 2:            # the arc's label breathes: redraw it every frame while the ground shakes
+		if _strip.visible:
+			_strip.update()
+		elif _left_col.visible:
+			_apex_ctl.update()
 	_refresh_director()
 	_refresh_squad()
 	_edge_reveal(delta)

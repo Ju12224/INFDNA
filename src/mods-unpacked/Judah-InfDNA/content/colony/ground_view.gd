@@ -62,6 +62,8 @@ var _sk := -1        # season stage the cached scenery was built for: when it ch
 var _P := {}         # the seasonal palette of the build in progress
 var _lib = null       # art_lib.gd, once asked for
 var _tex_loads := 0  # close-up pictures loaded this frame (one a frame, so zooming in never stalls)
+var _pit_x := -999999 # the column of the open Void pit (arc.gd, drawn by world_view): no grass or scenery grows in it
+const PIT_COLS = 28
 
 
 func _init(sim_) -> void:
@@ -148,6 +150,13 @@ func prepare(cols: Array, t: float) -> void:
 			elif m > CH - 4:
 				_stale[ci + 1] = true
 		g.surf_dirty.clear()
+	var pit = sim.void_x if sim.arc_stage == 3 else -999999
+	if pit != _pit_x:
+		for px in [_pit_x, pit]:
+			if px != -999999:
+				for ci2 in range(int(floor(float(px - PIT_COLS) / CH)), int(floor(float(px + PIT_COLS) / CH)) + 1):
+					_stale[ci2] = true
+		_pit_x = pit
 	var c_lo = int(floor(float(cols[0]) / CH))
 	var c_hi = int(floor(float(cols[1]) / CH))
 	var budget = 14 if _chunks.empty() else 3
@@ -714,7 +723,7 @@ func _decor(sl: Array, shade, band, c0: int, sy: PoolRealArray, mf: PoolRealArra
 		for ex in ents:
 			if abs(col - ex) < 9:
 				near = true
-		if near:
+		if near or abs(col - _pit_x) < PIT_COLS:
 			continue
 		var lane = fposmod(col * 0.618034 + 0.2 * MK.hash1(col * 5.71 + 2.0), 1.0)      # spread evenly through the depth, not in random clumps and gaps
 		var px = (col + MK.hash1(col * 9.1)) * C
