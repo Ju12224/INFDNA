@@ -8,6 +8,7 @@ extends Node2D
 const INK = Color("#15121a")
 const GroundView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ground_view.gd")
 const NestDecor = preload("res://mods-unpacked/Judah-InfDNA/content/colony/nest_decor.gd")
+const PredatorView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/predator_view.gd")
 const DEPTH = GroundView.DEPTH   # thickness of the ground's top face (2.5D surface band, many lanes)
 const TREE_TEX = "res://entities/units/neutral/tree.png"
 const ROCK_TEX = "res://entities/units/neutral/rock.png"
@@ -690,6 +691,9 @@ func _draw_pile(ci: CanvasItem, pile: Dictionary) -> void:
 	var g = sim.grid
 	var C = g.CELL
 	var base = Vector2((pile["x"] + 0.5) * C, _smooth_surf(g, pile["x"]) - DEPTH * 0.45)
+	if pile.get("kind", "") == "carcass":
+		_draw_carcass(ci, pile, base)
+		return
 	if pile.get("kind", "") == "jackpot":
 		var gl = 0.2 + 0.08 * sin(_t * 3.0)
 		ci.draw_circle(base + Vector2(0, -16), 52.0, Color(1.0, 0.85, 0.3, gl * 0.6))
@@ -711,3 +715,69 @@ func _draw_pile(ci: CanvasItem, pile: Dictionary) -> void:
 		var o = rows[i]
 		var p = base + Vector2(o[0] * 11.0, -o[1] * 9.0 - 9.0)
 		draw_gem(ci, p, 0.68, (pile["x"] * 7 + i * 3) % 5)
+
+
+# A shot-down bird lying on its back, drawn from the same pieces as the live one (predator_view.draw_dead; it lands in exactly this pose). It rots
+# away as pile["rot"] runs 1 -> 0 (a couple of minutes, faster as the foragers carry it off): it shrinks and goes grey-green and a little see-through,
+# loses its pieces one by one (feet first, the body last), its edges break into dark specks that rise and fade, and a faint mist hangs over it.
+# At rot 0 nothing at all is drawn.
+func _draw_carcass(ci: CanvasItem, pile: Dictionary, base: Vector2) -> void:
+	var rot = clamp(float(pile.get("rot", pile["amount"] / max(1.0, pile["max"]))), 0.0, 1.0)
+	if rot < 0.004:
+		return
+	var e = 1.0 - rot
+	var ps = GroundView.persp(0.5)
+	var sd = float(pile["x"]) * 3.7
+	var face = int(pile.get("face", 1))
+	var k = 0.6 + 0.4 * rot                                   # it shrinks as it goes
+	var sc = PredatorView.bird_scale(ps) * k
+	var alpha = 0.4 + 0.6 * pow(rot, 0.6)                     # 1 only while fresh
+	var fin = smoothstep(0.0, 0.1, rot)                       # the specks and mist go with the last of it
+	# the shadow, and a few of its feathers on the grass round it
+	PredatorView.draw_dead_shadow(ci, base, ps * k, 1.0, alpha)
+	for i in 4:
+		var fa = clamp(rot * 1.6 - 0.3 * float(i) * 0.5, 0.0, 1.0) * alpha
+		if fa > 0.0:
+			PredatorView.draw_feather(ci, base + Vector2((_hash(sd + i * 1.9) - 0.5) * 330.0 * ps * k, 3.0 + _hash(sd + i * 4.3) * 7.0 * ps), (_hash(sd + i * 7.7) - 0.5) * 1.2 + (0.0 if i % 2 == 0 else PI), (15.0 + 8.0 * _hash(sd + i * 2.2)) * ps, i % 3 == 0, fa)
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	# the bird: its pieces drop away in turn as it rots
+	var tint = Color.white.linear_interpolate(Color(0.62, 0.72, 0.58), clamp(e * 0.9, 0.0, 0.8))
+	var pa = [smoothstep(0.52, 0.66, rot), smoothstep(0.28, 0.46, rot), smoothstep(0.0, 0.22, rot), smoothstep(0.18, 0.36, rot), smoothstep(0.44, 0.58, rot)]
+	var piv = base + Vector2(0.0, -sc * PredatorView.DEAD_REACH + sc * 10.0)         # lying on the ground, a touch sunk into the grass
+	var ang = PredatorView.dead_angle(face, float(pile.get("spin", 0.0)))
+	if not PredatorView.draw_dead(ci, piv, sc, face, ang, 1.0, 0.0, 0.0, alpha, tint, pa):
+		ci.draw_circle(base + Vector2(0, -14.0 * ps), 22.0 * ps * k, Color(0.3, 0.26, 0.24, alpha))
+	# crumbling: dark specks lift off its outline, rise a little and fade; each slot has its own rhythm and a fresh spot every cycle
+	var mid = piv + Vector2(face * 55.0 * sc, 10.0 * sc)
+	var rx = 250.0 * sc
+	var ry = 110.0 * sc
+	var on = clamp(e * 2.2, 0.0, 1.0)
+	var N = 20
+	for i in N:
+		if (i + 0.5) / N > on:
+			break
+		var h1 = _hash(sd + i * 1.37)
+		var h2 = _hash(sd + i * 2.91 + 5.0)
+		var h3 = _hash(sd + i * 4.13 + 9.0)
+		var u = _t / (1.5 + 1.8 * h1) + h2
+		var cyc = floor(u)
+		var tau = u - cyc
+		var cs = sd + i * 7.1 + cyc * 13.3
+		var a = TAU * _hash(cs)
+		var rr = 0.55 + 0.45 * _hash(cs + 1.7)
+		var sp = mid + Vector2(cos(a) * rx * rr, min(sin(a) * ry * rr, base.y - mid.y - 6.0 * ps))
+		sp += Vector2(sin(tau * 4.0 + h2 * 6.0) * 9.0 * ps + tau * 14.0 * ps, -tau * (36.0 + 60.0 * h3) * ps)
+		var sa = pow(sin(PI * tau), 0.7) * 0.85 * fin
+		var sr = (1.4 + 2.2 * h3) * ps * (1.0 - 0.45 * tau)
+		var sc2 = Color(0.14, 0.13, 0.17, sa) if h1 < 0.72 else Color(0.38, 0.42, 0.3, sa * 0.8)
+		ci.draw_circle(sp, sr, sc2)
+	# a faint grey-green mist rising off it
+	var gt = _tex.get(GLOW_TEX)
+	var ma = clamp(e * 3.0, 0.0, 1.0) * fin
+	if gt != null and ma > 0.0:
+		for j in 3:
+			var tm = fposmod(_t * 0.11 + j / 3.0 + sd * 0.1, 1.0)
+			var mp = mid + Vector2(sin(tm * 5.0 + j * 2.0) * 18.0 * ps, -(6.0 + tm * 80.0) * ps)
+			var mr = (46.0 + 64.0 * tm) * ps * k
+			ci.draw_texture_rect(gt, Rect2(mp - Vector2(mr, mr), Vector2(mr, mr) * 2.0), false, Color(0.55, 0.68, 0.5, sin(PI * tm) * 0.16 * ma))
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

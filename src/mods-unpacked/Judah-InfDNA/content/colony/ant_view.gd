@@ -30,6 +30,9 @@ var _t := 0.0
 var _surf_k := {}   # smoothed surface factor per unit (0 underground, 1 surface)
 var _back_k := {}   # smoothed tunnel-plane factor (0 front plane, 1 back plane)
 var _air_k := {}    # smoothed flight factor of winged ants (0 on the ground, 1 airborne)
+var _bite_k := {}   # smoothed 0..1 of winged ants that have flown up to bite the hunting bird (only ever filled while a bird is about)
+var _bird_px := 0.0 # where the bird is (world x) and how high it hangs above the meadow (px), as long as _bite_k is in use
+var _bite_lift := 0.0
 var _gait_ph := {}  # walk-cycle phase (cycles) per ant, advanced by the distance it really walked so the feet stay planted
 var _last_pos := {}
 var _leg_cache := {}
@@ -65,7 +68,7 @@ func _process(delta: float) -> void:
 			alive[a2.id] = true
 		for e2 in sim.enemies:
 			alive[-e2.id] = true
-		for dct in [_anim, _surf_k, _back_k, _hid_k, _air_k, _gait_ph, _last_pos, _face_k, _lane_d]:
+		for dct in [_anim, _surf_k, _back_k, _hid_k, _air_k, _bite_k, _gait_ph, _last_pos, _face_k, _lane_d]:
 			for kk in dct.keys():
 				if not alive.has(kk):
 					dct.erase(kk)
@@ -107,7 +110,36 @@ func _process(delta: float) -> void:
 		_surf_k[key] = lerp(_surf_k.get(key, target2), target2, k)
 		_track_plane(key, e, g, k)
 		_lane_d[key] = lerp(_lane_d.get(key, e.lane), _lane_goal(e.x, e.lane, false), kl)
+	if sim.bird != null or not _bite_k.empty():
+		_step_bite(delta)
 	update()
+
+
+# Winged ants that are close enough to bite the hunting bird (the sim's own test) fly up to it, and sink back when it goes. Nothing here
+# runs, and nothing is stored, while there is no bird.
+func _step_bite(delta: float) -> void:
+	var b = sim.bird
+	var near := {}
+	if b != null:
+		var g = sim.grid
+		var bx = float(b["x"])
+		var reach = Sim.BIRD_BITE + 2.0
+		for a in sim.ants:
+			if abs(a.x - bx) <= reach and a.ph.get("wings", 0) > 0 and a.shelter_t <= 0.0 and not g.is_under(a.x, a.y):
+				near[a.id] = true
+		_bird_px = (bx + 0.5) * g.CELL
+		_bite_lift = clamp((34.0 + 230.0 * float(b["alt"])) * 0.7, 18.0, 62.0)        # up toward the bird, never far above the grass
+	var up = clamp(delta * 5.0, 0.0, 1.0)
+	var down = clamp(delta * 2.5, 0.0, 1.0)
+	for id in near:
+		_bite_k[id] = lerp(_bite_k.get(id, 0.0), 1.0, up)
+	for id in _bite_k.keys():
+		if not near.has(id):
+			var v = lerp(_bite_k[id], 0.0, down)
+			if v < 0.01:
+				_bite_k.erase(id)
+			else:
+				_bite_k[id] = v
 
 
 # The lane a unit is drawn in: smoothed over time (so the sim's lane jitter never shows), and pulled onto the
@@ -273,7 +305,9 @@ func _draw_shadows(items: Array) -> void:
 
 # Height above the ground of a flying (winged) ant, 0..1; 0 for everyone else.
 func _air(a) -> float:
-	return _air_k.get(a.id, 0.0)
+	if _bite_k.empty():
+		return _air_k.get(a.id, 0.0)
+	return max(_air_k.get(a.id, 0.0), _bite_k.get(a.id, 0.0))        # an ant biting the bird is airborne too
 
 
 # The ant under a click, judged by where it is DRAWN (lanes lift ants off their sim position).
@@ -523,9 +557,9 @@ func _leg_unit(g) -> float:
 
 
 # Beating wings of an airborne alate, in sprite pixels (the ant's own folded wings stay under them).
-func _draw_flap(air: float, al: float, id: int) -> void:
+func _draw_flap(air: float, al: float, id: int, buzz: float = 1.0) -> void:
 	var root = Vector2(6.0, -46.0)
-	var beat = sin(_t * 44.0 + id * 1.3)
+	var beat = sin(_t * 44.0 * buzz + id * 1.3)
 	for w in 2:
 		var ang = lerp(-2.55 + w * 0.5, -1.35 + w * 0.45, 0.5 + 0.5 * beat)
 		var ln = 98.0 - w * 18.0
@@ -587,8 +621,16 @@ func _draw_ant(a) -> void:
 	var n = Vector2(-sin(a.rot), cos(a.rot))
 	var feet = pos + n * C * 0.5
 	var air = _air(a)
+	var bite = 0.0
 	if air > 0.01:
-		feet += Vector2(0, -air * (30.0 + 5.0 * sin(_t * 3.0 + a.id)) * d[1])      # hover; the shadow stays on the ground
+		var lift = air * (30.0 + 5.0 * sin(_t * 3.0 + a.id))
+		if not _bite_k.empty():
+			bite = _bite_k.get(a.id, 0.0)
+		if bite > 0.0:
+			# at the bird: up to its height, drawn in toward it, darting about as it bites
+			lift = max(lift, bite * _bite_lift) + sin(_t * 21.0 + a.id * 1.7) * 2.5 * bite
+			feet.x += clamp(_bird_px - feet.x, -70.0, 70.0) * 0.35 * bite + sin(_t * 13.0 + a.id) * 2.0 * bite
+		feet += Vector2(0, -lift * d[1])      # hover; the shadow stays on the ground
 	var moving = a.tx != a.x or a.ty != a.y
 	var detail = perf.ants if perf != null else 2
 	if detail == 0 or (cam != null and cam.zoom.x > 1.7):
@@ -656,7 +698,7 @@ func _draw_ant(a) -> void:
 	elif tex != null:
 		draw_texture_rect(tex, Rect2(-baker.FEET, baker.SIZE), false, tint)
 	if air > 0.05:
-		_draw_flap(air, alpha * shade, a.id)
+		_draw_flap(air, alpha * shade, a.id, 1.0 + 0.7 * bite)
 	var gm = Color(shade, shade, shade, alpha)
 	if a.carry > 0.0:
 		WorldView.draw_gem(self, Vector2(72, -26), 2.0, a.id % 5, gm)   # held in the mandibles

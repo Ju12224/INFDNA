@@ -14,6 +14,12 @@ const WF = preload("res://mods-unpacked/Judah-InfDNA/core/world_features.gd")
 const Seasons = preload("res://mods-unpacked/Judah-InfDNA/core/seasons.gd")
 
 const INK = Color("#15121a")
+# How a drawn tree changes with the camera zoom (the camera's zoom is below 1 when the view is magnified)
+const CLOSE_INK_LO = 0.42     # the owner's full outline is on the tree at and beyond CLOSE_INK_HI, and fades out to the thin one by CLOSE_INK_LO
+const CLOSE_INK_HI = 0.85
+const CLOSE_DETAIL_LO = 0.45  # grooves, moss and leaf tufts are full strength at and below CLOSE_DETAIL_LO and gone at CLOSE_DETAIL_HI
+const CLOSE_DETAIL_HI = 1.1
+const SHADE_FAR = 0.4         # the share of the soft light and shadow that stays on a tree seen from afar
 const DEPTH = 128.0          # thickness of the walkable band, px
 const LANE_K = 0.9           # a unit at lane l stands (1 - l) * DEPTH * LANE_K above the front lip
 const CH = 48                # columns per cached chunk
@@ -54,6 +60,8 @@ var day              # day_cycle.gd (optional): the year, which tints the grass,
 var poll_features := true   # rebuild a cached tree or rock whose ground has moved (see _prepare_features)
 var _sk := -1        # season stage the cached scenery was built for: when it changes, chunks and trees are rebuilt a few per frame
 var _P := {}         # the seasonal palette of the build in progress
+var _lib = null       # art_lib.gd, once asked for
+var _tex_loads := 0  # close-up pictures loaded this frame (one a frame, so zooming in never stalls)
 
 
 func _init(sim_) -> void:
@@ -127,6 +135,7 @@ static func _sy_at(sy: PoolRealArray, c0: int, px: float, C: float) -> float:
 # ---------------------------------------------------------------- per frame
 func prepare(cols: Array, t: float) -> void:
 	_t = t
+	_tex_loads = 0
 	if day != null:
 		_sk = day.stage
 	if not g.surf_dirty.empty():
@@ -252,16 +261,24 @@ func draw_slice(ci: CanvasItem, s: int) -> void:
 			continue
 		var sw = amp * sin(_t * 1.15 + e[0] * 1.7 + s * 0.45)
 		ci.draw_mesh(m, null, null, Transform2D(Vector2(1, 0), Vector2(sw, 1), Vector2(-sw * e[1]["oy"], 0)))
+	if _vis_f[s].empty():
+		return
+	# how close the camera is (a zoom below 1 is a magnified view) and what part of the world it sees: the close-up layers of a tree are only drawn for trees in view
+	var ct = ci.get_canvas_transform()
+	var z = 1.0 / max(0.01, ct.get_scale().x)
+	var vr = ct.affine_inverse().xform(Rect2(Vector2.ZERO, ci.get_viewport_rect().size))
 	for fe in _vis_f[s]:
+		if fe["x1"] < vr.position.x - 200.0 or fe["x0"] > vr.end.x + 200.0:
+			continue
 		var sway = 0.0
+		var gust = 1.0 + 1.6 * sim.rain
+		var ph = fe["x0"] * 0.0137
 		if fe.get("sway", 0.0) > 0.0:
 			# a tree bends in the wind: the base stays put and the crown sways (a shear about the foot), more in rain
-			var gust = 1.0 + 1.6 * sim.rain
-			var ph = fe["x0"] * 0.0137
 			sway = 0.0065 * gust * (sin(_t * 0.85 + ph) + 0.4 * sin(_t * 1.9 + ph * 1.7))
 		var xf = Transform2D(Vector2(1, 0), Vector2(sway, 1), Vector2(-sway * fe["by"], 0))
 		if fe.has("spr"):
-			_draw_sprite(ci, fe["spr"], xf)
+			_draw_sprite(ci, fe["spr"], xf, z, sway, gust, ph, fe["by"])
 		if fe["mesh"] != null:
 			if sway != 0.0:
 				ci.draw_mesh(fe["mesh"], null, null, xf)
@@ -270,21 +287,52 @@ func draw_slice(ci: CanvasItem, s: int) -> void:
 
 
 # A drawn tree or rock: the picture(s) of the entry at its place, the leaves of a leafy tree blended between the summer green and the spring or autumn
-# look by how far the year has gone (live, every frame, so the colours move smoothly between the rebuilds of the cached entry).
-func _draw_sprite(ci: CanvasItem, sp: Dictionary, xf: Transform2D) -> void:
+# look by how far the year has gone (live, every frame, so the colours move smoothly between the rebuilds of the cached entry). A tree also has layers
+# that depend on how close the camera is (z is the camera zoom, below 1 is a magnified view): the owner's outline, drawn thin in the picture and
+# put back over it by the `ink` layer except in a close view, soft light and shadow (`shade`), and grooves, moss and leaf tufts (`detail`).
+func _draw_sprite(ci: CanvasItem, sp: Dictionary, xf: Transform2D, z: float, sway: float, gust: float, ph: float, by: float) -> void:
 	ci.draw_set_transform_matrix(xf)
 	var rect = Rect2(sp["pos"], sp["size"])
 	var mod: Color = sp["mod"]
 	ci.draw_texture_rect(sp["base"], rect, false, mod)
 	if sp.has("looks") and day != null:
-		var ph = Seasons.phase(day.sea_t)
-		var spring = 1.0 - smoothstep(0.06, 0.3, ph)
+		var ph2 = Seasons.phase(day.sea_t)
+		var spring = 1.0 - smoothstep(0.06, 0.3, ph2)
 		if spring > 0.02 and sp["looks"].has("spring"):
 			ci.draw_texture_rect(sp["looks"]["spring"], rect, false, Color(mod.r, mod.g, mod.b, spring))
 		var au = day.autumn
 		if au > 0.02:
 			ci.draw_texture_rect(sp["looks"][sp["autumn"]], rect, false, Color(mod.r, mod.g, mod.b, au))
+	if sp.has("ink"):
+		var ia = smoothstep(CLOSE_INK_LO, CLOSE_INK_HI, z)
+		if ia > 0.02 and sp["ink"] != null:
+			ci.draw_texture_rect(sp["ink"], rect, false, Color(mod.r, mod.g, mod.b, ia))
+		var sa = SHADE_FAR + (1.0 - SHADE_FAR) * (1.0 - smoothstep(0.4, 1.1, z))
+		if sp["shade"] != null:
+			ci.draw_texture_rect(sp["shade"], rect, false, Color(mod.r, mod.g, mod.b, sa))
+		var da = 1.0 - smoothstep(CLOSE_DETAIL_LO, CLOSE_DETAIL_HI, z)
+		if da > 0.03:
+			var dt = _overlay(sp, "detail")
+			if dt != null:
+				# the detail rides a little differently from the picture under it, so the leaves seem to move against each other
+				var s2 = sway + 0.0035 * gust * sin(_t * 2.1 + ph * 3.1)
+				ci.draw_set_transform_matrix(Transform2D(Vector2(1, 0), Vector2(s2, 1), Vector2(-s2 * by, 0)))
+				ci.draw_texture_rect(dt, rect, false, Color(mod.r, mod.g, mod.b, da))
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+# A close-up picture of a tree entry, loaded the first time it is wanted (one per frame at most; null until then, or when the file is missing).
+func _overlay(sp: Dictionary, key: String):
+	if sp.has(key):
+		return sp[key]
+	if _tex_loads >= 1:
+		return null
+	_tex_loads += 1
+	if _lib == null:
+		_lib = AL.get_lib()
+	var t = _lib.tex_mip(str(sp[key + "_f"]))
+	sp[key] = t
+	return t
 
 
 # The picture entry of a tree or rock feature, or null when the art is not there. `sh` is the ground shadow mesh builder.
@@ -297,6 +345,13 @@ func _sprite_entry(f: Dictionary, spr: Dictionary, sh) -> Dictionary:
 
 func _tint(lane: float) -> Color:
 	return Color.white.linear_interpolate(Color(0.8, 0.87, 0.93), (1.0 - clamp(lane, 0.0, 1.0)) * 0.5)
+
+
+# No two trees of one kind are quite the same colour: a little lighter or darker, a little warmer or cooler.
+static func _vary(sd: float) -> Color:
+	var v = 0.945 + 0.1 * MK.hash1(sd + 21.0)
+	var w = (MK.hash1(sd + 22.0) - 0.5) * 0.07
+	return Color(v + w, v, v - w * 0.9, 1.0)
 
 
 func _tree_sprite(f: Dictionary):
@@ -341,7 +396,7 @@ func _tree_sprite(f: Dictionary):
 	var leafy = bool(def["leafy"])
 	if leafy and float(_P["leaf"]) < 0.12 + 0.55 * MK.hash1(sd + 98.0):
 		return null                     # this tree has dropped its leaves: the game's own bare tree stands here
-	var base = lib.tex(str(def["looks"]["summer"]))
+	var base = lib.tex_mip(str(def["looks"]["summer"]))
 	if base == null:
 		return null
 	var H = float(f["h"]) * sc * hmul
@@ -350,20 +405,59 @@ func _tree_sprite(f: Dictionary):
 	if name == "log":
 		size = Vector2(float(f["w"]) * sc * 5.5, float(f["w"]) * sc * 5.5 * float(def["h"]) / float(def["w"]))
 	var b = _base_point(f)
-	var spr = {"base": base, "size": size, "pos": Vector2(b.x - size.x * 0.5, b.y - size.y + 6.0 * sc), "mod": _tint(lane), "sway": 1.0 if (leafy or name == "spruce") else 0.0}
+	var spr = {"base": base, "size": size, "pos": Vector2(b.x - size.x * 0.5, b.y - size.y + 6.0 * sc), "mod": _tint(lane) * _vary(sd), "sway": 1.0 if (leafy or name == "spruce") else 0.0}
 	if leafy:
 		var looks := {}
 		for k in def["looks"].keys():
-			var tx = lib.tex(str(def["looks"][k]))
+			var tx = lib.tex_mip(str(def["looks"][k]))
 			if tx != null:
 				looks[k] = tx
 		spr["looks"] = looks
 		spr["autumn"] = ["orange", "red", "gold"][int(MK.hash1(sd + 55.0) * 2.99)]
 		if not looks.has(spr["autumn"]):
 			spr.erase("looks")
+	# the close-up layers: the owner's outline (the picture itself carries a thinner one), soft light and shadow, and the detail (loaded when first wanted)
+	if def.has("ink") and def.has("shade") and def.has("detail"):
+		spr["ink"] = lib.tex_mip(str(def["ink"]))
+		spr["shade"] = lib.tex_mip(str(def["shade"]))
+		spr["detail_f"] = str(def["detail"])
 	var sh = MK.new()
 	sh.shadow(b + Vector2(-size.x * 0.12, 5.0), size.x * 0.42, 14.0 * sc + size.x * 0.03, Color(0.06, 0.1, 0.04, 0.2), 3)
-	return _sprite_entry(f, spr, sh)
+	var e = _sprite_entry(f, spr, sh)
+	var dress = MK.new()
+	_tree_foot(dress, spr, def, b, sc, lane, sd)
+	e["mesh"] = dress.build()
+	return e
+
+
+# Where a drawn tree meets the ground: a low mound of turf over the join, a few dark clumps of moss and tufts of grass, so the bottom edge of the picture
+# is buried and the trunk grows out of the meadow. Built once with the tree.
+func _tree_foot(mk, spr: Dictionary, def: Dictionary, b: Vector2, sc: float, lane: float, sd: float) -> void:
+	var size: Vector2 = spr["size"]
+	var foot = def.get("foot", [0.25, 0.75])
+	var x0 = spr["pos"].x + size.x * float(foot[0])
+	var x1 = spr["pos"].x + size.x * float(foot[1])
+	var fw = max(x1 - x0, 30.0)
+	var cx = (x0 + x1) * 0.5
+	var fy = spr["pos"].y + size.y                  # the bottom of the picture
+	var snowy = float(_P["snow"]) > 0.3
+	var turf_b = _P["gb"].linear_interpolate(_P["gf"], clamp(lane, 0.0, 1.0))
+	var ry = 4.0 * sc + fw * 0.03
+	if snowy:
+		mk.ellipse(Vector2(cx, fy + 1.0), fw * 0.62, ry * 1.1, Color(0.62, 0.73, 0.86), 16)
+		mk.ellipse(Vector2(cx, fy - 1.0), fw * 0.6, ry * 0.95, Color(0.97, 0.985, 1.0), 16)
+		return
+	mk.blob(Vector2(cx, fy + 1.0), fw * 0.56, ry * 1.25, sd + 80.0, 0.09, turf_b.darkened(0.12), 22, turf_b.lightened(0.04))
+	for k in 5:
+		var mx = x0 + fw * (0.1 + 0.8 * MK.hash1(sd + k * 3.3))
+		var mr = fw * (0.05 + 0.04 * MK.hash1(sd + k * 5.1))
+		mk.blob(Vector2(mx, fy - ry * 0.2), mr, mr * 0.42, sd + 90.0 + k, 0.2, hz(_sg(Color("#4a7a33")), lane), 10, hz(_sg(Color("#6fa650")), lane))
+	var nb = int(clamp(fw / 11.0, 8.0, 34.0))
+	for k in nb:
+		var ux = (float(k) + MK.hash1(sd + k * 1.9)) / nb
+		var gp = Vector2(x0 - fw * 0.06 + ux * fw * 1.12, fy + 1.0 + MK.hash1(sd + k * 4.3) * 4.0)
+		var gl = clamp((9.0 + 22.0 * MK.hash1(sd + k * 5.7)) * (0.6 + 0.4 * sc), 8.0, 38.0)
+		mk.blade(gp, (MK.hash1(sd + k * 8.1) - 0.5) * gl * 0.9, gl, clamp(gl * 0.17, 2.0, 5.0), hz(_sg(Color("#3f7a2a")), lane), hz(_sg(Color("#7cbc4c")), lane))
 
 
 func _rock_sprite(f: Dictionary):

@@ -42,6 +42,21 @@ func tex(file: String):
 	return t
 
 
+# The same picture with mipmaps (smooth when drawn much smaller than it is: a tree seen from afar does not shimmer). For scenery, not creatures.
+func tex_mip(file: String):
+	var key = "m:" + file
+	if _tex.has(key):
+		return _tex[key]
+	var img = Image.new()
+	var t = null
+	if img.load(DIR + file) == OK:
+		var it = ImageTexture.new()
+		it.create_from_image(img, Texture.FLAG_FILTER | Texture.FLAG_MIPMAPS)
+		t = it
+	_tex[key] = t
+	return t
+
+
 # A creature entry of the manifest ({} when there is none).
 func creature(name: String) -> Dictionary:
 	var m = manifest()

@@ -470,8 +470,8 @@ func _draw_minimap() -> void:
 	for p in sim.piles:
 		var x2 = MM_W * 0.5 + (p["x"] - ex) * sc
 		var k = p.get("kind", "")
-		var col = Color("#ffd86b") if k == "jackpot" else (Color("#f0a233") if k == "fruit" else Color("#9bf06a"))
-		_mm.draw_circle(Vector2(x2, cy + 1.0), 3.2 if k == "jackpot" else 2.2, col)
+		var col = Color("#ffd86b") if k == "jackpot" else (Color("#f0a233") if k == "fruit" else (Color("#a8553a") if k == "carcass" else Color("#9bf06a")))
+		_mm.draw_circle(Vector2(x2, cy + 1.0), 3.2 if k == "jackpot" else (2.8 if k == "carcass" else 2.2), col)
 	for b in sim.beacons:
 		var x3 = MM_W * 0.5 + (b["x"] - ex) * sc
 		_mm.draw_line(Vector2(x3, cy + 4.0), Vector2(x3, cy - 12.0), Color("#7ed957"), 2.0)

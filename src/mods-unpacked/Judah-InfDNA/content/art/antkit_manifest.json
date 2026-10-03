@@ -1,0 +1,1155 @@
+{
+ "_about": "Ant part kit cut from art_src/antkit_*.png by tools/art/make_antkit.py. Every piece is a trimmed transparent PNG, long side <= 256 px. 'pivot' is a suggested hinge in the piece's own pixels (legs: top joint; mandibles: where they attach; antennae: base; wings: root; abdomens: front attachment; thorax/misc: centre; heads: neck). Ants in the pictures face RIGHT. _l/_r name the place on the sheet (mirror a piece with a flip for the other side). 'scale' is how much the piece was shrunk from the sheet. Full bodies carry 'length' (nose to tail, antennae and leg tips excluded) and 'feet' (ground contact, bottom centre).",
+ "pieces": {
+  "head_1": {
+   "file": "antkit/head_1.png",
+   "w": 192,
+   "h": 256,
+   "kind": "head",
+   "sheet": "antkit_heads_a.png",
+   "pivot": [
+    17.5,
+    169.6
+   ],
+   "scale": 0.501
+  },
+  "head_2": {
+   "file": "antkit/head_2.png",
+   "w": 188,
+   "h": 256,
+   "kind": "head",
+   "sheet": "antkit_heads_a.png",
+   "pivot": [
+    16.9,
+    151.3
+   ],
+   "scale": 0.4904
+  },
+  "head_3": {
+   "file": "antkit/head_3.png",
+   "w": 207,
+   "h": 256,
+   "kind": "head",
+   "sheet": "antkit_heads_a.png",
+   "pivot": [
+    19.4,
+    165.5
+   ],
+   "scale": 0.5039
+  },
+  "head_4": {
+   "file": "antkit/head_4.png",
+   "w": 168,
+   "h": 256,
+   "kind": "head",
+   "sheet": "antkit_heads_a.png",
+   "pivot": [
+    16.9,
+    161.4
+   ],
+   "scale": 0.4942
+  },
+  "mandible_1_l": {
+   "file": "antkit/mandible_1_l.png",
+   "w": 116,
+   "h": 174,
+   "kind": "mandible",
+   "sheet": "antkit_heads_a.png",
+   "pivot": [
+    80.3,
+    12.9
+   ],
+   "scale": 1.0
+  },
+  "mandible_1_r": {
+   "file": "antkit/mandible_1_r.png",
+   "w": 116,
+   "h": 177,
+   "kind": "mandible",
+   "sheet": "antkit_heads_a.png",
+   "pivot": [
+    41.6,
+    13.4
+   ],
+   "scale": 1.0
+  },
+  "mandible_2_l": {
+   "file": "antkit/mandible_2_l.png",
+   "w": 172,
+   "h": 256,
+   "kind": "mandible",
+   "sheet": "antkit_heads_a.png",
+   "pivot": [
+    93.0,
+    18.2
+   ],
+   "scale": 0.9588
+  },
+  "mandible_2_r": {
+   "file": "antkit/mandible_2_r.png",
+   "w": 126,
+   "h": 252,
+   "kind": "mandible",
+   "sheet": "antkit_heads_a.png",
+   "pivot": [
+    40.6,
+    17.5
+   ],
+   "scale": 1.0
+  },
+  "mandible_3_l": {
+   "file": "antkit/mandible_3_l.png",
+   "w": 151,
+   "h": 256,
+   "kind": "mandible",
+   "sheet": "antkit_heads_a.png",
+   "pivot": [
+    65.2,
+    18.1
+   ],
+   "scale": 0.9309
+  },
+  "mandible_3_r": {
+   "file": "antkit/mandible_3_r.png",
+   "w": 143,
+   "h": 256,
+   "kind": "mandible",
+   "sheet": "antkit_heads_a.png",
+   "pivot": [
+    42.3,
+    17.8
+   ],
+   "scale": 0.9176
+  },
+  "mandible_4_l": {
+   "file": "antkit/mandible_4_l.png",
+   "w": 183,
+   "h": 251,
+   "kind": "mandible",
+   "sheet": "antkit_heads_a.png",
+   "pivot": [
+    101.0,
+    17.7
+   ],
+   "scale": 1.0
+  },
+  "mandible_4_r": {
+   "file": "antkit/mandible_4_r.png",
+   "w": 134,
+   "h": 246,
+   "kind": "mandible",
+   "sheet": "antkit_heads_a.png",
+   "pivot": [
+    62.2,
+    16.7
+   ],
+   "scale": 1.0
+  },
+  "head_5": {
+   "file": "antkit/head_5.png",
+   "w": 256,
+   "h": 219,
+   "kind": "head",
+   "sheet": "antkit_heads_b.png",
+   "pivot": [
+    26.8,
+    124.7
+   ],
+   "scale": 0.6809
+  },
+  "head_6": {
+   "file": "antkit/head_6.png",
+   "w": 256,
+   "h": 255,
+   "kind": "head",
+   "sheet": "antkit_heads_b.png",
+   "pivot": [
+    26.7,
+    128.1
+   ],
+   "scale": 0.7232
+  },
+  "head_7": {
+   "file": "antkit/head_7.png",
+   "w": 256,
+   "h": 215,
+   "kind": "head",
+   "sheet": "antkit_heads_b.png",
+   "pivot": [
+    27.1,
+    114.0
+   ],
+   "scale": 0.6667
+  },
+  "head_8": {
+   "file": "antkit/head_8.png",
+   "w": 229,
+   "h": 256,
+   "kind": "head",
+   "sheet": "antkit_heads_b.png",
+   "pivot": [
+    28.0,
+    146.5
+   ],
+   "scale": 0.5845
+  },
+  "mandible_5_l": {
+   "file": "antkit/mandible_5_l.png",
+   "w": 121,
+   "h": 169,
+   "kind": "mandible",
+   "sheet": "antkit_heads_b.png",
+   "pivot": [
+    57.9,
+    12.2
+   ],
+   "scale": 1.0
+  },
+  "mandible_5_r": {
+   "file": "antkit/mandible_5_r.png",
+   "w": 90,
+   "h": 160,
+   "kind": "mandible",
+   "sheet": "antkit_heads_b.png",
+   "pivot": [
+    21.2,
+    11.8
+   ],
+   "scale": 1.0
+  },
+  "mandible_6_l": {
+   "file": "antkit/mandible_6_l.png",
+   "w": 227,
+   "h": 256,
+   "kind": "mandible",
+   "sheet": "antkit_heads_b.png",
+   "pivot": [
+    82.7,
+    17.9
+   ],
+   "scale": 0.892
+  },
+  "mandible_6_r": {
+   "file": "antkit/mandible_6_r.png",
+   "w": 194,
+   "h": 256,
+   "kind": "mandible",
+   "sheet": "antkit_heads_b.png",
+   "pivot": [
+    36.2,
+    17.7
+   ],
+   "scale": 0.8858
+  },
+  "mandible_7_l": {
+   "file": "antkit/mandible_7_l.png",
+   "w": 147,
+   "h": 256,
+   "kind": "mandible",
+   "sheet": "antkit_heads_b.png",
+   "pivot": [
+    33.7,
+    15.8
+   ],
+   "scale": 0.7829
+  },
+  "mandible_7_r": {
+   "file": "antkit/mandible_7_r.png",
+   "w": 179,
+   "h": 256,
+   "kind": "mandible",
+   "sheet": "antkit_heads_b.png",
+   "pivot": [
+    44.0,
+    17.0
+   ],
+   "scale": 0.8533
+  },
+  "mandible_8_l": {
+   "file": "antkit/mandible_8_l.png",
+   "w": 213,
+   "h": 256,
+   "kind": "mandible",
+   "sheet": "antkit_heads_b.png",
+   "pivot": [
+    70.2,
+    19.3
+   ],
+   "scale": 0.9588
+  },
+  "mandible_8_r": {
+   "file": "antkit/mandible_8_r.png",
+   "w": 162,
+   "h": 254,
+   "kind": "mandible",
+   "sheet": "antkit_heads_b.png",
+   "pivot": [
+    28.0,
+    17.7
+   ],
+   "scale": 1.0
+  },
+  "abdomen_1": {
+   "file": "antkit/abdomen_1.png",
+   "w": 169,
+   "h": 246,
+   "kind": "abdomen",
+   "sheet": "antkit_parts_a.png",
+   "pivot": [
+    143.9,
+    25.3
+   ],
+   "scale": 1.0
+  },
+  "abdomen_2": {
+   "file": "antkit/abdomen_2.png",
+   "w": 132,
+   "h": 256,
+   "kind": "abdomen",
+   "sheet": "antkit_parts_a.png",
+   "pivot": [
+    108.3,
+    26.5
+   ],
+   "scale": 0.9588
+  },
+  "abdomen_3": {
+   "file": "antkit/abdomen_3.png",
+   "w": 162,
+   "h": 256,
+   "kind": "abdomen",
+   "sheet": "antkit_parts_a.png",
+   "pivot": [
+    141.6,
+    26.0
+   ],
+   "scale": 0.9275
+  },
+  "abdomen_4": {
+   "file": "antkit/abdomen_4.png",
+   "w": 139,
+   "h": 256,
+   "kind": "abdomen",
+   "sheet": "antkit_parts_a.png",
+   "pivot": [
+    108.6,
+    35.9
+   ],
+   "scale": 0.8982
+  },
+  "abdomen_5": {
+   "file": "antkit/abdomen_5.png",
+   "w": 121,
+   "h": 256,
+   "kind": "abdomen",
+   "sheet": "antkit_parts_a.png",
+   "pivot": [
+    96.6,
+    19.8
+   ],
+   "scale": 0.8393
+  },
+  "antenna_1_l": {
+   "file": "antkit/antenna_1_l.png",
+   "w": 200,
+   "h": 169,
+   "kind": "antenna",
+   "sheet": "antkit_parts_a.png",
+   "pivot": [
+    186.8,
+    152.9
+   ],
+   "scale": 1.0
+  },
+  "antenna_1_r": {
+   "file": "antkit/antenna_1_r.png",
+   "w": 178,
+   "h": 178,
+   "kind": "antenna",
+   "sheet": "antkit_parts_a.png",
+   "pivot": [
+    12.8,
+    158.5
+   ],
+   "scale": 1.0
+  },
+  "antenna_2_l": {
+   "file": "antkit/antenna_2_l.png",
+   "w": 206,
+   "h": 200,
+   "kind": "antenna",
+   "sheet": "antkit_parts_a.png",
+   "pivot": [
+    193.0,
+    181.4
+   ],
+   "scale": 1.0
+  },
+  "antenna_2_r": {
+   "file": "antkit/antenna_2_r.png",
+   "w": 178,
+   "h": 200,
+   "kind": "antenna",
+   "sheet": "antkit_parts_a.png",
+   "pivot": [
+    11.8,
+    170.0
+   ],
+   "scale": 1.0
+  },
+  "wing_1_fore": {
+   "file": "antkit/wing_1_fore.png",
+   "w": 256,
+   "h": 66,
+   "kind": "wing",
+   "sheet": "antkit_parts_a.png",
+   "pivot": [
+    16.1,
+    23.2
+   ],
+   "scale": 0.4923,
+   "alpha_hint": "membrane is drawn opaque in the source; the game may draw wings at about 0.85 alpha"
+  },
+  "wing_1_hind": {
+   "file": "antkit/wing_1_hind.png",
+   "w": 256,
+   "h": 90,
+   "kind": "wing",
+   "sheet": "antkit_parts_a.png",
+   "pivot": [
+    17.2,
+    41.8
+   ],
+   "scale": 0.5039,
+   "alpha_hint": "membrane is drawn opaque in the source; the game may draw wings at about 0.85 alpha"
+  },
+  "wing_2_fore": {
+   "file": "antkit/wing_2_fore.png",
+   "w": 256,
+   "h": 78,
+   "kind": "wing",
+   "sheet": "antkit_parts_a.png",
+   "pivot": [
+    16.8,
+    36.4
+   ],
+   "scale": 0.5172,
+   "alpha_hint": "membrane is drawn opaque in the source; the game may draw wings at about 0.85 alpha"
+  },
+  "wing_2_hind": {
+   "file": "antkit/wing_2_hind.png",
+   "w": 256,
+   "h": 97,
+   "kind": "wing",
+   "sheet": "antkit_parts_a.png",
+   "pivot": [
+    17.1,
+    48.7
+   ],
+   "scale": 0.5753,
+   "alpha_hint": "membrane is drawn opaque in the source; the game may draw wings at about 0.85 alpha"
+  },
+  "thorax_1": {
+   "file": "antkit/thorax_1.png",
+   "w": 203,
+   "h": 177,
+   "kind": "thorax",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    97.2,
+    82.7
+   ],
+   "scale": 1.0
+  },
+  "thorax_2": {
+   "file": "antkit/thorax_2.png",
+   "w": 199,
+   "h": 213,
+   "kind": "thorax",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    95.8,
+    107.4
+   ],
+   "scale": 1.0
+  },
+  "thorax_3": {
+   "file": "antkit/thorax_3.png",
+   "w": 190,
+   "h": 203,
+   "kind": "thorax",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    88.3,
+    98.6
+   ],
+   "scale": 1.0
+  },
+  "thorax_4": {
+   "file": "antkit/thorax_4.png",
+   "w": 188,
+   "h": 202,
+   "kind": "thorax",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    90.6,
+    98.7
+   ],
+   "scale": 1.0
+  },
+  "leg_1": {
+   "file": "antkit/leg_1.png",
+   "w": 128,
+   "h": 256,
+   "kind": "leg",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    75.0,
+    17.4
+   ],
+   "scale": 0.9275
+  },
+  "leg_2": {
+   "file": "antkit/leg_2.png",
+   "w": 136,
+   "h": 256,
+   "kind": "leg",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    55.0,
+    17.2
+   ],
+   "scale": 0.8797
+  },
+  "leg_3": {
+   "file": "antkit/leg_3.png",
+   "w": 144,
+   "h": 256,
+   "kind": "leg",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    56.5,
+    18.3
+   ],
+   "scale": 0.892
+  },
+  "leg_4": {
+   "file": "antkit/leg_4.png",
+   "w": 136,
+   "h": 256,
+   "kind": "leg",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    54.3,
+    18.6
+   ],
+   "scale": 0.8678
+  },
+  "leg_5": {
+   "file": "antkit/leg_5.png",
+   "w": 151,
+   "h": 256,
+   "kind": "leg",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    58.2,
+    18.0
+   ],
+   "scale": 0.9046
+  },
+  "leg_6": {
+   "file": "antkit/leg_6.png",
+   "w": 143,
+   "h": 256,
+   "kind": "leg",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    31.7,
+    17.5
+   ],
+   "scale": 0.8591
+  },
+  "antenna_3_l": {
+   "file": "antkit/antenna_3_l.png",
+   "w": 159,
+   "h": 188,
+   "kind": "antenna",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    30.2,
+    27.7
+   ],
+   "scale": 1.0
+  },
+  "antenna_3_r": {
+   "file": "antkit/antenna_3_r.png",
+   "w": 185,
+   "h": 174,
+   "kind": "antenna",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    23.8,
+    24.2
+   ],
+   "scale": 1.0
+  },
+  "antenna_4_l": {
+   "file": "antkit/antenna_4_l.png",
+   "w": 216,
+   "h": 94,
+   "kind": "antenna",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    202.9,
+    63.9
+   ],
+   "scale": 1.0
+  },
+  "antenna_4_r": {
+   "file": "antkit/antenna_4_r.png",
+   "w": 185,
+   "h": 164,
+   "kind": "antenna",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    23.9,
+    18.2
+   ],
+   "scale": 1.0
+  },
+  "antenna_5_l": {
+   "file": "antkit/antenna_5_l.png",
+   "w": 191,
+   "h": 142,
+   "kind": "antenna",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    31.4,
+    30.9
+   ],
+   "scale": 1.0
+  },
+  "antenna_5_r": {
+   "file": "antkit/antenna_5_r.png",
+   "w": 221,
+   "h": 249,
+   "kind": "antenna",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    152.8,
+    42.7
+   ],
+   "scale": 1.0
+  },
+  "antenna_6_r": {
+   "file": "antkit/antenna_6_r.png",
+   "w": 199,
+   "h": 209,
+   "kind": "antenna",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    62.9,
+    26.0
+   ],
+   "scale": 1.0
+  },
+  "sting_1": {
+   "file": "antkit/sting_1.png",
+   "w": 109,
+   "h": 249,
+   "kind": "misc",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    57.3,
+    16.6
+   ],
+   "scale": 1.0
+  },
+  "horn_1": {
+   "file": "antkit/horn_1.png",
+   "w": 148,
+   "h": 255,
+   "kind": "spine",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    56.7,
+    237.3
+   ],
+   "scale": 1.0
+  },
+  "horn_2": {
+   "file": "antkit/horn_2.png",
+   "w": 77,
+   "h": 128,
+   "kind": "spine",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    37.0,
+    116.8
+   ],
+   "scale": 1.0
+  },
+  "horn_3": {
+   "file": "antkit/horn_3.png",
+   "w": 136,
+   "h": 96,
+   "kind": "spine",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    10.1,
+    40.7
+   ],
+   "scale": 1.0
+  },
+  "horn_4": {
+   "file": "antkit/horn_4.png",
+   "w": 135,
+   "h": 204,
+   "kind": "spine",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    37.8,
+    188.4
+   ],
+   "scale": 1.0
+  },
+  "frill_1": {
+   "file": "antkit/frill_1.png",
+   "w": 177,
+   "h": 168,
+   "kind": "misc",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    130.0,
+    12.7
+   ],
+   "scale": 1.0
+  },
+  "plate_1": {
+   "file": "antkit/plate_1.png",
+   "w": 164,
+   "h": 138,
+   "kind": "misc",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    84.0,
+    67.8
+   ],
+   "scale": 1.0
+  },
+  "plate_2": {
+   "file": "antkit/plate_2.png",
+   "w": 228,
+   "h": 162,
+   "kind": "misc",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    119.2,
+    73.5
+   ],
+   "scale": 1.0
+  },
+  "spine_1": {
+   "file": "antkit/spine_1.png",
+   "w": 256,
+   "h": 141,
+   "kind": "spine",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    147.5,
+    127.7
+   ],
+   "scale": 0.9242
+  },
+  "spine_2": {
+   "file": "antkit/spine_2.png",
+   "w": 256,
+   "h": 210,
+   "kind": "spine",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    147.5,
+    195.9
+   ],
+   "scale": 0.7052
+  },
+  "spine_3": {
+   "file": "antkit/spine_3.png",
+   "w": 173,
+   "h": 137,
+   "kind": "spine",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    150.1,
+    125.4
+   ],
+   "scale": 1.0
+  },
+  "spine_4": {
+   "file": "antkit/spine_4.png",
+   "w": 167,
+   "h": 191,
+   "kind": "spine",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    35.5,
+    175.5
+   ],
+   "scale": 1.0
+  },
+  "spine_5": {
+   "file": "antkit/spine_5.png",
+   "w": 115,
+   "h": 108,
+   "kind": "spine",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    18.2,
+    98.0
+   ],
+   "scale": 1.0
+  },
+  "spine_6": {
+   "file": "antkit/spine_6.png",
+   "w": 191,
+   "h": 142,
+   "kind": "spine",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    87.4,
+    129.6
+   ],
+   "scale": 1.0
+  },
+  "spine_7": {
+   "file": "antkit/spine_7.png",
+   "w": 137,
+   "h": 144,
+   "kind": "spine",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    51.3,
+    132.5
+   ],
+   "scale": 1.0
+  },
+  "plate_3": {
+   "file": "antkit/plate_3.png",
+   "w": 148,
+   "h": 107,
+   "kind": "misc",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    82.0,
+    58.3
+   ],
+   "scale": 1.0
+  },
+  "egg_sac_1": {
+   "file": "antkit/egg_sac_1.png",
+   "w": 166,
+   "h": 159,
+   "kind": "egg",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    86.3,
+    77.2
+   ],
+   "scale": 1.0
+  },
+  "eye_1": {
+   "file": "antkit/eye_1.png",
+   "w": 46,
+   "h": 44,
+   "kind": "eye",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    22.7,
+    21.2
+   ],
+   "scale": 1.0
+  },
+  "eye_2": {
+   "file": "antkit/eye_2.png",
+   "w": 82,
+   "h": 82,
+   "kind": "eye",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    42.0,
+    39.0
+   ],
+   "scale": 1.0
+  },
+  "claw_1": {
+   "file": "antkit/claw_1.png",
+   "w": 55,
+   "h": 74,
+   "kind": "misc",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    11.4,
+    6.4
+   ],
+   "scale": 1.0
+  },
+  "claw_2": {
+   "file": "antkit/claw_2.png",
+   "w": 45,
+   "h": 48,
+   "kind": "misc",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    8.1,
+    5.4
+   ],
+   "scale": 1.0
+  },
+  "fur_1": {
+   "file": "antkit/fur_1.png",
+   "w": 124,
+   "h": 153,
+   "kind": "fur",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    86.5,
+    139.7
+   ],
+   "scale": 1.0
+  },
+  "fur_2": {
+   "file": "antkit/fur_2.png",
+   "w": 174,
+   "h": 158,
+   "kind": "fur",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    128.9,
+    145.3
+   ],
+   "scale": 1.0
+  },
+  "fur_3": {
+   "file": "antkit/fur_3.png",
+   "w": 157,
+   "h": 114,
+   "kind": "fur",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    78.2,
+    55.0
+   ],
+   "scale": 1.0
+  },
+  "fur_4": {
+   "file": "antkit/fur_4.png",
+   "w": 93,
+   "h": 108,
+   "kind": "fur",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    45.7,
+    53.8
+   ],
+   "scale": 1.0
+  },
+  "queen_full": {
+   "file": "antkit/queen_full.png",
+   "w": 256,
+   "h": 125,
+   "kind": "body",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    120.7,
+    124.0
+   ],
+   "scale": 0.4324,
+   "length": 247,
+   "feet": [
+    120.7,
+    124.0
+   ],
+   "ground_y": 124.0,
+   "nose_x": 251,
+   "tail_x": 4
+  },
+  "alate_full": {
+   "file": "antkit/alate_full.png",
+   "w": 256,
+   "h": 190,
+   "kind": "body",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    25.1,
+    188.0
+   ],
+   "scale": 0.5899,
+   "length": 249,
+   "feet": [
+    25.1,
+    188.0
+   ],
+   "ground_y": 188.0,
+   "nose_x": 252,
+   "tail_x": 3
+  },
+  "soldier_full": {
+   "file": "antkit/soldier_full.png",
+   "w": 256,
+   "h": 204,
+   "kind": "body",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    29.9,
+    201.0
+   ],
+   "scale": 0.862,
+   "length": 237,
+   "feet": [
+    29.9,
+    201.0
+   ],
+   "ground_y": 201.0,
+   "nose_x": 249,
+   "tail_x": 12
+  },
+  "worker_full": {
+   "file": "antkit/worker_full.png",
+   "w": 184,
+   "h": 125,
+   "kind": "body",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    72.6,
+    122.0
+   ],
+   "scale": 1.0,
+   "length": 170,
+   "feet": [
+    72.6,
+    122.0
+   ],
+   "ground_y": 122.0,
+   "nose_x": 181,
+   "tail_x": 11
+  },
+  "egg_cluster": {
+   "file": "antkit/egg_cluster.png",
+   "w": 232,
+   "h": 161,
+   "kind": "egg",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    115.9,
+    87.7
+   ],
+   "scale": 1.0
+  },
+  "larva_1": {
+   "file": "antkit/larva_1.png",
+   "w": 151,
+   "h": 158,
+   "kind": "brood",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    73.1,
+    83.0
+   ],
+   "scale": 1.0
+  },
+  "larva_2": {
+   "file": "antkit/larva_2.png",
+   "w": 232,
+   "h": 155,
+   "kind": "brood",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    117.7,
+    78.9
+   ],
+   "scale": 1.0
+  },
+  "pupa_1": {
+   "file": "antkit/pupa_1.png",
+   "w": 201,
+   "h": 178,
+   "kind": "brood",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    106.2,
+    94.6
+   ],
+   "scale": 1.0
+  },
+  "worker_small_full": {
+   "file": "antkit/worker_small_full.png",
+   "w": 226,
+   "h": 127,
+   "kind": "body",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    105.8,
+    124.0
+   ],
+   "scale": 1.0,
+   "length": 217,
+   "feet": [
+    105.8,
+    124.0
+   ],
+   "ground_y": 124.0,
+   "nose_x": 221,
+   "tail_x": 4
+  },
+  "pupa_2": {
+   "file": "antkit/pupa_2.png",
+   "w": 192,
+   "h": 161,
+   "kind": "brood",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    94.6,
+    81.9
+   ],
+   "scale": 1.0
+  },
+  "pupa_3": {
+   "file": "antkit/pupa_3.png",
+   "w": 256,
+   "h": 158,
+   "kind": "brood",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    126.1,
+    75.7
+   ],
+   "scale": 0.9143
+  },
+  "wing_3_fore": {
+   "file": "antkit/wing_3_fore.png",
+   "w": 256,
+   "h": 105,
+   "kind": "wing",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    17.8,
+    75.9
+   ],
+   "scale": 0.8232,
+   "alpha_hint": "membrane is drawn opaque in the source; the game may draw wings at about 0.85 alpha"
+  },
+  "wing_3_hind": {
+   "file": "antkit/wing_3_hind.png",
+   "w": 256,
+   "h": 85,
+   "kind": "wing",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    17.2,
+    25.0
+   ],
+   "scale": 0.795,
+   "alpha_hint": "membrane is drawn opaque in the source; the game may draw wings at about 0.85 alpha"
+  }
+ }
+}

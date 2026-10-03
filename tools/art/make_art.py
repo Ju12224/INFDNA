@@ -248,16 +248,16 @@ def trim(im, pad=2):
 
 
 def make_trees(manifest):
-    """The tree sheet: six sprites cut by hand-placed boxes (some of them touch). `leafy` ones carry their leaves all year, so the game swaps them for
-    bare trees in winter; the others (dead stump, fallen log, spruce) stand in every season."""
+    """The tree sheet: six sprites cut by hand-placed boxes (some of them touch), kept at the drawing's own size. `leafy` ones carry their leaves all year, so
+    the game swaps them for bare trees in winter; the others (dead stump, fallen log, spruce) stand in every season. Each tree comes with a thinned outline
+    plus an `ink` layer that gives it back, close-up `shade` and `detail` layers, and hazy far copies (see tree_art.py, which does the work)."""
+    import tree_art as T
     sheet = load("trees.png")
-    boxes = [("mossoak", True, (0, 0, 925, 670)), ("stump", False, (900, 50, 1400, 565)), ("spruce", False, (1395, 0, 1774, 610)),
-             ("log", False, (20, 625, 940, 887)), ("acacia", True, (825, 568, 1395, 887)), ("grove", True, (1395, 585, 1774, 887))]
-    k = 0.6
+    boxes = [("mossoak", True, (0, 0, 925, 670), "moss"), ("stump", False, (900, 50, 1400, 565), "stump"), ("spruce", False, (1395, 0, 1774, 610), "spruce"),
+             ("log", False, (20, 625, 940, 887), "log"), ("acacia", True, (825, 568, 1395, 887), "acacia"), ("grove", True, (1395, 585, 1774, 887), "grove")]
     trees = []
-    for nm, leafy, box in boxes:
+    for nm, leafy, box, kind in boxes:
         c = sheet.crop(box)
-        c = c.resize((int(c.size[0] * k), int(c.size[1] * k)), Image.LANCZOS)
         # keep only the big connected pieces of this box (another tree's edge can poke into it)
         comps, step = components(c, step=2, thresh=24)
         biggest = max(len(q) for q in comps)
@@ -267,25 +267,9 @@ def make_trees(manifest):
         for q in parts:
             c2.alpha_composite(q["img"], (int(q["x"]), int(q["y"])))
         c = trim(c2)
-        fn = "tree_%s.png" % nm
-        c.save(os.path.join(OUT, fn), optimize=True)
-        entry = {"name": nm, "file": fn, "w": c.size[0], "h": c.size[1], "leafy": leafy, "looks": {"summer": fn}}
-        entry["mist"] = {}
-        if leafy:
-            for lk, args in LOOKS.items():
-                f2 = "tree_%s_%s.png" % (nm, lk)
-                rc = recolor(c, *args)
-                rc.save(os.path.join(OUT, f2), optimize=True)
-                entry["looks"][lk] = f2
-                m2 = "mist_%s_%s.png" % (nm, lk)
-                mist(rc).save(os.path.join(OUT, m2), optimize=True)
-                entry["mist"][lk] = m2
-        else:
-            m2 = "mist_%s.png" % nm
-            mist(c).save(os.path.join(OUT, m2), optimize=True)
-            entry["mist"]["summer"] = m2
+        entry, sizes = T.build_tree(OUT, nm, c, leafy, kind, sum(map(ord, nm)))
         trees.append(entry)
-        print("tree %s: %dx%d%s" % (nm, c.size[0], c.size[1], " (leafy)" if leafy else ""))
+        print("tree %s: %dx%d%s, %d KB" % (nm, c.size[0], c.size[1], " (leafy)" if leafy else "", sum(sizes.values()) // 1024))
     manifest["trees"] = trees
 
 
@@ -294,84 +278,36 @@ LOOKS = {"summer": (0.31, 1.05, 1.2, 0.03), "spring": (0.22, 1.0, 1.42, 0.06), "
 
 def green_center(im):
     """The average hue of a sprite's leaves, so the recolour keeps the spread of tones around it whatever green the picture started from."""
-    import colorsys
-    px = im.load()
-    w, h = im.size
-    tot = 0.0
-    n = 0
-    for y in range(0, h, 3):
-        for x in range(0, w, 3):
-            r, g, b, a = px[x, y]
-            if a < 200:
-                continue
-            hh, ss, vv = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
-            if 0.18 < hh < 0.5 and ss > 0.25:
-                tot += hh
-                n += 1
-    return tot / n if n else 0.37
+    import tree_art as T
+    return T.green_center(im)
 
 
-def mist(im, k=0.45, height=340):
+def mist(im, k=0.45, height=300):
     """A small, washed-out copy for the far background: the colour pulled toward a pale blue haze."""
-    w = max(8, int(im.size[0] * height / im.size[1]))
-    sm = im.resize((w, height), Image.LANCZOS)
-    haze = Image.new("RGBA", sm.size, (206, 222, 230, 255))
-    out = Image.blend(sm.convert("RGB"), haze.convert("RGB"), k).convert("RGBA")
-    out.putalpha(sm.getchannel("A"))
-    return out
+    import tree_art as T
+    return T.mist(im, k, height)
 
 
 def recolor(im, hue_to, sat_k, val_k, val_add=0.0):
-    """Move the green of the leaves to another colour (the trunk, brown and grey, stays): the autumn and spring versions of a tree. The change is blended in by how
-    green a pixel is, so the dark edge where leaves meet shadow shifts smoothly and leaves no speckle."""
-    import colorsys
-    out = im.copy()
-    px = out.load()
-    w, h = out.size
-    center = green_center(im)
-    for y in range(h):
-        for x in range(w):
-            r, g, b, a = px[x, y]
-            if a < 8:
-                continue
-            hh, ss, vv = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
-            hw = min(1.0, max(0.0, (hh - 0.13) / 0.07)) * min(1.0, max(0.0, (0.56 - hh) / 0.08))
-            sw = min(1.0, max(0.0, (ss - 0.08) / 0.16))
-            wgt = hw * sw
-            if wgt <= 0.0:
-                continue
-            nh = hue_to + (hh - center) * 0.35
-            ns = min(1.0, ss * sat_k)
-            nv = min(1.0, vv * val_k + val_add * min(1.0, vv * 3.0))
-            r2, g2, b2 = colorsys.hsv_to_rgb(nh % 1.0, ns, nv)
-            px[x, y] = (int((r / 255.0 * (1 - wgt) + r2 * wgt) * 255), int((g / 255.0 * (1 - wgt) + g2 * wgt) * 255), int((b / 255.0 * (1 - wgt) + b2 * wgt) * 255), a)
-    return out
+    """Move the green of the leaves to another colour (the trunk, brown and grey, stays): the autumn and spring versions of a tree."""
+    import tree_art as T
+    return T.recolor(im, hue_to, sat_k, val_k, val_add)
 
 
 def make_oaks(manifest):
-    """Two full oaks with every season of leaf on them (summer green is the drawing; spring, three autumns); winter uses the game's bare tree."""
+    """Two full oaks with every season of leaf on them (summer green is the drawing; spring, three autumns); winter uses the game's bare tree. Kept at the
+    drawing's own size, with the same thinned outline, ink layer and close-up layers as the other trees."""
+    import tree_art as T
     sheet = load("trees2.png")
-    k = 0.8
-    sheet = sheet.resize((int(sheet.size[0] * k), int(sheet.size[1] * k)), Image.LANCZOS)
     comps, step = components(sheet, step=3, thresh=24)
     comps = [c for c in comps if len(c) > 900]
     pieces = cut(sheet, comps, step, grow=3)
     pieces.sort(key=lambda p: p["x"])
     for i, p in enumerate(pieces):
         nm = "oak%d" % (i + 1)
-        entry = {"name": nm, "w": p["img"].size[0], "h": p["img"].size[1], "leafy": True, "looks": {}}
-        entry["mist"] = {}
-        for lk, args in LOOKS.items():
-            fn = "tree_%s_%s.png" % (nm, lk)
-            rc = recolor(p["img"], *args)
-            rc.save(os.path.join(OUT, fn), optimize=True)
-            entry["looks"][lk] = fn
-            m2 = "mist_%s_%s.png" % (nm, lk)
-            mist(rc).save(os.path.join(OUT, m2), optimize=True)
-            entry["mist"][lk] = m2
-        entry["file"] = entry["looks"]["summer"]
+        entry, sizes = T.build_tree(OUT, nm, p["img"], True, "oak", 11 + i)
         manifest["trees"].append(entry)
-        print("oak %s: %dx%d, looks %s" % (nm, entry["w"], entry["h"], ",".join(entry["looks"].keys())))
+        print("oak %s: %dx%d, looks %s, %d KB" % (nm, entry["w"], entry["h"], ",".join(entry["looks"].keys()), sum(sizes.values()) // 1024))
 
 
 def make_bird(manifest):

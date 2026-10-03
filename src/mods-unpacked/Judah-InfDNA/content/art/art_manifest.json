@@ -2,9 +2,8 @@
  "trees": [
   {
    "name": "mossoak",
-   "file": "tree_mossoak.png",
-   "w": 555,
-   "h": 402,
+   "w": 925,
+   "h": 670,
    "leafy": true,
    "looks": {
     "summer": "tree_mossoak_summer.png",
@@ -19,52 +18,100 @@
     "orange": "mist_mossoak_orange.png",
     "red": "mist_mossoak_red.png",
     "gold": "mist_mossoak_gold.png"
-   }
+   },
+   "file": "tree_mossoak_summer.png",
+   "ink": "tree_mossoak_ink.png",
+   "shade": "tree_mossoak_shade.png",
+   "detail": "tree_mossoak_detail.png",
+   "foot": [
+    0.3805,
+    0.7643
+   ],
+   "ink_rgb": [
+    7,
+    5,
+    10
+   ]
   },
   {
    "name": "stump",
-   "file": "tree_stump.png",
-   "w": 297,
-   "h": 306,
+   "w": 491,
+   "h": 508,
    "leafy": false,
    "looks": {
     "summer": "tree_stump.png"
    },
    "mist": {
     "summer": "mist_stump.png"
-   }
+   },
+   "file": "tree_stump.png",
+   "ink": "tree_stump_ink.png",
+   "shade": "tree_stump_shade.png",
+   "detail": "tree_stump_detail.png",
+   "foot": [
+    0.0081,
+    0.7291
+   ],
+   "ink_rgb": [
+    8,
+    4,
+    10
+   ]
   },
   {
    "name": "spruce",
-   "file": "tree_spruce.png",
-   "w": 227,
-   "h": 361,
+   "w": 379,
+   "h": 593,
    "leafy": false,
    "looks": {
     "summer": "tree_spruce.png"
    },
    "mist": {
     "summer": "mist_spruce.png"
-   }
+   },
+   "file": "tree_spruce.png",
+   "ink": "tree_spruce_ink.png",
+   "shade": "tree_spruce_shade.png",
+   "detail": "tree_spruce_detail.png",
+   "foot": [
+    0.066,
+    0.8522
+   ],
+   "ink_rgb": [
+    7,
+    5,
+    10
+   ]
   },
   {
    "name": "log",
-   "file": "tree_log.png",
-   "w": 549,
-   "h": 157,
+   "w": 913,
+   "h": 253,
    "leafy": false,
    "looks": {
     "summer": "tree_log.png"
    },
    "mist": {
     "summer": "mist_log.png"
-   }
+   },
+   "file": "tree_log.png",
+   "ink": "tree_log_ink.png",
+   "shade": "tree_log_shade.png",
+   "detail": "tree_log_detail.png",
+   "foot": [
+    0.0,
+    0.9956
+   ],
+   "ink_rgb": [
+    7,
+    5,
+    9
+   ]
   },
   {
    "name": "acacia",
-   "file": "tree_acacia.png",
-   "w": 333,
-   "h": 191,
+   "w": 552,
+   "h": 317,
    "leafy": true,
    "looks": {
     "summer": "tree_acacia_summer.png",
@@ -79,13 +126,25 @@
     "orange": "mist_acacia_orange.png",
     "red": "mist_acacia_red.png",
     "gold": "mist_acacia_gold.png"
-   }
+   },
+   "file": "tree_acacia_summer.png",
+   "ink": "tree_acacia_ink.png",
+   "shade": "tree_acacia_shade.png",
+   "detail": "tree_acacia_detail.png",
+   "foot": [
+    0.2065,
+    0.8967
+   ],
+   "ink_rgb": [
+    8,
+    5,
+    10
+   ]
   },
   {
    "name": "grove",
-   "file": "tree_grove.png",
-   "w": 222,
-   "h": 180,
+   "w": 370,
+   "h": 295,
    "leafy": true,
    "looks": {
     "summer": "tree_grove_summer.png",
@@ -100,12 +159,25 @@
     "orange": "mist_grove_orange.png",
     "red": "mist_grove_red.png",
     "gold": "mist_grove_gold.png"
-   }
+   },
+   "file": "tree_grove_summer.png",
+   "ink": "tree_grove_ink.png",
+   "shade": "tree_grove_shade.png",
+   "detail": "tree_grove_detail.png",
+   "foot": [
+    0.0,
+    0.9892
+   ],
+   "ink_rgb": [
+    7,
+    5,
+    9
+   ]
   },
   {
    "name": "oak1",
-   "w": 596,
-   "h": 717,
+   "w": 746,
+   "h": 897,
    "leafy": true,
    "looks": {
     "summer": "tree_oak1_summer.png",
@@ -121,12 +193,24 @@
     "red": "mist_oak1_red.png",
     "gold": "mist_oak1_gold.png"
    },
-   "file": "tree_oak1_summer.png"
+   "file": "tree_oak1_summer.png",
+   "ink": "tree_oak1_ink.png",
+   "shade": "tree_oak1_shade.png",
+   "detail": "tree_oak1_detail.png",
+   "foot": [
+    0.3271,
+    0.7346
+   ],
+   "ink_rgb": [
+    3,
+    11,
+    17
+   ]
   },
   {
    "name": "oak2",
-   "w": 704,
-   "h": 728,
+   "w": 881,
+   "h": 910,
    "leafy": true,
    "looks": {
     "summer": "tree_oak2_summer.png",
@@ -142,7 +226,19 @@
     "red": "mist_oak2_red.png",
     "gold": "mist_oak2_gold.png"
    },
-   "file": "tree_oak2_summer.png"
+   "file": "tree_oak2_summer.png",
+   "ink": "tree_oak2_ink.png",
+   "shade": "tree_oak2_shade.png",
+   "detail": "tree_oak2_detail.png",
+   "foot": [
+    0.4188,
+    0.6822
+   ],
+   "ink_rgb": [
+    3,
+    11,
+    18
+   ]
   }
  ],
  "bird": {
@@ -230,44 +326,88 @@
    {
     "layer": "far",
     "file": "spider_far_0.png",
-    "x": 10,
-    "y": 158,
+    "x": 242,
+    "y": 172,
     "pivot": [
-     242.1,
-     160.0
+     276.0,
+     196.0
+    ],
+    "phase": 1
+   },
+   {
+    "layer": "far",
+    "file": "spider_far_1.png",
+    "x": 9,
+    "y": 248,
+    "pivot": [
+     133.0,
+     274.0
+    ],
+    "phase": 1
+   },
+   {
+    "layer": "far",
+    "file": "spider_far_2.png",
+    "x": 117,
+    "y": 157,
+    "pivot": [
+     257.5,
+     194.0
     ],
     "phase": 0
    },
    {
     "layer": "far",
-    "file": "spider_far_1.png",
-    "x": 501,
-    "y": 166,
+    "file": "spider_far_3.png",
+    "x": 500,
+    "y": 165,
     "pivot": [
-     570.1,
-     168.0
+     567.5,
+     186.0
     ],
-    "phase": 1
+    "phase": 0
    },
    {
     "layer": "near",
     "file": "spider_near_0.png",
-    "x": 8,
-    "y": 158,
+    "x": 244,
+    "y": 172,
     "pivot": [
-     242.1,
-     160.0
+     276.0,
+     196.0
     ],
     "phase": 0
    },
    {
     "layer": "near",
     "file": "spider_near_1.png",
-    "x": 572,
-    "y": 236,
+    "x": 7,
+    "y": 248,
     "pivot": [
-     643.2,
-     238.0
+     133.0,
+     274.0
+    ],
+    "phase": 0
+   },
+   {
+    "layer": "near",
+    "file": "spider_near_2.png",
+    "x": 117,
+    "y": 157,
+    "pivot": [
+     257.5,
+     194.0
+    ],
+    "phase": 1
+   },
+   {
+    "layer": "near",
+    "file": "spider_near_3.png",
+    "x": 571,
+    "y": 235,
+    "pivot": [
+     632.5,
+     257.5
     ],
     "phase": 1
    }
@@ -275,53 +415,53 @@
   "wave": false,
   "body": {
    "file": "spider_body.png",
-   "x": 46,
-   "y": 26
+   "x": 45,
+   "y": 25
   },
   "jaws": [
    {
     "file": "spider_jaw_0.png",
-    "x": 468,
-    "y": 341,
+    "x": 465,
+    "y": 343,
     "pivot": [
-     495.3,
-     350
+     496.6,
+     349.0
     ],
     "open": 0.2
    },
    {
     "file": "spider_jaw_1.png",
-    "x": 548,
-    "y": 333,
+    "x": 544,
+    "y": 332,
     "pivot": [
-     575.6,
-     342
+     577.4,
+     341.0
     ],
     "open": -0.16
    },
    {
     "file": "spider_jaw_2.png",
     "x": 566,
-    "y": 347,
+    "y": 343,
     "pivot": [
-     594.7,
-     356
+     596.4,
+     354.0
     ],
-    "open": 0.2
+    "open": -0.2
    }
   ],
   "cavity": {
    "file": "spider_cavity.png",
-   "x": 466,
-   "y": 331
+   "x": 461,
+   "y": 328
   },
   "feet": [
-   366.0,
-   524.0
+   365.5,
+   525.0
   ],
-  "width": 716.0,
-  "height": 498.0,
-  "scale": 0.1676
+  "width": 717.0,
+  "height": 500.0,
+  "scale": 0.16736
  },
  "void": {
   "canvas": [
@@ -337,22 +477,220 @@
    {
     "layer": "far",
     "file": "void_far_0.png",
-    "x": 293,
-    "y": 192,
+    "x": 554,
+    "y": 335,
     "pivot": [
-     380.5,
-     194.0
+     593.3,
+     372.5
+    ],
+    "phase": 1
+   },
+   {
+    "layer": "far",
+    "file": "void_far_1.png",
+    "x": 293,
+    "y": 191,
+    "pivot": [
+     362.5,
+     222.8
+    ],
+    "phase": 1
+   },
+   {
+    "layer": "far",
+    "file": "void_far_2.png",
+    "x": 419,
+    "y": 299,
+    "pivot": [
+     530.1,
+     342.6
+    ],
+    "phase": 0
+   },
+   {
+    "layer": "far",
+    "file": "void_far_3.png",
+    "x": 535,
+    "y": 231,
+    "pivot": [
+     603.3,
+     272.7
+    ],
+    "phase": 0
+   },
+   {
+    "layer": "far",
+    "file": "void_far_4.png",
+    "x": 611,
+    "y": 221,
+    "pivot": [
+     691.1,
+     255.4
+    ],
+    "phase": 1
+   },
+   {
+    "layer": "far",
+    "file": "void_far_5.png",
+    "x": 704,
+    "y": 274,
+    "pivot": [
+     734.3,
+     313.3
+    ],
+    "phase": 0
+   },
+   {
+    "layer": "far",
+    "file": "void_far_6.png",
+    "x": 750,
+    "y": 233,
+    "pivot": [
+     822.8,
+     270.1
+    ],
+    "phase": 1
+   },
+   {
+    "layer": "far",
+    "file": "void_far_7.png",
+    "x": 848,
+    "y": 263,
+    "pivot": [
+     876.7,
+     298.0
+    ],
+    "phase": 0
+   },
+   {
+    "layer": "far",
+    "file": "void_far_8.png",
+    "x": 942,
+    "y": 309,
+    "pivot": [
+     1013.7,
+     343.9
+    ],
+    "phase": 1
+   },
+   {
+    "layer": "near",
+    "file": "void_near_0.png",
+    "x": 644,
+    "y": 323,
+    "pivot": [
+     669.2,
+     368.5
     ],
     "phase": 0
    },
    {
     "layer": "near",
-    "file": "void_near_0.png",
-    "x": 292,
-    "y": 190,
+    "file": "void_near_1.png",
+    "x": 455,
+    "y": 219,
     "pivot": [
-     425.2,
-     192.0
+     535.5,
+     256.1
+    ],
+    "phase": 1
+   },
+   {
+    "layer": "near",
+    "file": "void_near_2.png",
+    "x": 536,
+    "y": 233,
+    "pivot": [
+     593.3,
+     272.1
+    ],
+    "phase": 0
+   },
+   {
+    "layer": "near",
+    "file": "void_near_3.png",
+    "x": 731,
+    "y": 423,
+    "pivot": [
+     772.9,
+     435.7
+    ],
+    "phase": 0
+   },
+   {
+    "layer": "near",
+    "file": "void_near_4.png",
+    "x": 291,
+    "y": 189,
+    "pivot": [
+     373.8,
+     224.8
+    ],
+    "phase": 0
+   },
+   {
+    "layer": "near",
+    "file": "void_near_5.png",
+    "x": 368,
+    "y": 306,
+    "pivot": [
+     441.0,
+     337.9
+    ],
+    "phase": 1
+   },
+   {
+    "layer": "near",
+    "file": "void_near_6.png",
+    "x": 413,
+    "y": 299,
+    "pivot": [
+     527.5,
+     343.9
+    ],
+    "phase": 0
+   },
+   {
+    "layer": "near",
+    "file": "void_near_7.png",
+    "x": 588,
+    "y": 211,
+    "pivot": [
+     656.5,
+     255.4
+    ],
+    "phase": 1
+   },
+   {
+    "layer": "near",
+    "file": "void_near_8.png",
+    "x": 666,
+    "y": 296,
+    "pivot": [
+     704.4,
+     339.2
+    ],
+    "phase": 1
+   },
+   {
+    "layer": "near",
+    "file": "void_near_9.png",
+    "x": 773,
+    "y": 272,
+    "pivot": [
+     872.0,
+     304.0
+    ],
+    "phase": 1
+   },
+   {
+    "layer": "near",
+    "file": "void_near_10.png",
+    "x": 956,
+    "y": 308,
+    "pivot": [
+     1062.9,
+     336.6
     ],
     "phase": 0
    }
@@ -366,8 +704,8 @@
   "jaws": [
    {
     "file": "void_jaw_0.png",
-    "x": 838,
-    "y": 296,
+    "x": 846,
+    "y": 295,
     "pivot": [
      845,
      318
@@ -377,8 +715,8 @@
   ],
   "cavity": {
    "file": "void_cavity.png",
-   "x": 900,
-   "y": 283
+   "x": 829,
+   "y": 277
   },
   "glow": {
    "file": "void_glow.png",
