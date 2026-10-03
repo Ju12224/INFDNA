@@ -10,6 +10,8 @@ colour fill and nothing behind them.  So there is no background to remove and no
      two antennae, a spike clump and a fur tuft) the pieces give seed lines instead, and the island is shared out by a walk from the seeds in which
      a step onto the dark outline costs much more than a step over fill (`partition`), so the border falls in the middle of the outline between
      them; the outline itself is shared out by nearness to each part's fill, so each piece keeps its whole outline and none of its neighbour's,
+     and a cut through an outline the two drawings share runs along the smoothed middle line and is anti-aliased (no stair steps, no bumps);
+     the haze in a narrow gap between two outlines goes to neither part,
   3. a piece may lose its thin parts inside a box (the heads without antennae: the antenna stalks are cut off along the head's own outline,
      found by a morphological opening, and the cut ends are capped with outline colour) and may be mirrored (the full-sheet wing, so every wing
      has its root on the right),
@@ -49,7 +51,7 @@ FILM = 250           # alpha from this up is solid
 MIN_ISLAND = 150     # islands smaller than this are dust (the real parts are all far bigger)
 INK_MAX = 70         # a pixel whose brightest channel is under this is outline
 INK_COST = 6.0       # walking onto outline costs this much more than walking over fill (partition)
-SHARE = 0.5          # sheet px: where two split parts meet, outline pixels this close to a tie go to both
+SEAM_SOFT = 1.5      # sheet px: the anti-aliased width of the cut through a fused outline between two split parts
 RING = 1             # px of outline ring added round every piece (after shrinking)
 BLEED = 3            # px round a piece that get the colour of the nearest visible pixel
 
@@ -189,35 +191,36 @@ def partition(sh, island_ids, seeds):
                 label[j] = li
                 push(heap, (nd, j))
     lab = np.array(label, dtype=np.int32).reshape(h + 2, W)[1:-1, 1:-1]
-    # the fill (everything that is not outline) goes by the walk; every outline pixel goes to the part whose fill is nearest, and where two
-    # parts meet both keep a SHARE px band, so each keeps its whole outline and none of its neighbour's (even where the two outlines only
-    # touch through a soft bridge, as the full-sheet wings do)
+    # the fill (everything that is not outline) goes by the walk; every outline pixel goes to the part whose fill is nearest, so each part keeps
+    # its whole outline and none of its neighbour's (also where two outlines are fused into one band, or only touch through a soft bridge, as
+    # the full-sheet wings do).  The cut through a fused outline runs along the smoothed middle line between the two fills and is anti-aliased
+    # (a weight that ramps from 1 to 0 over about SEAM_SOFT px), so it has neither stair steps nor bumps of the painted outline.
     fills = [(lab == k) & ~ink for k in range(len(seeds))]
     dist = np.stack([ndi.distance_transform_edt(~f) if f.any() else np.full(isl.shape, 1e9) for f in fills])
-    dmin = dist.min(axis=0)
     solid = sh.a[y0:y1, x0:x1] >= 128
+    anyfill = np.zeros_like(isl)
+    for f in fills:
+        anyfill |= f
     out = []
     for k in range(len(seeds)):
-        # (soft edge pixels, alpha < 128, go only to the nearest part: they are the bridge between two outlines, not outline)
-        m = isl & (fills[k] | (ink & solid & (dist[k] <= dmin + SHARE)) | (~solid & (dist[k] <= dmin)))
-        # crumbs: solid bits of the part not joined to its body (keep pieces of at least a twentieth of the biggest), and soft pixels far from it
+        other = np.min(np.delete(dist, k, axis=0), axis=0)
+        diff = ndi.gaussian_filter(np.clip(other - dist[k], -30, 30), 1.2)
+        w = np.clip(diff / SEAM_SOFT + 0.5, 0.0, 1.0)
+        w[fills[k]] = 1.0
+        w[anyfill & ~fills[k]] = 0.0
+        w[~isl] = 0.0
+        m = w >= 0.5
+        # crumbs: solid bits of the part not joined to its body (keep pieces of at least a twentieth of the biggest)
         cl, n = ndi.label(m & solid, structure=np.ones((3, 3), bool))
         if n > 1:
             sizes = ndi.sum(np.ones_like(cl), cl, index=np.arange(1, n + 1))
             keep = np.isin(cl, [i + 1 for i, s in enumerate(sizes) if s >= 0.05 * sizes.max()])
-            m = m & ndi.binary_dilation(keep, structure=np.ones((3, 3), bool), iterations=2)
-        # the seam with a neighbour (pixels about as near the neighbour's fill as this part's) is smoothed: no 1-2 px bumps of the painted
-        # outline stick out where two outlines were fused; tips elsewhere are left alone
-        other = np.min(np.delete(dist, k, axis=0), axis=0) if len(seeds) > 1 else np.full(isl.shape, 1e9)
-        seam = other <= dist[k] + 8.0
-        if seam.any():
-            smooth = ndi.binary_opening(m, structure=disk(2))
-            m = (m & ~seam) | (smooth & seam)
+            w[~ndi.binary_dilation(keep, structure=np.ones((3, 3), bool), iterations=2)] = 0.0
         # soft pixels only as the part's own anti-aliased rim (the haze in a narrow gap between two outlines is nobody's)
-        own_solid = m & solid
+        own_solid = (w >= 0.5) & solid
         if own_solid.any():
-            m = m & (solid | (ndi.distance_transform_edt(~own_solid) <= 1.5))
-        out.append(m)
+            w[~solid & (ndi.distance_transform_edt(~own_solid) > 1.5)] = 0.0
+        out.append(w.astype(np.float32))
     return (x0, y0, x1, y1), out
 
 
@@ -431,7 +434,7 @@ def assign(sh, specs):
         # every part of a shared island needs seeds, also a part that is not saved (a "_" piece: a repeat stuck to a wanted part)
         (x0, y0, x1, y1), pm = partition(sh, sorted(g["ids"]), [s["seeds"] for s in sps])
         for s, m in zip(sps, pm):
-            full = np.zeros((sh.h, sh.w), bool)
+            full = np.zeros((sh.h, sh.w), np.float32)      # a weight 0..1 (anti-aliased seam), not a plain mask
             full[y0:y1, x0:x1] = m
             masks[s["name"]] = full
     return masks
@@ -481,10 +484,11 @@ def piece_rgba(sh, mask, sp):
     if sp.get("bare"):
         mask, cap = strip_antennae(sh, mask, sp)
         px[cap, 0], px[cap, 1], px[cap, 2] = sh.ink
-    ys, xs = np.nonzero(mask & (sh.a > 0))
+    wgt = mask.astype(np.float32)                 # bool mask, or the 0..1 weight of a split piece
+    ys, xs = np.nonzero((wgt > 0) & (sh.a > 0))
     x0, x1, y0, y1 = xs.min(), xs.max() + 1, ys.min(), ys.max() + 1
     crop = px[y0:y1, x0:x1].copy()
-    crop[..., 3] = np.where(mask[y0:y1, x0:x1], crop[..., 3], 0)
+    crop[..., 3] = np.round(crop[..., 3] * wgt[y0:y1, x0:x1]).astype(np.uint8)
     crop[crop[..., 3] == 0, :3] = 0
     flip = bool(sp.get("flip"))
     if flip:
@@ -701,7 +705,7 @@ def check_coverage(sh, masks):
     """Warn about real islands that no piece took and that are not known repeats."""
     taken = np.zeros((sh.h, sh.w), bool)
     for m in masks.values():
-        taken |= m
+        taken |= m > 0.5
     for i in range(1, len(sh.objs) + 1):
         if sh.area[i - 1] < MIN_ISLAND:
             continue
@@ -730,6 +734,7 @@ def assign_debug(sh, masks, specs, path):
         m = masks.get(sp["name"])
         if m is None:
             continue
+        m = m > 0.5
         r, g, b = colorsys.hsv_to_rgb((n * 0.137) % 1.0, 0.75, 1.0)
         over[m & ~cover] = (r * 255, g * 255, b * 255)
         over[m & cover] = (255, 0, 0)          # pixel in two pieces (a shared rim)
@@ -743,7 +748,7 @@ def assign_debug(sh, masks, specs, path):
         m = masks.get(sp["name"])
         if m is None:
             continue
-        ys, xs = np.nonzero(m)
+        ys, xs = np.nonzero(m > 0.5)
         d.text((int(xs.min()) + 2, int(ys.min()) + 2), sp["name"], fill=(0, 0, 0))
     img.save(path)
 
