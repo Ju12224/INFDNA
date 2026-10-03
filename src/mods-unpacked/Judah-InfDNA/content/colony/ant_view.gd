@@ -9,6 +9,7 @@ const WorldView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/world
 const GroundView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ground_view.gd")
 const EnemyDefs = preload("res://mods-unpacked/Judah-InfDNA/core/enemy_defs.gd")
 const Sim = preload("res://mods-unpacked/Judah-InfDNA/core/colony_sim.gd")
+const Orders = preload("res://mods-unpacked/Judah-InfDNA/core/orders.gd")
 
 const CASTE_COLORS = [Color("#6cc644"), Color("#c9863b"), Color("#e8483b")]
 const CASTE_ICONS = ["res://items/all/fruit_basket/fruit_basket_icon.png", "res://items/all/improved_tools/improved_tools_icon.png",
@@ -23,6 +24,7 @@ var day              # day_cycle.gd (optional): shadows fade with the sun (the c
 var cam
 var show_castes := true
 var selected = null
+var sel_ids := {}    # ids of the ants in the player's box selection: each stands in a white ring (ants under an order show a coloured one)
 var _caste_tex := []
 var _t := 0.0
 var _surf_k := {}   # smoothed surface factor per unit (0 underground, 1 surface)
@@ -288,6 +290,52 @@ func pick(world_pos: Vector2, radius: float = 30.0):
 		if q < r * r and q < bd:
 			bd = q
 			best = a
+	return best
+
+
+# Every ant in the player's selection stands in a white ring; one under an order wears a ring in the order's colour (blue guard, red attack,
+# gold harvest, brown dig), so the squads read at a glance.
+func _draw_order_ring(a, feet: Vector2, sc: float) -> void:
+	var col = Color(1, 1, 1, 0.95)
+	var w = 3.0
+	if not sel_ids.has(a.id):
+		var sq = sim.squads.get(a.squad)
+		var base = Orders.COLORS.get(sq["kind"], Color(0.6, 0.8, 1.0)) if sq != null else Color(0.6, 0.8, 1.0)
+		col = Color(base.r, base.g, base.b, 0.6)
+		w = 2.2
+	draw_set_transform(feet + Vector2(0, 4.0 * sc), 0.0, Vector2(1.0, 0.34))
+	draw_arc(Vector2.ZERO, 26.0 * sc, 0.0, TAU, 22, Color(0, 0, 0, 0.45), w + 2.0, true)
+	draw_arc(Vector2.ZERO, 26.0 * sc, 0.0, TAU, 22, col, w, true)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+# Ants whose drawn body lies inside a world rectangle (the player's drag-box).
+func pick_rect(r: Rect2) -> Array:
+	var out := []
+	var C = sim.grid.CELL
+	for a in sim.ants:
+		var d = _depth(a.id, lane_of(a, a.id))
+		var n = Vector2(-sin(a.rot), cos(a.rot))
+		var mid = sim.ant_pos(a) + Vector2(0, d[0]) + n * C * 0.5 - n * 15.0 * d[1]
+		if r.has_point(mid):
+			out.append(a)
+	return out
+
+
+# The raider (or prey) drawn under a world point, nearest body centre first.
+func pick_enemy(world_pos: Vector2, radius: float = 34.0):
+	var best = null
+	var bd = 1e18
+	var C = sim.grid.CELL
+	for e in sim.enemies:
+		var d = _depth(-e.id, lane_of(e, -e.id))
+		var h = EnemyDefs.HEIGHT[e.cls] * d[1]
+		var mid = sim.enemy_pos(e) + Vector2(0, C * 0.5 + d[0]) + Vector2(0, -h * 0.5)
+		var q = mid.distance_squared_to(world_pos)
+		var rr = max(radius, h * 0.6)
+		if q < rr * rr and q < bd:
+			bd = q
+			best = e
 	return best
 
 
@@ -562,6 +610,8 @@ func _draw_ant(a) -> void:
 		var pr = 26.0 + sin(_t * 6.0) * 2.5
 		draw_circle(feet - n * 10.0, pr, Color(1, 1, 1, 0.18))
 		draw_arc(feet - n * 10.0, pr, _t * 1.5, _t * 1.5 + TAU * 0.8, 28, Color.white, 3.0, true)
+	if a.squad != 0 or sel_ids.has(a.id):
+		_draw_order_ring(a, feet, d[1])
 	var frame = int(fposmod(_gait_ph.get(a.id, 0.0), 1.0) * baker.FRAMES) % baker.FRAMES if moving else 0
 	var tex = baker.get_texture(a.genome, 1.0, frame)
 	var sk = _surf_k.get(a.id, 0.0)

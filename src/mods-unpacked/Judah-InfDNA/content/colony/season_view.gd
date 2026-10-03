@@ -13,6 +13,7 @@ var ground
 var day
 var perf
 var _t := 0.0
+var _was := false
 
 
 static func _h(a: float, b: float = 0.0) -> float:
@@ -21,8 +22,11 @@ static func _h(a: float, b: float = 0.0) -> float:
 
 func _process(delta: float) -> void:
 	_t += delta
-	if day != null and (_leaf_k() > 0.02 or _petal_k() > 0.02):
+	var on = day != null and (_leaf_k() > 0.02 or _petal_k() > 0.02)
+	# (a canvas keeps its last drawing until update() is called again, so the frame after it goes quiet must be drawn too, or the last bird / flag / leaf / raindrop stays frozen on screen)
+	if on or _was:
 		update()
+	_was = on
 
 
 # Leaves come down from the middle of autumn until the trees are bare.

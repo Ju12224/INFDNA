@@ -14,6 +14,9 @@ const RunLog = preload("res://mods-unpacked/Judah-InfDNA/core/run_log.gd")
 const Legacy = preload("res://mods-unpacked/Judah-InfDNA/core/legacy.gd")
 const Wild = preload("res://mods-unpacked/Judah-InfDNA/core/wild.gd")
 
+const HINT_CLEAN = "Drag: select ants   Right-click: order them   Q: free them   Wheel: zoom   WASD: pan   Space: pause   Tab: more panels"
+const HINT_FULL = "WASD / middle-drag pan   Wheel zoom   Drag: select ants   Right-click: order   Q: free   Space: pause   Tab: fewer panels   Esc: menu\nLayers P C F T H X K O   Powers R E Z J M Y   L lineage   U nest   N new strain   V watch   I goals"
+
 # task order in the sim: NURSE, FORAGE, DIG, HOME, DEFEND (shared with the Tasks layer so the legend matches)
 const TASK_COLORS = LayersView.TASK_COLORS
 const TASK_LABELS = LayersView.TASK_LABELS
@@ -77,6 +80,16 @@ var _watch_chip: Label
 var _watch_info: Label
 var _watch_t := 0.0
 var _watch_hidden := []      # nodes hidden in watch mode, with the visibility to restore
+# The clean screen: by default only the colony card, the raid timer, the minimap, speed, Lab and Menu are up (plus a bar for the selected
+# ants). Tab (or the Panels button) brings every panel back.
+var compact := true
+var _extra_nodes := []       # parts of the colony card and the graph card that only the full screen shows
+var _more_box: HBoxContainer # Focus and Brood levers
+var _panels_btn: Button
+var _squad_panel: PanelContainer
+var _squad_label: Label
+var _squad_hint: Label
+var _squad_sig := ""
 var _quality_btn: Button
 var _mm_font: Font
 const MM_W = 640.0
@@ -143,11 +156,13 @@ func _ready() -> void:
 	_build_lineage()
 	_build_bar()
 	_build_director()
+	_build_squad()
 	_build_inspector()
 	_build_overlays()
 	_build_shop()
 	_build_collapse()
 	_build_evolution()
+	set_compact(true)
 
 	# scene enters from black
 	Kit.fade_rect(root, Color("#0b0910"), 1.0, 0.0, 0.7)
@@ -266,6 +281,7 @@ func _build_left() -> void:
 	var crow = HBoxContainer.new()
 	crow.add_constant_override("separation", 8)
 	v.add_child(crow)
+	_extra_nodes.append(crow)
 	for i in 3:
 		_caste_nums.append(_chip(crow, Kit.CASTE_KEYS[i], Kit.CASTE_COLORS[i]))
 
@@ -275,10 +291,13 @@ func _build_left() -> void:
 	v.add_child(_task_bar)
 	_task_txt = Kit.label(v, "", _f_s)
 	_task_txt.modulate = Color(1, 1, 1, 0.8)
+	_extra_nodes.append(_task_bar)
+	_extra_nodes.append(_task_txt)
 
 	var srow = HBoxContainer.new()
 	srow.add_constant_override("separation", 10)
 	v.add_child(srow)
+	_extra_nodes.append(srow)
 	for k in ["speed", "carry", "attack", "hp"]:
 		var b = HBoxContainer.new()
 		b.add_constant_override("separation", 3)
@@ -304,6 +323,7 @@ func _build_left() -> void:
 
 	# ---- population / food graph
 	var gv = _card(_left_col)
+	_extra_nodes.append(gv.get_parent())
 	_graph = Control.new()
 	_graph.rect_min_size = Vector2(396, 74)
 	_graph.connect("draw", self, "_draw_graph")
@@ -347,32 +367,32 @@ func _build_bar() -> void:
 	var bar = HBoxContainer.new()
 	bar.add_constant_override("separation", 8)
 	_bar_panel.add_child(bar)
-	_group(bar, "Focus", [["Forage", "food"], ["Balanced", "balanced"], ["Dig", "dig"], ["Defend", "armor"]], 1, "_on_focus",
+	_more_box = HBoxContainer.new()
+	_more_box.add_constant_override("separation", 8)
+	bar.add_child(_more_box)
+	_group(_more_box, "Focus", [["Forage", "food"], ["Balanced", "balanced"], ["Dig", "dig"], ["Defend", "armor"]], 1, "_on_focus",
 		["Ants favor foraging", "Even split", "Ants favor digging", "Ants rally to defend"])
-	_sep(bar)
-	_group(bar, "Brood", [["Low", ""], ["Normal", ""], ["High", ""]], 1, "_on_brood",
+	_sep(_more_box)
+	_group(_more_box, "Brood", [["Low", ""], ["Normal", ""], ["High", ""]], 1, "_on_brood",
 		["Slow, cheap brood", "Standard egg rate", "Fast eggs, drains food"])
-	_sep(bar)
+	_sep(_more_box)
 	_speed_btns = _group(bar, "Speed", [["||", ""], ["1x", ""], ["2x", ""], ["4x", ""], ["10x", ""]], 1, "_on_speed",
 		["Pause (Space)", "1x (key 1)", "2x (key 2)", "4x (key 3)", "10x (key 4). If the colony is too big for 10x, the readout shows the speed you actually get."])
 	_sep(bar)
-	var layers = _btn(bar, "Layers", "sense")
-	layers.toggle_mode = true
-	layers.pressed = true
-	layers.hint_tooltip = "Show or hide the layer buttons (trails, badges, fights, tasks, health)"
-	layers.connect("toggled", self, "_on_layers_panel")
-	_btn(bar, "Lineage", "power").connect("pressed", self, "toggle_evolution")
 	_btn(bar, "Lab", "luck").connect("pressed", scene, "open_shop")
 	_btn(bar, "Menu", "exit").connect("pressed", scene, "go_to_menu")
+	_panels_btn = _btn(bar, "Panels", "sense")
+	_panels_btn.toggle_mode = true
+	_panels_btn.hint_tooltip = "Show every panel: body plans, powers, layers, focus and brood (Tab)"
+	_panels_btn.connect("toggled", self, "_on_panels_toggled")
 
-	var hint = Kit.label(root, "WASD / right-drag pan   Wheel zoom   Click an ant   Space pause   P C F T H layers   X follow   K night   O sound   Y strike   L lineage   U nest   N new strain   V watch   Esc menu", _f_s)
+	var hint = Kit.label(root, HINT_CLEAN, _f_s)
 	hint.anchor_top = 1.0
 	hint.anchor_bottom = 1.0
 	hint.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	hint.margin_left = 22
 	hint.margin_bottom = -96
 	hint.modulate = Color(1, 1, 1, 0.55)
-	hint.text = hint.text.replace("U nest   Esc menu", "U nest   N new strain   V watch mode   Esc menu")
 	_hint = hint
 	_build_layers()
 	_build_minimap()
@@ -500,7 +520,7 @@ func _build_layers() -> void:
 	_layers_panel.anchor_bottom = 1.0
 	_layers_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_layers_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_layers_panel.margin_bottom = -130     # above the lever bar and its key hint
+	_layers_panel.margin_bottom = -168     # above the lever bar and its two-line key hint
 	root.add_child(_layers_panel)
 	var v = VBoxContainer.new()
 	v.add_constant_override("separation", 6)
@@ -525,6 +545,9 @@ func _build_layers() -> void:
 		b.hint_tooltip = it[3]
 		b.connect("toggled", self, "_on_layer_toggled", [it[0]])
 		_layer_btns[it[0]] = b
+	var lin = _btn(row, "Lineage (L)", "power", Color("#f2c14e"), 20)
+	lin.hint_tooltip = "Body plans over time: trait spread and ancestry"
+	lin.connect("pressed", self, "toggle_evolution")
 	_quality_btn = _btn(row, scene.perf.label(), "luck", Color("#7ed957"), 20)
 	_quality_btn.hint_tooltip = "The optimizer. Auto lowers detail when the frame rate dips and restores it when smooth. Click to cycle Auto / High / Medium / Low."
 	_quality_btn.connect("pressed", self, "_on_quality")
@@ -591,6 +614,47 @@ func _build_director() -> void:
 	_dir_hint.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_dir_hint.margin_top = 150
 	_dir_hint.visible = false
+
+
+# The bar for the ants the player has selected: how many, how many are under orders, what a right-click does, and a button to free them.
+func _build_squad() -> void:
+	_squad_panel = PanelContainer.new()
+	_squad_panel.add_stylebox_override("panel", Kit.panel(Color(0.22, 0.32, 0.44), 0.96, 6.0))
+	_squad_panel.anchor_left = 0.5
+	_squad_panel.anchor_right = 0.5
+	_squad_panel.anchor_top = 1.0
+	_squad_panel.anchor_bottom = 1.0
+	_squad_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_squad_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_squad_panel.margin_bottom = -134
+	_squad_panel.visible = false
+	root.add_child(_squad_panel)
+	var h = HBoxContainer.new()
+	h.add_constant_override("separation", 18)
+	_squad_panel.add_child(h)
+	_squad_label = Kit.label(h, "", _f_m, Color("#bfe6ff"))
+	_squad_hint = Kit.label(h, "Right-click: a spot to guard  ·  a food pile to harvest  ·  a raider to attack  ·  soil to dig", _f_s)
+	_squad_hint.modulate = Color(1, 1, 1, 0.8)
+	_squad_hint.valign = Label.VALIGN_CENTER
+	var fb = _btn(h, "Free (Q)", "exit", Color("#f2c14e"), 20)
+	fb.hint_tooltip = "Let the selected ants go back to their own work"
+	fb.connect("pressed", scene, "release_selection")
+
+
+func _refresh_squad() -> void:
+	var sel = scene.selection
+	var vis = not sel.empty() and not scene.watch_mode and not scene.shop_open and not scene.sim.collapsed
+	_squad_panel.visible = vis
+	if not vis:
+		return
+	var ordered := 0
+	for a in sel:
+		if a.squad != 0:
+			ordered += 1
+	var sig = "%d|%d" % [sel.size(), ordered]
+	if sig != _squad_sig:
+		_squad_sig = sig
+		_squad_label.text = "%d selected%s" % [sel.size(), ("  ·  %d under orders" % ordered) if ordered > 0 else ""]
 
 
 func _on_cmd(id: String) -> void:
@@ -892,6 +956,7 @@ func _process(delta: float) -> void:
 		_banner.visible = false
 		_banner_text = ""
 	_refresh_director()
+	_refresh_squad()
 	if scene.watch_mode:
 		_watch_t += delta
 		_watch_chip.modulate.a = lerp(0.9, 0.28, smoothstep(5.0, 9.0, _watch_t))
@@ -1525,7 +1590,7 @@ func sync_quality() -> void:
 func set_watch(on: bool) -> void:
 	if on:
 		_watch_hidden = []
-		for n in [_left_col, _lineage_panel, _bar_panel, _mm_panel, _hint, _layers_panel, _inspect, _dir_panel, _dir_hint]:
+		for n in [_left_col, _lineage_panel, _bar_panel, _mm_panel, _hint, _layers_panel, _inspect, _dir_panel, _dir_hint, _squad_panel]:
 			if n != null:
 				_watch_hidden.append([n, n.visible])
 				n.visible = false
@@ -1549,8 +1614,26 @@ func _refresh_watch_info(sim) -> void:
 		("raid %d" % sim.raid_n) if sim.raid_n > 0 else "calm"]
 
 
-func _on_layers_panel(on: bool) -> void:
-	_layers_panel.visible = on
+func _on_panels_toggled(on: bool) -> void:
+	set_compact(not on)
+
+
+func toggle_compact() -> void:
+	set_compact(not compact)
+
+
+# The clean screen (compact) or every panel.
+func set_compact(on: bool) -> void:
+	compact = on
+	for n in _extra_nodes:
+		n.visible = not on
+	_more_box.visible = not on
+	if not scene.watch_mode:
+		_lineage_panel.visible = not on
+		_dir_panel.visible = not on
+		_layers_panel.visible = not on
+	_panels_btn.set_pressed_no_signal(not on)
+	_hint.text = HINT_CLEAN if on else HINT_FULL
 
 
 func _on_layer_toggled(on: bool, key: String) -> void:

@@ -101,7 +101,7 @@ func pick_job(dig_down: float):
 		return null
 	var w := []
 	for j in jobs:
-		w.append(max(0.05, dig_down if j["kind"] == "shaft" else 1.0 - dig_down))
+		w.append(max(0.05, dig_down if j["kind"] == "shaft" else 1.0 - dig_down) * (4.0 if j["kind"] == "order" else 1.0))   # the player's dig orders come first
 	var total := 0.0
 	for x in w:
 		total += x
@@ -111,6 +111,37 @@ func pick_job(dig_down: float):
 		if r <= 0.0:
 			return jobs[i]
 	return jobs[0]
+
+
+# A tunnel the player asked for: from the nearest open tunnel cell of the nest toward `goal` (a solid cell). Returns the job id, 0 if there is
+# no way (nothing to start from, or rock in the way at once).
+func add_dig_order(goal: Vector2) -> int:
+	var best = null
+	var bd = 1e12
+	for s in spine:
+		if int(s.z) != 0:
+			continue
+		var d = goal.distance_squared_to(Vector2(s.x, s.y))
+		if d < bd:
+			bd = d
+			best = s
+	if best == null:
+		return 0
+	var start = Vector2(best.x, best.y)
+	var length = int(clamp(start.distance_to(goal) * 1.3 + 6.0, 4.0, 140.0))
+	var w = _walk(start, {"kind": "goal", "goal": goal}, length, 0, false)
+	if w["cells"].size() < 1:
+		return 0
+	var job = _job("order", w["cells"], 0, 1.3)
+	job["id"] = _next_id
+	_next_id += 1
+	job["dist"] = PoolIntArray()
+	job["src"] = Vector2(-99, -99)
+	job["built"] = -99.0
+	job["idx"] = 0
+	job["linked"] = []
+	jobs.append(job)
+	return job["id"]
 
 
 func job_by_id(id: int):

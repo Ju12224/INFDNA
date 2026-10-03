@@ -10,12 +10,16 @@ var sim
 var cam
 var ground
 var _t := 0.0
+var _was := false
 
 
 func _process(delta: float) -> void:
 	_t += delta
-	if sim != null and (sim.rally_t > 0.0 or sim.harvest_t > 0.0):
+	var on = sim != null and (sim.rally_t > 0.0 or sim.harvest_t > 0.0)
+	# (a canvas keeps its last drawing until update() is called again, so the frame after it goes quiet must be drawn too, or the last bird / flag / leaf / raindrop stays frozen on screen)
+	if on or _was:
 		update()
+	_was = on
 
 
 func _draw() -> void:

@@ -23,6 +23,8 @@ const RivalView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/rival
 const Ambience = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ambience.gd")
 const Legacy = preload("res://mods-unpacked/Judah-InfDNA/core/legacy.gd")
 const Wild = preload("res://mods-unpacked/Judah-InfDNA/core/wild.gd")
+const Orders = preload("res://mods-unpacked/Judah-InfDNA/core/orders.gd")
+const SelectView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/select_view.gd")
 const DayCycle = preload("res://mods-unpacked/Judah-InfDNA/content/colony/day_cycle.gd")
 const WatchCam = preload("res://mods-unpacked/Judah-InfDNA/content/colony/watch_cam.gd")
 const SELECT_SCENE = "res://mods-unpacked/Judah-InfDNA/content/colony/queen_select.tscn"
@@ -39,6 +41,7 @@ var ant_view
 var rival_view
 var ambience
 var enemy_view
+var pview               # the bird's view
 var layers_view
 var perf               # the optimizer (perf.gd): adaptive quality
 var _weather
@@ -59,6 +62,16 @@ var watch_mode := false
 var _watch_saved := {}
 var _shop_noted := false
 var armed := ""              # a command waiting for a click on the ground (rally, harvest)
+# Direct control (orders.gd): drag a box over ants to select them, right-click to order them.
+var selection: Array = []    # the box selection
+var boxing := false          # a drag-box is being drawn (select_view.gd draws it)
+var box_a := Vector2()       # its corners, in screen coordinates
+var box_b := Vector2()
+var _lmb := false
+var _rmb := false
+var _rmb_pos := Vector2()
+var _rmb_moved := false
+var _sel_t := 0.0
 # view layers (HUD "Layers" panel and the P/C/F/T/H keys); see set_layer
 var layer_state := {"trails": true, "castes": true, "fights": true, "tasks": false, "health": false, "follow": false, "light": true, "sound": true}
 
@@ -118,7 +131,7 @@ func _ready() -> void:
 	ant_view.ground = world_view.ground
 	world_view.cam = cam
 
-	var pview = PredatorView.new()      # the bird, before the light pass so night tints it
+	pview = PredatorView.new()      # the bird, before the light pass so night tints it
 	pview.sim = sim
 	pview.cam = cam
 	pview.ground = world_view.ground
@@ -180,6 +193,16 @@ func _ready() -> void:
 	ambience.ground = world_view.ground
 	add_child(ambience)
 
+	var sl = CanvasLayer.new()          # the drag-box: screen space, under the HUD
+	sl.layer = 9
+	add_child(sl)
+	var sv = SelectView.new()
+	sv.scene = self
+	sv.anchor_right = 1.0
+	sv.anchor_bottom = 1.0
+	sv.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sl.add_child(sv)
+
 	hud = Hud.new()
 	hud.scene = self
 	add_child(hud)
@@ -194,6 +217,15 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	day.update(sim.time, sim.rain, sim.wet)
+	# a button released over a panel never reaches _unhandled_input: finish the drag from the real button state
+	if _lmb and not Input.is_mouse_button_pressed(BUTTON_LEFT):
+		_end_box(get_viewport().get_mouse_position(), Input.is_key_pressed(KEY_SHIFT))
+	if _rmb and not Input.is_mouse_button_pressed(BUTTON_RIGHT):
+		_rmb = false
+	_sel_t -= delta
+	if _sel_t <= 0.0:
+		_sel_t = 0.25
+		live_selection()
 	if sim.shop_pending and not shop_open and not sim.collapsed:
 		if not watch_mode:
 			open_shop()
@@ -266,11 +298,39 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.button_index == BUTTON_RIGHT:
 			set_armed("")
 		return
-	if event is InputEventMouseButton and event.pressed and event.button_index == BUTTON_LEFT:
-		selected = ant_view.pick(get_global_mouse_position(), 30.0)
-		if watch_mode and selected != null:
-			watch.follow(selected)
-	elif event is InputEventKey and event.pressed and not event.echo:
+	if watch_mode:
+		if event is InputEventMouseButton and event.pressed and event.button_index == BUTTON_LEFT:
+			selected = ant_view.pick(get_global_mouse_position(), 30.0)
+			if selected != null:
+				watch.follow(selected)
+	elif event is InputEventMouseButton and event.button_index == BUTTON_LEFT:
+		if event.pressed and not shop_open and not sim.collapsed:
+			_lmb = true
+			boxing = false
+			box_a = event.position
+			box_b = event.position
+			if event.doubleclick:
+				_select_like(_to_world(event.position))
+				_lmb = false
+		elif not event.pressed and _lmb:
+			_end_box(event.position, event.shift)
+	elif event is InputEventMouseMotion and _lmb:
+		box_b = event.position
+		if (box_b - box_a).length() > 9.0:
+			boxing = true
+	elif event is InputEventMouseButton and event.button_index == BUTTON_RIGHT:
+		if event.pressed:
+			_rmb = true
+			_rmb_moved = false
+			_rmb_pos = event.position
+		elif _rmb:
+			_rmb = false
+			if not _rmb_moved and not shop_open and not sim.collapsed:
+				context_order(_to_world(event.position))
+	elif event is InputEventMouseMotion and _rmb:
+		if event.position.distance_to(_rmb_pos) > 8.0:
+			_rmb_moved = true                   # a right-drag pans the camera; only a plain right-click orders
+	if event is InputEventKey and event.pressed and not event.echo:
 		match event.scancode:
 			KEY_V:
 				set_watch(not watch_mode)
@@ -288,9 +348,15 @@ func _unhandled_input(event: InputEvent) -> void:
 				command("breed", true)
 			KEY_Y:
 				command("strike", true)
+			KEY_Q:
+				release_selection()
+			KEY_TAB:
+				hud.toggle_compact()
 			KEY_ESCAPE:
 				if armed != "":
 					set_armed("")
+				elif not selection.empty():
+					_set_selection([], false)
 				elif watch_mode:
 					set_watch(false)
 				elif hud.is_evolution_open():
@@ -313,7 +379,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				sim.place_beacon(int(floor(get_global_mouse_position().x / sim.grid.CELL)))
 			KEY_G:
 				sim.bless(selected)
-			KEY_O:
+			KEY_I:
 				var shown := 0
 				for g in sim.GOALS:
 					if not sim.goals_done.has(g["id"]) and shown < 3:
@@ -337,6 +403,110 @@ func _unhandled_input(event: InputEvent) -> void:
 				toggle_layer("sound")
 			KEY_L:
 				hud.toggle_evolution()
+
+
+# ---- direct control: selection and orders (orders.gd)
+func _to_world(screen_pos: Vector2) -> Vector2:
+	return get_canvas_transform().affine_inverse().xform(screen_pos)
+
+
+func _end_box(release_pos: Vector2, add: bool) -> void:
+	_lmb = false
+	var was_box = boxing
+	boxing = false
+	if was_box:
+		var wa = _to_world(box_a)
+		var wb = _to_world(release_pos)
+		_set_selection(ant_view.pick_rect(Rect2(wa, wb - wa).abs()), add)
+	else:
+		var a = ant_view.pick(_to_world(release_pos), 30.0)
+		if a != null:
+			_set_selection([a], add)
+		elif not add:
+			_set_selection([], false)
+
+
+# Double-click: every ant on screen of the same caste as the one clicked.
+func _select_like(world_pos: Vector2) -> void:
+	var a = ant_view.pick(world_pos, 30.0)
+	if a == null:
+		return
+	var tl = _to_world(Vector2.ZERO)
+	var br = _to_world(get_viewport().get_visible_rect().size)
+	var out := []
+	for b in ant_view.pick_rect(Rect2(tl, br - tl).abs()):
+		if b.caste == a.caste:
+			out.append(b)
+	_set_selection(out, false)
+
+
+func _set_selection(list: Array, add: bool) -> void:
+	var out := []
+	var ids := {}
+	if add:
+		for a in selection:
+			if sim.ants.has(a) and not ids.has(a.id):
+				ids[a.id] = true
+				out.append(a)
+	for a in list:
+		if add and ids.has(a.id):
+			out.erase(a)               # shift-clicking an ant that is already selected takes it out
+			ids.erase(a.id)
+		elif not ids.has(a.id):
+			ids[a.id] = true
+			out.append(a)
+	selection = out
+	selected = out[0] if out.size() == 1 else null
+	ant_view.sel_ids = ids
+
+
+# The selection without the dead.
+func live_selection() -> Array:
+	var out := []
+	var ids := {}
+	for a in selection:
+		if sim.ants.has(a):
+			out.append(a)
+			ids[a.id] = true
+	if out.size() != selection.size():
+		selection = out
+		ant_view.sel_ids = ids
+		if out.size() != 1 and selected != null and not out.has(selected):
+			selected = null
+	return out
+
+
+# A right-click with ants selected: attack the raider under the cursor, harvest a food pile, dig the soil, or guard / walk to the spot.
+func context_order(wp: Vector2) -> void:
+	var sel = live_selection()
+	if sel.empty():
+		return
+	var g = sim.grid
+	var C = g.CELL
+	var col = int(floor(wp.x / C))
+	var res
+	var foe = ant_view.pick_enemy(wp, 34.0)
+	if foe != null:
+		res = Orders.issue(sim, sel, "attack", foe.x, foe.y, foe.z, foe.id)
+	else:
+		var surf = world_view.ground.smooth_px(col)
+		if wp.y < surf + C * 1.5:
+			var pile_near = false
+			for p in sim.piles:
+				if p["amount"] > 4.0 and abs(p["x"] - col) <= 5:
+					pile_near = true
+					break
+			res = Orders.issue(sim, sel, "harvest" if pile_near else "move", col, g.surf_y(col) - 2)
+		else:
+			var row = int(floor(wp.y / C))
+			var z = 0 if (g.can_walk(col, row, 0) or not g.can_walk(col, row, 1)) else 1
+			res = Orders.issue(sim, sel, "dig" if g.is_solid(col, row, z) else "move", col, row, z)
+	sim.toasts.append({"text": res["msg"], "t": 2.5})
+
+
+func release_selection() -> void:
+	var n = Orders.release(sim, live_selection())
+	sim.toasts.append({"text": ("%d ant%s let go." % [n, "" if n == 1 else "s"]) if n > 0 else "None of the selected ants are under orders.", "t": 2.5})
 
 
 func open_shop() -> void:

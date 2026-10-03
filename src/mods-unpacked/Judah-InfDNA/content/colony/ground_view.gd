@@ -50,6 +50,7 @@ var _vis_f := []             # per slice: visible feature entries
 var _vis_shade := []
 var perf             # perf.gd (optional): scenery detail level
 var day              # day_cycle.gd (optional): the year, which tints the grass, turns the leaves and brings the snow
+var poll_features := true   # rebuild a cached tree or rock whose ground has moved (see _prepare_features)
 var _sk := -1        # season stage the cached scenery was built for: when it changes, chunks and trees are rebuilt a few per frame
 var _P := {}         # the seasonal palette of the build in progress
 
@@ -174,11 +175,19 @@ func _prepare_features(cols: Array, chunk_budget: int) -> void:
 	var budget = 2
 	for f in _flist:
 		var e = _fcache.get(f["id"])
+		# The ground under a cached tree or rock can move: spoil mounds grow, outpost shafts open. Twice a second each one checks that it
+		# still stands on the ground, and is rebuilt (one or two a frame, the old one drawn meanwhile) once it is more than 3 px off.
+		if poll_features and e != null and _t - float(e.get("chk", -9.0)) > 0.5:
+			e["chk"] = _t
+			if abs(_base_point(f).y - float(e.get("by", 0.0))) > 3.0:
+				e["sk"] = -2
 		if e == null or e.get("sk", -1) != _sk:
 			if budget > 0:
 				budget -= 1
 				e = _build_feature(f)
 				e["sk"] = _sk
+				e["by"] = _base_point(f).y
+				e["chk"] = _t
 				_fcache[f["id"]] = e
 			elif e == null:
 				continue

@@ -407,6 +407,76 @@ func _idle(_delta):
 		if d0.file_exists(Wd.PATH + ".bak"):
 			d0.copy(Wd.PATH + ".bak", Wd.PATH)
 			d0.remove(Wd.PATH + ".bak")
+	elif frames == 132:
+		# direct control: drag a box over ants, right-click to order them, Q to free them, Tab for the full screen
+		var Od = load("res://mods-unpacked/Judah-InfDNA/core/orders.gd")
+		sim.raid_queue.clear()
+		for e in sim.enemies.duplicate():
+			sim.enemies.erase(e)
+		var ex2 = int(sim.grid.entrance.x)
+		s.cam.position = sim.grid.center(ex2, int(sim.grid.entrance.y)) + Vector2(0, -60)
+		s.cam.zoom = Vector2.ONE * 0.5
+		s.cam.force_update_scroll()
+		for i in 3:
+			sim.step(0.05)
+		var vp = s.get_viewport().get_visible_rect().size
+		var press = InputEventMouseButton.new()
+		press.button_index = BUTTON_LEFT
+		press.pressed = true
+		press.position = Vector2(4, 4)
+		s._unhandled_input(press)
+		var drag = InputEventMouseMotion.new()
+		drag.position = vp - Vector2(4, 4)
+		s._unhandled_input(drag)
+		_check(s.boxing, "dragging more than a few pixels draws a selection box")
+		var rel = InputEventMouseButton.new()
+		rel.button_index = BUTTON_LEFT
+		rel.pressed = false
+		rel.position = vp - Vector2(4, 4)
+		s._unhandled_input(rel)
+		_check(not s.boxing and s.selection.size() > 0, "releasing the box selects the ants inside it (%d)" % s.selection.size())
+		_check(s.ant_view.sel_ids.size() == s.selection.size(), "every selected ant gets a ring")
+		s.hud._refresh_squad()
+		_check(s.hud._squad_panel.visible and s.hud._squad_label.text.find("selected") >= 0, "the squad bar shows when ants are selected")
+		var ordered_before = Od.count(sim)
+		s.context_order(sim.grid.center(ex2 + 30, sim.grid.surf_y(ex2 + 30) - 10))
+		_check(Od.count(sim) > ordered_before, "a right-click on open ground gives the selection a guard order (%d under orders)" % Od.count(sim))
+		var pile_x = -1
+		for p in sim.piles:
+			if p["amount"] > 10.0:
+				pile_x = int(p["x"])
+				break
+		if pile_x >= 0:
+			var wp = sim.grid.center(pile_x, sim.grid.surf_y(pile_x) - 10)
+			s.context_order(wp)
+			var harvesters := 0
+			for a in s.selection:
+				if a.squad != 0 and sim.squads.has(a.squad) and sim.squads[a.squad]["kind"] == "harvest":
+					harvesters += 1
+			_check(harvesters > 0, "a right-click on a food pile sends the selection to harvest it (%d)" % harvesters)
+		sim.step(0.1)
+		var q = InputEventKey.new()
+		q.scancode = KEY_Q
+		q.pressed = true
+		s._unhandled_input(q)
+		_check(Od.count(sim) == 0, "Q frees the selected ants")
+		var comp = s.hud.compact
+		s.hud.toggle_compact()
+		_check(s.hud.compact != comp and s.hud._dir_panel.visible == (not s.hud.compact), "Tab switches between the clean screen and every panel")
+		s.hud.toggle_compact()
+		_check(s.hud.compact == comp and not s.hud._dir_panel.visible, "...and back to the clean screen")
+		var esc = InputEventKey.new()
+		esc.scancode = KEY_ESCAPE
+		esc.pressed = true
+		s._unhandled_input(esc)
+		_check(s.selection.empty(), "Esc clears the selection")
+		# a bird and a rally flag leave nothing behind on the canvas
+		sim.bird = {"x": float(ex2), "t": 0.1, "cd": 9.0, "dive": 0.0, "alt": 0.5, "face": 1, "kills": 0}
+		s.pview._process(0.05)
+		_check(s.pview._was, "a bird in the air is drawn")
+		sim.bird = null
+		s.pview._process(0.05)
+		_check(not s.pview._was, "the frame after the bird leaves is drawn once more (so it does not stay frozen on screen)")
 	elif frames == 140:
 		print("RESULT %d failed" % fails)
 		quit(1 if fails > 0 else 0)

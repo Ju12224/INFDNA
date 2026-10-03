@@ -179,10 +179,24 @@ func step(sim, dt: float) -> void:
 					sim.toasts.append({"text": "The %s live %d cells %s of the nest. They will raid you; Strike (Y) when you are ready to break them." % [name, d, where(sim)], "t": 10.0})
 				sim._sfx("boss")
 				break
-	if sim.strike_t > 0.0:
+	if sim.strike_t > 0.0 or _party_at_mound(sim) >= 5:
 		_strike(sim, dt)
 	elif guards_out and not _guards_alive(sim):
 		guards_out = false
+
+
+# Five or more ants under the player's own guard or attack order standing at the mound are a strike party just as the Strike power's is: the guards
+# come out and, with them down, the party storms the mound (no Will needed: sending them is the player's call).
+func _party_at_mound(sim) -> int:
+	if sim.squads.empty():
+		return 0
+	var n := 0
+	for a in sim.ants:
+		if a.squad != 0 and abs(a.x - x) <= 26 and not sim.grid.is_under(a.x, a.y):
+			var sq = sim.squads.get(a.squad)
+			if sq != null and (sq["kind"] == "move" or sq["kind"] == "attack"):
+				n += 1
+	return n
 
 
 func _guards_alive(sim) -> bool:
@@ -213,7 +227,7 @@ func _strike(sim, dt: float) -> void:
 			sim._spawn_enemy("redsoldier", side, x + sim.rng.randi_range(-5, 5), x)
 		for i in soldiers * 2:
 			sim._spawn_enemy("redant", side, x + sim.rng.randi_range(-6, 6), x)
-		sim.banner = "The %s's guards pour out of the mound!" % name
+		sim.banner = "The %s guards pour out of the mound!" % (name + ("'" if name.ends_with("s") else "'s"))
 		sim.banner_t = 4.0
 		sim._sfx("raid")
 		return

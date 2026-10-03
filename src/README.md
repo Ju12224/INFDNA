@@ -1,4 +1,34 @@
-# InfDNA (Brotato mod) - v0.30.0
+# InfDNA (Brotato mod) - v0.31.0
+
+## v0.31.0 - you command the ants, a clean screen, and the first real playtest's bugs
+The first playtest in Brotato reported: trees and objects floating or in the wrong place, a bird frozen in the air, too many menus, and "I should be able to select
+areas and command ants, not just tap a button".
+- **Drag to select, right-click to order.** Drag a box over ants (underground too) to select them (white rings; Shift adds, double-click takes every ant of that caste on
+  screen, click an empty spot or Esc clears). Then **right-click**: on open ground = *guard* that spot (they walk there, hold it and go for anything that comes near);
+  on a food pile = *harvest* it, trip after trip, until it is empty; on a raider = *attack* it, then guard where it fell; on soil = *dig* a tunnel toward that spot (a
+  real planner job: the squad bores it, other diggers help, and the spoil is hauled out); on an open tunnel or chamber underground = *move* there. A plain right-click
+  orders; right-drag still pans the camera. **Q** frees the selected ants (Free button too). Ants under an order wear a coloured ring (blue guard, red attack, gold
+  harvest, brown dig). Orders cost nothing (the Will meter still pays for the colony-wide powers). They give way by themselves, and come back, while raiders are inside
+  the nest, the queen is badly hurt or a Recall is running; carriers are skipped by orders that would make them drop their load; a flag (Rally, Strike) does not call
+  ordered ants away; a finished order (pile empty, tunnel dug) frees its squad. A toast warns when the larder is nearly empty while ants are under orders.
+- **A clean screen.** By default only the colony card (food, queen, ants), the raid timer, the minimap, speed, Lab and Menu are up, plus a bar for the selected ants.
+  **Tab** (or the Panels button) brings back everything: body plans, powers, focus and brood, layers, the full colony card. The hint line is two short lines now.
+- **Frozen things fixed.** Four views (the bird, the rally flag and harvest marker, falling leaves and petals, rain and snow) stopped redrawing when they went quiet, and a
+  Godot canvas keeps its last drawing until it is told to redraw: the bird that left, the leaf that stopped falling and the raindrops of a finished shower all stayed
+  painted on the screen. Each now draws one more (empty) frame. A bird hovering over its prey also wheels about now instead of hanging still.
+- **Trees and rocks that follow the ground.** Cached scenery was built once and never checked again, so a spoil mound or an outpost shaft that changed the ground left it
+  floating or buried. Each one now checks twice a second and is rebuilt (the old one drawn meanwhile) once it is more than 3 px off. I could not make the floating happen
+  in my own tests (the headless check found no mismatch), so if you still see it, a screenshot would tell me which kind it is.
+- **Ants trapped in pockets.** A gap in the rim of a big chamber can cut a pocket off from every tunnel; an ant standing in one never foraged, dug or fought again. In
+  one test run six ants were found trapped in seven minutes (founders were even placed there). Ants in such a pocket are now carried to the nearest connected cell, and new
+  founders are never placed in one.
+- **Keys:** O was both "show goals" and "sound": the goals shadowed the sound key, so O never muted anything (the button did). Goals are I now. New: Tab, Q; Esc clears the
+  selection first.
+- **Robustness tooling** (`src/tests-v023/`): `invariants.gd` runs a long sim with a random player (orders, powers) and checks that nothing leaves the world or the soil, no
+  NaN, no ant or raider stuck for no reason, a bird that moves, squads that refer to real orders; `orders_test.gd` covers every order; `fuzz.gd` now also throws random
+  drag-boxes, right-clicks and releases at the scene; `layers_smoke.gd` covers box select, right-click, Q, Tab and the bird's last frame.
+- **Not verified:** none of this has been played in Brotato (its own input handling, the drag-box and right-click on your mouse, the clean screen at your resolution).
+  The headless checks pass and a render of the clean screen at 1920x1080 and 2560x1080 looks right.
 
 ## v0.30.0 - the Wild: the colony you lost is the enemy you meet next
 **Why this direction.** Evolving ants and a shop between raids are not new: SuperColony (Steam) already has an ant colony, DNA to collect and roguelite runs, and Ants in

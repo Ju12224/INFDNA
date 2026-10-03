@@ -22,6 +22,7 @@ const Queens = preload("res://mods-unpacked/Judah-InfDNA/core/queens.gd")
 const WF = preload("res://mods-unpacked/Judah-InfDNA/core/world_features.gd")
 const Seasons = preload("res://mods-unpacked/Judah-InfDNA/core/seasons.gd")
 const Legacy = preload("res://mods-unpacked/Judah-InfDNA/core/legacy.gd")
+const Orders = preload("res://mods-unpacked/Judah-InfDNA/core/orders.gd")
 const Rival = preload("res://mods-unpacked/Judah-InfDNA/core/rival.gd")
 
 enum Task { NURSE, FORAGE, DIG, HOME, DEFEND }
@@ -101,6 +102,7 @@ class Ant:
 	var dump_x := 0
 	var dump_set := false
 	# organ abilities (v0.21)
+	var squad := 0           # the player's order this ant is under (orders.gd): 0 = free
 	var rally_k := 1.0
 	var cd_pulse := 0.0
 	var cd_arc := 0.0
@@ -374,6 +376,11 @@ var _champ_n := 0
 # this colony's own fall has been written into the Wild yet (the collapse screen does that once).
 var kin := {}
 var wild_saved := false
+# Squad orders (orders.gd): id -> {"kind", "x", "y", "z", "ref", "job", "field", "under"}
+var squads := {}
+var squad_seq := 1
+var _squad_t := 1.0
+var _squad_warned := false
 
 
 func _init(seed_value: int = 0, queen_id: String = "well_rounded", heirloom_in: Dictionary = {}, kin_in: Dictionary = {}) -> void:
@@ -425,7 +432,8 @@ func _init(seed_value: int = 0, queen_id: String = "well_rounded", heirloom_in: 
 	for i in 8:
 		grid.deposit(ex + (i % 2 * 2 - 1) * rng.randi_range(2, 5), grid.open_under * SPOIL_KEEP / 8.0, rng)
 	grid.rebuild_nav()
-	toasts.append({"text": "You direct the colony: R rally flag   E harvest a pile   Z recall   J surge   M breed   (cursor = target)   B beacon   G mutagen", "t": 14.0})
+	toasts.append({"text": "Drag a box over ants to select them, then right-click: guard a spot, harvest a pile, attack a raider, dig soil.", "t": 16.0})
+	toasts.append({"text": "Powers: R rally, E harvest, Z recall, J surge, M breed (Tab shows them). Q frees selected ants.", "t": 16.0})
 	if not heirloom.empty():
 		toasts.append({"text": "Heirloom from %s: %s." % [heirloom.get("from", "a past colony"), str(heirloom.get("label", "")).to_lower()], "t": 12.0})
 
@@ -730,6 +738,7 @@ func _step_weather(dt: float) -> void:
 
 
 func _step_extras(dt: float) -> void:
+	Orders.step(self, dt)
 	rival.step(self, dt)
 	_step_seasons(dt)
 	_step_weather(dt)
@@ -1062,7 +1071,7 @@ func _call_up(frac: float) -> void:
 	var want = int(ants.size() * frac)
 	var order := []
 	for a in ants:
-		if a.carry <= 0.0:
+		if a.carry <= 0.0 and a.squad == 0:          # an ant under the player's own order is not called away by a flag
 			order.append(a)
 	order.sort_custom(self, "_rally_order")
 	var n := 0
@@ -1195,6 +1204,8 @@ func _p(s: float, t: float) -> float:
 
 
 func _choose_task(a) -> void:
+	if a.squad != 0 and Orders.choose(self, a):
+		return
 	a.timer = 0.0
 	if recall_t > 0.0 and a.caste != 2 and _stim_defend <= 0.0:
 		a.task = Task.NURSE      # recalled: stay in the nest until the order lapses
@@ -1350,6 +1361,44 @@ func _footing_fix(u, dt: float) -> void:
 		u.t = 0.0
 
 
+# A walkable cell that no tunnel leads out of (a gap in the rim of a big chamber cuts a pocket off) holds an ant for ever: it cannot reach the
+# way out, so it never forages, digs or fights. Such an ant is carried to the nearest cell that is connected. (Found by the invariants test: three
+# of thirteen ants near the queen's chamber were in a pocket.)
+var rescued := 0
+
+
+func _rescue(u) -> void:
+	if grid.nav_dirty or grid.dist_exit.size() != grid.PLANES * grid.WH:
+		return
+	if not grid.can_walk(u.x, u.y, u.z) or grid.field(grid.dist_exit, u.x, u.y, u.z) >= 0:
+		return
+	var best = null
+	var bd = 1e9
+	for pz in [u.z, 1 - u.z]:
+		for r in range(1, 17):
+			for yy in range(u.y - r, u.y + r + 1):
+				for xx in range(u.x - r, u.x + r + 1):
+					if max(abs(xx - u.x), abs(yy - u.y)) != r or not grid.can_walk(xx, yy, pz) or grid.field(grid.dist_exit, xx, yy, pz) < 0:
+						continue
+					var d = (xx - u.x) * (xx - u.x) + (yy - u.y) * (yy - u.y)
+					if d < bd:
+						bd = d
+						best = Vector3(xx, yy, pz)
+			if best != null:
+				break
+		if best != null:
+			break
+	if best != null:
+		u.x = int(best.x)
+		u.y = int(best.y)
+		u.z = int(best.z)
+		u.tx = u.x
+		u.ty = u.y
+		u.tz = u.z
+		u.t = 0.0
+		rescued += 1
+
+
 func _step_ant(a, dt: float) -> void:
 	a.age += dt * _s_age
 	a.hurt = max(0.0, a.hurt - dt)
@@ -1361,6 +1410,8 @@ func _step_ant(a, dt: float) -> void:
 	# footing check staggered over 5 ticks (the rescue itself waits 0.5 s anyway)
 	if (_tick_n + a.id) % 5 == 0:
 		_footing_fix(a, dt * 5.0)
+	if (_tick_n + a.id) % 40 == 0:
+		_rescue(a)
 
 	# smooth body rotation toward the local ground normal
 	# (in a narrow tunnel floor and ceiling nearly cancel; one extra ceiling cell used to
@@ -1440,6 +1491,8 @@ func _on_arrive(a) -> void:
 			_go(a, Vector2(a.x, a.y + 1))
 		return
 
+	if a.squad != 0 and Orders.obey(self, a):
+		return
 	match a.task:
 		Task.FORAGE:
 			_forage(a)
@@ -1664,6 +1717,8 @@ func _start_trip(a) -> void:
 		if _scouting:
 			# scouts range far whether or not nearer food exists: long-tailed radius, 150..RANGE_MAX
 			a.search_r = int(min(RANGE_MAX, max(a.search_r, 150 + int(-log(max(0.001, rng.randf())) * 420.0))))
+	if a.squad != 0:
+		Orders.trip(self, a)
 
 
 # Recruitment: a forager setting out is often told about a pile some nestmate has already found and that still holds
@@ -1762,10 +1817,16 @@ func _dig(a) -> void:
 		return
 	var job = planner.job_by_id(a.job_id) if a.job_id != 0 else null
 	if job == null:
-		job = planner.pick_job(a.genome.traits["dig_down"])
-		if job == null:
-			a.task = Task.NURSE
-			return
+		if a.squad != 0 and Orders.is_dig(self, a):
+			job = planner.job_by_id(Orders.job_of(self, a))          # a squad digs its own tunnel, and is let go when it is done
+			if job == null:
+				Orders.complete(self, a.squad, "The dig is done: the diggers are free.")
+				return
+		else:
+			job = planner.pick_job(a.genome.traits["dig_down"])
+			if job == null:
+				a.task = Task.NURSE
+				return
 		a.job_id = job["id"]
 	var t = planner.target(job)
 	if t == null:
@@ -1893,7 +1954,7 @@ func _random_home_cell() -> Vector2:
 	var cells := []
 	for y in range(int(grid.chamber.y - 6), int(grid.chamber.y + 6)):
 		for x in range(int(grid.chamber.x - 10), int(grid.chamber.x + 11)):
-			if grid.can_walk(x, y) and grid.field(grid.dist_home, x, y) == 0:
+			if grid.can_walk(x, y) and grid.field(grid.dist_home, x, y) == 0 and (grid.dist_exit.empty() or grid.field(grid.dist_exit, x, y) >= 0):
 				cells.append(Vector2(x, y))
 	return cells[rng.randi_range(0, cells.size() - 1)] if cells.size() > 0 else grid.chamber
 
@@ -2329,7 +2390,7 @@ func _step_raids(dt: float) -> void:
 		if _raid_rival:
 			_raid_rival = false
 			rival.power = max(1.0, rival.power - 5.0)
-			toasts.append({"text": "The %s's raid broke against your defenders: they have lost heart." % rival.name, "t": 6.0})
+			toasts.append({"text": "The %s raid broke against your defenders: they have lost heart." % (rival.name + ("'" if rival.name.ends_with("s") else "'s")), "t": 6.0})
 		adapt[2] = {"left": 8, "bias": {"armor": 1.6, "spike": 1.0, "claw": 1.2, "size": 1.0}}
 		toasts.append({"text": "The survivors breed hardier soldiers: armor, spikes, claws.", "t": 6.0})
 		if raids_repelled % 2 == 0 and mutagen < 3:

@@ -11,16 +11,24 @@ var ground
 var day
 var perf
 var _t := 0.0
+var _was := false
 
 
 static func _h(a: float, b: float = 0.0) -> float:
 	return fmod(abs(sin(a * 12.9898 + b * 78.233) * 43758.5453), 1.0)
 
 
+func _active() -> bool:
+	return day != null and (day.rain > 0.02 or day.wet > 0.04 or day.snow > 0.05)
+
+
 func _process(delta: float) -> void:
 	_t += delta
-	if day != null and (day.rain > 0.02 or day.wet > 0.04 or day.snow > 0.05):
+	var on = _active()
+	# (a canvas keeps its last drawing until update() is called again, so the frame after it goes quiet must be drawn too, or the last bird / flag / leaf / raindrop stays frozen on screen)
+	if on or _was:
 		update()
+	_was = on
 
 
 # Puddles: shallow shiny pools on the open ground that outlast the rain and slowly dry. Each reflects the sky and gets
@@ -90,7 +98,7 @@ func _ellipse(c: Vector2, rx: float, ry: float, col: Color) -> void:
 
 
 func _draw() -> void:
-	if day == null or cam == null:
+	if day == null or cam == null or not _active():
 		return
 	var vp0 = get_viewport_rect().size
 	var c0 = cam.get_camera_screen_center()
