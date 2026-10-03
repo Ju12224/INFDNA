@@ -12,7 +12,7 @@ const NOTES = [
 	"Spring: the thaw. Food returns and the queen lays faster.",
 	"Summer: steady food. Keep an eye on the sky.",
 	"Autumn: a glut of rich food. Fill the larder before winter!",
-	"Winter: hardly any food on the surface and everyone eats a little more, but the ants huddle and age slowly. Live off your stores.",
+	"Winter: next to no food outside; the ants huddle and age slowly. Live off your stores.",
 ]
 
 

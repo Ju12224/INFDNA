@@ -1,4 +1,105 @@
-# InfDNA (Brotato mod) - v0.28.0
+# InfDNA (Brotato mod) - v0.29.0
+
+## v0.29.0 - a year of seasons, a rival nest, an anteater, heirlooms, living gardens, sound, and a graphics pass
+Compile-checked; `src/tests-v023/layers_smoke.gd` passes (it now also covers items, seasons, heirlooms, the anteater, the rival and the
+gardens); rendered headless under Xvfb (software GL) and fuzzed (random seasons, times of day, weather, watch mode); balance-probed
+(8 seeds x 30 and 42 sim-minutes, see "Balance" below). NOT playtested in Brotato by a person (see "Not verified" at the end of this section).
+New keys: **O** (sound on/off) and **Y** (send the strike party). The hint line at the bottom of the screen lists all of them.
+
+### Seasons (`core/seasons.gd`)
+A year is 20 minutes of colony time: five minutes each of spring, summer, autumn and winter, and a run starts at the start of spring. The
+current season is in the header line under the title (day, season, generation, time of day); a toast announces each one and autumn ends with a minute's warning before winter.
+| Season | wild food piles | richer piles | fruit trees drop | the colony eats | queen lays | raids | ants walk | what you see |
+|---|---|---|---|---|---|---|---|---|
+| Spring | x1.25 | | x0.8 | | x1.1 | | | thaw, blossom on the trees, flowers in the meadow |
+| Summer | x1.0 | | x1.0 | | x1.0 | | | deep green, warm light |
+| Autumn | x1.35 | x1.3 | x1.8 | | x0.95 | | | straw grass, leaves turn gold, orange and red and fall |
+| Winter | x(1-0.92w) | | x(1-0.9w) | +30% w | -20% w | -35% w | -15% w | bare branches, snow on ground, bushes and rocks, snowfall |
+
+`w` is how hard winter grips (0 to 1 over the season) times the winter's *severity*: the first winter is mild (0.55), the second 0.8, the
+third and later ones 1.0. In winter the ants also huddle and **age at up to half speed** (without this a lean winter was a double cull:
+the queen stops laying and every ant dies of old age four minutes later). Autumn is the glut; fill the larder. Living through a winter is
+counted on the run summary and earns two run goals. The year changes everything you look at: the meadow, the trees (bud, blossom, turn,
+shed, bare), the distant fields, forest, hedges and peaks, the sky tint and the light colour. A change of season never shows as a hitch:
+the cached scenery is rebuilt a piece per frame in the background (the old look stays on screen until the new one is ready).
+
+### The rival colony and the Strike command (`core/rival.gd`, `content/colony/rival_view.gd`)
+A neighbouring nest of red ants sits on the open ground 80-110 cells from yours, east or west (a dark mound, its own hole and a flag, and a
+few of its ants going about their business). **Every third raid is theirs**: the red raiders march out of their own mound, so you see them
+coming, and a raid that breaks against you costs them strength. Their strength grows with time. Your foragers find the mound as they range
+(a toast and a banner say where, and the minimap marks it). Then you can **Strike (Y, 35 Will, 75 s recharge)**: half the colony, soldiers
+first, marches to the nest. Their guards pour out (2 to 8 red soldiers and twice as many red ants, more as they grow); with the guards down
+the party storms the mound (its health bar is above it). If you win, the colony is broken for five minutes (no raids from it), you carry off
+its stores (a good pile of food) and a mutagen, and its strength halves; it rebuilds afterwards. The party will not march out of a nest with
+raiders inside or a hurt queen.
+
+### The anteater (predator two)
+From minute ten, and only once the colony has 70+ ants, a shaggy giant lumbers in from the edge of the meadow about every nine to twelve
+minutes, sieges the entrance and licks one to three ants at a time off the ground in front of it (a long pink tongue; three at once only
+when a crowd is packed in front of it). It is slow, bites weakly, and has a lot of health that grows with the colony (400 + 6.5 per ant). Rally
+the soldiers to the entrance (R), Recall the foragers (Z); killing it pays food and a mutagen. Drawn procedurally: long snout, bushy tail,
+the shoulder stripe, shuffling walk. (An earlier version scaled with the raid count, so a late anteater could not be killed at all; and its
+first visit at minute eight cost a colony 15-45% of its ants. Both fixed.)
+
+### Heirlooms: legacy between runs (`core/legacy.gd`)
+When a colony falls, its champion body plan (the one that once outnumbered the others) can hand ONE trait down to the next queen: a
+first-tier organ, a part form, an anatomy gene, an extra pair of legs, plating, spines, a little more size, an instinct nudge, or plain
+"veteran stock" (+6% health and attack). The collapse screen offers the two most remarkable; the choice is kept in
+`user://infdna_legacy.json`, **every founder ant of the next colony is born with it**, and the queen select screen shows it with a switch to turn it off.
+If the file cannot be read or written the game simply has no heirloom.
+
+### Fungus gardens that live (`world_view._draw_fungus`, `colony_sim._step_gardens`)
+A garden is now drawn as a leafcutter-style comb (a bed of chewed pulp, a pale lumpy body with galleries, food bulbs, white threads) instead of
+cartoon mushrooms. A new garden starts as a bed of pulp with threads and **matures over about 2.5 minutes** (a young one gives a quarter of
+its food); now and then (every 3 to 6 minutes) **mould** gets into one: a warning sign over the nest, green fuzz creeping over the comb, up to
+80% less food. Nurses weed it out, faster with more nurses per garden. New Lab item **Metapleural Glands** (the antibiotic glands real ants carry): mould is rarer
+and weeded out faster (stacks twice).
+
+### Director items: eleven new Lab items for the Will meter
+Queen's Whisper, Deep Reserve, Pheromone Choir, Frugal Orders, War Standard, Honey Trail, Scarecrow (fewer, shorter bird visits), Adrenal Glands,
+Stud Book, the legendary Hive Voice, and the black-market Puppet Strings (strong now, the ants eat more later). The Director panel shows
+the effective cost and recharge of every command, and its tooltips say which items change it.
+
+### Sound (`content/colony/ambience.gd`, key O)
+No sound files needed: the ambience is synthesised sample by sample while it plays and mixed quietly into Brotato's own "Sound" bus (so the game's volume
+settings apply). Wind over the meadow (stronger in winter and in rain), the hush of rain and snow, birdsong by day in the mild seasons,
+crickets after dark, and a low murmur of earth with the odd drip once the camera is underground. O (or the Sound button in the layer row) mutes it.
+
+### Graphics and animation pass
+- **Soil**: strata now bend smoothly (no per-column stairs); round grains instead of square speckle; pebble layers no longer shear into streaks at layer borders;
+  organic holes in the rear wall; stones keep one smooth tint (the "+" seams are gone).
+- **Brood** shows egg, wriggling grub, then a silk cocoon that darkens and twitches before the ant hatches. Scent trails are a smooth ribbon with beads
+  drifting toward the nest. The mound is shaded from the upper right, with clods.
+- **Trees** sway in the wind (more in rain), with a rounder canopy, warm bark light, tidier moss and knots. Cloud shadows drift over the meadow, and puddles
+  stay after rain and ripple while it falls.
+- **Ground critters**: ladybirds, snails (out in the rain, leaving a slime trail), caterpillars and hopping grasshoppers.
+- **Caste badges** keep a constant screen size and sit just above the head; the right-hand HUD panels clear the depth bar.
+- **New creature art**: the anteater, the red ants (three sizes) and a rebuilt bird wing.
+- **Fix:** the bird's wing polygon crossed itself in some poses, so Godot refused to draw it (a silent "triangulation failed"); found by a fuzz run with
+  a validator that reports every polygon Godot rejects. It is now a guaranteed-simple outline and the fuzz runs clean.
+
+### Balance: what the probe found, and what changed
+The balanced bot (it buys sensibly but knows nothing of seasons, the Director or the rival) was run on 8 seeds for 30 sim-minutes, and
+three colonies were down to 35 ants or fewer by minute 20 and never recovered, all starting just as the first winter set in. Chased through traces rather than by tuning numbers:
+- **A far-away hostile locked the colony on guard.** A cave spider (a discovered cave can send one after your scouts) was still 450-650 cells out
+  and walking home at 2.8 cells a second, but the colony answered it as if it were at the door: 88 of 124 ants stood guard for over a minute, the
+  food runs stopped, the larder went from 396 to 0 and the colony could not recover. The defend response now only counts hostiles within 240 cells of the
+  entrance or underground (the threat field only reaches 260 anyway); raids, bosses and the rival's guards all appear well inside that range, so
+  nothing else changes. (`ALERT_RANGE`, `_alerts` in `colony_sim.gd`).
+- **Winter was a double cull**, see the ageing note above.
+- **The anteater** was retuned (see above).
+
+**Measured after the fixes** (same 8 seeds, balanced bot): at 30 minutes, 8 of 8 colonies alive with 71-183 ants (before the fixes 5 of 8). At 42 minutes, five colonies healthy (89-226 ants), one overrun by raids at minute 33, one lost its queen at minute 41, one down to
+23 ants at raid 26. **Nobody starved in any run**: the colonies that fell were overrun by raids (raids 23-28, 50+ raiders on the field), which is the late-game end
+the raids were built for (v0.27). The first winter is a non-event for the bot (160-205 ants at its end), the second dented a few colonies and starved none. A bot keeps a
+perfect larder; a person may not, and may find winters toothless or brutal, which is exactly what I cannot tell from here. Probes are noisy (changing any timer shifts
+every random draw), so read these as rough counts, not guarantees.
+
+### Not verified (what I could not test from here)
+Nothing here has been played by a person in Brotato. Not checked: Brotato's own font and the HUD scaling inside Brotato's viewport, the item icons
+for the new Lab items (they reuse icon names the mod already used), the frame rate on a real graphics card with the multiplying light and the extra
+scenery, the sound (only the synthesis code was exercised, nobody has listened), and whether the pacing is fun. Fungus and aphid farming with
+real Brotato art is still waiting for the list of Brotato's files (`tools/list_brotato_pck.py`); the gardens use procedural drawings for now.
 
 ## v0.28.0 - you direct the colony (Will, five commands, a bird)
 The game was boring to just watch, so the player now has a permanent job. **Will** (the gold bar in the Director panel, right side) fills

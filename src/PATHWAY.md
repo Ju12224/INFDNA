@@ -150,3 +150,30 @@ results are deterministic per seed, so A/B a change on the same seeds.
 
 ## M6 - Run structure + polish   (brief step 4)
 - Run goals, queen unlocks, save/load; HUD pass at 1280x720 (v0.25: HUD scales below 1080p); surface life (day/night: done in v0.25, next: night raids, nocturnal prey).
+
+### v0.29 notes (seasons, rival nest, anteater, heirlooms, gardens, sound)
+- Seasons (`core/seasons.gd`): every number the sim and the views use for the year is one pure function of the colony clock, so nothing needs
+  saving and a test can ask "what is winter doing at t = 1010". A season is 300 s, a year 1200 s; winters get colder (severity 0.55, 0.8, 1.0).
+  The views rebuild their cached scenery a piece per frame when the season stage (year phase x 16) changes (stale-while-revalidate).
+- Rival colony (`core/rival.gd`): pure data plus a step; the sim owns its raiders (every third raid, `_raid_rival`) and the strike party is
+  the rally flag planted at its mound (`strike_t`), so the strike reuses the rally code. Guards are ordinary raiders with `guard_x` set.
+- Anteater: a boss that is not in the raid roster (own timer, own hit points: 400 + 6.5 per ant). Lesson: anything that scales with `raid_n`
+  becomes unkillable late, so a one-off boss needs its own scaling.
+- Legacy (`core/legacy.gd`): one trait handed to the next founders, kept in `user://infdna_legacy.json`; optional and failure-proof.
+- Gardens (`_step_gardens`): age gives growth (150 s to full), a timer picks a garden for mould, nurses per garden weed it out.
+  Wanted next: leaf pieces carried down by ants, a gardener caste, aphids, and Brotato's own art (waiting for the file list).
+- Sound (`content/colony/ambience.gd`): synthesised in `_process` into an `AudioStreamGenerator` on the "Sound" bus. Nobody has listened to it yet.
+
+### Balance findings (v0.29, balanced bot, 8 seeds x 30-42 min)
+First run of the full build: 3 of 8 colonies were down to 35 ants or fewer by minute 20 and never recovered, all starting as the first winter set in, none because of the winter's food alone.
+Traces of single runs found the causes (the way the v0.26 walking bug was found): (1) the defend response counted every hostile anywhere, so a cave spider
+still 450-650 cells away held 88 of 124 ants on guard and the larder went from 396 to 0 (now only hostiles within `ALERT_RANGE` = 240 cells of the entrance, or
+underground, count); (2) with ~4-minute lifespans a pause in laying is lethal on its own, and winter pauses laying, so winter now slows ageing
+(`Seasons.age_k`, down to half). Lessons: ants live 4-5 minutes, so the colony is a conveyor belt and any lasting stop in laying halves it;
+raids are time-driven and sized by colony only down to 0.85x, so a colony that falls under ~70 ants around raid 10 cannot come back
+(a softer floor on raid size for small colonies is the next lever if this turns out too harsh for a person).
+Probe scripts: `bal8.gd` style (one TL row per sim-minute: ants, food, eggs, raid, hostiles, queen hp, tasks, deaths); for a collapse, print the enemy list and
+the ledger every 5-10 sim-seconds around it.
+Measured after these fixes (same 8 seeds): 30 min 8 of 8 alive (71-183 ants); 42 min five healthy, one overrun at minute 33 (raid 23), one lost its queen at minute 41, one at 23 ants;
+zero starvation deaths in any run, and the first winter is a non-event for the bot (160-205 ants at its end, larders from 7 to 1314 food). If playtests find winters toothless,
+raise `Seasons.severity` or cap the larder; if they find them brutal, soften the upkeep bump (`Seasons.upkeep_k`).
