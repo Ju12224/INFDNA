@@ -2725,6 +2725,8 @@ func _spawn_enemy(kind: String, side: int, from_x: int = 0, guard_at: int = 0) -
 			e.max_hp *= clamp(ants.size() / 70.0, 0.55, 1.0)   # a small colony faces a weaker borer
 	if kind == "anteater":
 		e.max_hp = (400.0 + 6.5 * ants.size()) * fate.raider_hp_mult      # it grows with the colony, not with the raid count
+	if d.has("critter"):
+		e.max_hp = d["hp"]                    # meadow critters stay small whatever the raid count
 	e.hp = e.max_hp
 	e.heading = -side
 	e.facing = e.heading
@@ -2843,10 +2845,10 @@ func _enemy_arrive(e) -> void:
 		return
 
 	if e.cls == "prey":
-		var near = _nearest_surface_ant(e.x, 6)
+		var near = _nearest_surface_ant(e.x, 4 if e.def.has("critter") else 6)
 		if near != null:
 			_set_heading(e, -1 if near.x > e.x else 1)
-		elif rng.randf() < 0.04:
+		elif rng.randf() < (0.02 if e.def.has("critter") else 0.04):
 			e.heading = -e.heading
 		if e.x <= grid.arena_l + 3 or e.x >= grid.arena_r - 3:
 			e.heading = 1 if e.x <= grid.arena_l + 3 else -1
@@ -3007,6 +3009,7 @@ func _nearest_surface_enemy(x: int, max_d: int):
 	return best
 
 
+const COMBAT_BUCKET = 96.0         # px: ants are bucketed by x for the combat step
 const FIGHT_LANE = 0.78            # the depth lane an engaged raider is drawn in, and the ants fighting it with it
 
 
@@ -3019,6 +3022,7 @@ func _combat(dt: float) -> void:
 	var apos := PoolVector2Array()
 	var max_k2 := 1.0
 	var apos_n := -1
+	var buckets := {}
 	for e in enemies.duplicate():
 		e.engaged = false
 		if e.state == 2:
@@ -3027,9 +3031,18 @@ func _combat(dt: float) -> void:
 			apos_n = ants.size()
 			apos = PoolVector2Array()
 			max_k2 = 1.0
+			buckets = {}
+			var bi := 0
 			for a0 in ants:
-				apos.append(ant_pos(a0))
+				var p0 = ant_pos(a0)
+				apos.append(p0)
 				max_k2 = max(max_k2, a0.ph.get("reach2", 1.0))
+				var bk0 = int(floor(p0.x / COMBAT_BUCKET))
+				if buckets.has(bk0):
+					buckets[bk0].append(bi)
+				else:
+					buckets[bk0] = [bi]
+				bi += 1
 		var ep = enemy_pos(e)
 		var reach = EnemyDefs.REACH[e.cls] * grid.CELL
 		var r2 = reach * reach
@@ -3039,13 +3052,20 @@ func _combat(dt: float) -> void:
 		var target = null
 		var td = 1e12
 		var dmg_in := 0.0
-		for ai in apos_n:
+		# only the ants in the stretches of ground within reach (ants bucketed by x once per tick), not the whole colony
+		var near_idx := []
+		for bk in range(int(floor((ep.x - far) / COMBAT_BUCKET)), int(floor((ep.x + far) / COMBAT_BUCKET)) + 1):
+			if buckets.has(bk):
+				near_idx += buckets[bk]
+		for ai in near_idx:
 			var a = ants[ai]
 			if a.z != e.z:
 				continue   # a wall of dirt between them
 			var apx = apos[ai]
 			if abs(apx.x - ep.x) > far:
 				continue
+			if e.def.get("fly", false) and e.cls == "prey" and a.ph["wings"] <= 0:
+				continue   # a butterfly is out of reach of anything without wings
 			var d = apx.distance_squared_to(ep)
 			if d <= ar2 * a.ph.get("reach2", 1.0):
 				var w = (1.0 + mod("defend_attack")) if a.task == Task.DEFEND else (0.8 if e.cls == "prey" else 0.3)
@@ -3750,7 +3770,43 @@ func _drop_fruit(x: int) -> void:
 	piles.append({"x": x, "amount": 9.0, "max": 36.0, "kind": "fruit"})
 
 
+# The meadow's small life: ladybirds, snails, caterpillars, grasshoppers and butterflies are real prey now (v0.35), not scenery, so any
+# of them can be attacked (by an order or by a forager that comes across it). They never bite back; they run from ants and wander.
+# The population follows the size of the explored meadow, the season (none in winter, snails in the rain, butterflies in summer).
+var _critter_t := 8.0
+
+
+func _step_critters(dt: float) -> void:
+	_critter_t -= dt
+	if _critter_t > 0.0:
+		return
+	_critter_t = rng.randf_range(4.0, 9.0)
+	var n := 0
+	for e in enemies:
+		if e.def.has("critter"):
+			n += 1
+	var winter = Seasons.snow(time) > 0.5
+	var width = grid.arena_r - grid.arena_l
+	var want = 0 if winter else int(clamp(width / 70, 3, 14))
+	if n >= want:
+		return
+	var w = [3.0, 1.0 + 6.0 * rain, 2.0, 2.5, 2.0 * (1.0 - rain), 1.5 * (1.0 - rain)]
+	var kind = _weighted(EnemyDefs.CRITTERS, w)
+	var ex = int(grid.entrance.x)
+	var x = ex
+	for tries in 6:
+		x = rng.randi_range(grid.arena_l + 6, grid.arena_r - 6)
+		if abs(x - ex) > 18:
+			break
+	_spawn_enemy(kind, -1 if rng.randf() < 0.5 else 1, x)
+	var c = enemies.back()
+	c.heading = -1 if rng.randf() < 0.5 else 1
+	c.facing = c.heading
+	c.lane = rng.randf_range(0.15, 0.95)
+
+
 func _step_prey(dt: float) -> void:
+	_step_critters(dt)
 	_prey_timer -= dt
 	if _prey_timer > 0.0:
 		return
@@ -3758,7 +3814,7 @@ func _step_prey(dt: float) -> void:
 	_prey_timer = rng.randf_range(35.0, 70.0) / pb
 	var n := 0
 	for e in enemies:
-		if e.cls == "prey":
+		if e.cls == "prey" and not e.def.has("critter"):
 			n += 1
 	if n < 2 + int(pb - 1.0 + 0.5):
 		_spawn_enemy("looter", -1 if rng.randf() < 0.5 else 1)

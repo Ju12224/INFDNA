@@ -14,6 +14,7 @@ var sim
 var cam
 var ground
 var perf
+var live_critters := true   # the sim spawns the meadow's critters as prey (colony_sim._step_critters); the old drawn-only ones stay off
 var day              # day_cycle.gd (optional): at night fireflies replace the bees and butterflies
 var _t := 0.0
 
@@ -44,6 +45,8 @@ func _draw() -> void:
 	if night > 0.15:
 		_fireflies(s0, s1, night)
 	var raining = day != null and day.rain > 0.3
+	if live_critters:
+		return          # v0.35: the crawlers, bees and butterflies are real prey in the sim (they can be hunted) and are drawn with the raiders
 	if z < 1.7 and (night < 0.45 or raining):
 		_crawlers(s0, s1, raining)
 	if night > 0.45 or raining:

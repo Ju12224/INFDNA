@@ -219,17 +219,14 @@ def shrink(im, maxside=MAXSIDE):
 
 
 def base_point(im):
-    """Bottom centre where the thing rests: the middle of the footprint of its lowest rows (the bottom 10%), at the bottom of the lowest
-    solid pixel.  Things with legs (a stump's roots, a cart's wheels, a gate's posts) rest on the span between their outer feet."""
+    """Bottom centre where the thing rests: the horizontal middle of its solid pixels, at the bottom of the lowest solid row.  (The sheet
+    draws most things in a three-quarter view, so the lowest pixels of a diagonal plank or a palisade are only its nearest corner: the
+    middle of that corner would put the item off to one side of the spot it is placed on.)"""
     a = im.getchannel("A").point(lambda v: 255 if v >= 128 else 0)
-    px = a.load()
-    w, h = a.size
-    ys = [y for y in range(h) if any(px[x, y] for x in range(w))]
-    gy = (max(ys) + 1) if ys else h
-    lo = max(0, gy - max(3, int(0.10 * h)))
-    xs = [x for x in range(w) for y in range(lo, gy) if px[x, y]]
-    bx = (min(xs) + max(xs) + 1) / 2.0 if xs else w / 2.0
-    return [round(bx, 1), float(gy)]
+    bb = a.getbbox()
+    if not bb:
+        return [im.size[0] / 2.0, float(im.size[1])]
+    return [round((bb[0] + bb[2]) / 2.0, 1), float(bb[3])]
 
 
 def top_point(im):

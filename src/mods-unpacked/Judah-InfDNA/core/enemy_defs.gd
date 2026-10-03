@@ -50,7 +50,15 @@ const DEFS = {
 	# passive prey (not raiders): wanders the surface, flees ants, big food when hunted
 	"looter": {"name": "Looter", "hp": 45.0, "dmg": 0.0, "speed": 3.0, "cls": "prey", "food": 24.0, "cost": 0,
 		"tex": ["res://dlcs/dlc_1/enemies/looting_pig/looting_pig.png", "res://entities/units/enemies/looter/looter.png"]},
+	# the meadow's small life (v0.35): harmless prey ants can hunt; they never bite back, they only run. "critter" says how the view draws it.
+	"ladybird": {"name": "Ladybird", "hp": 12.0, "dmg": 0.0, "speed": 1.5, "cls": "prey", "food": 4.0, "cost": 0, "tex": [], "critter": "ladybird", "h": 14.0},
+	"snail": {"name": "Snail", "hp": 26.0, "dmg": 0.0, "speed": 0.55, "cls": "prey", "food": 8.0, "cost": 0, "tex": [], "critter": "snail", "h": 22.0},
+	"caterpillar": {"name": "Caterpillar", "hp": 20.0, "dmg": 0.0, "speed": 0.8, "cls": "prey", "food": 7.0, "cost": 0, "tex": [], "critter": "caterpillar", "h": 16.0},
+	"grasshopper": {"name": "Grasshopper", "hp": 16.0, "dmg": 0.0, "speed": 3.4, "cls": "prey", "food": 6.0, "cost": 0, "tex": [], "critter": "grasshopper", "h": 22.0},
+	"honeybee": {"name": "Honeybee", "hp": 7.0, "dmg": 0.0, "speed": 2.8, "cls": "prey", "food": 3.0, "cost": 0, "tex": [], "critter": "bee", "fly": true, "h": 16.0},
+	"butterfly": {"name": "Butterfly", "hp": 6.0, "dmg": 0.0, "speed": 2.6, "cls": "prey", "food": 3.0, "cost": 0, "tex": [], "critter": "butterfly", "fly": true, "h": 20.0},
 }
+const CRITTERS = ["ladybird", "snail", "caterpillar", "grasshopper", "butterfly", "honeybee"]
 
 const SMALL = ["baby", "fly", "shrimp", "bee"]
 const BRUTE = ["charger", "helmet", "crab", "spider"]

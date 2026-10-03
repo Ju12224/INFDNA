@@ -5,6 +5,7 @@ extends Node2D
 const EnemyDefs = preload("res://mods-unpacked/Judah-InfDNA/core/enemy_defs.gd")
 const CreatureArt = preload("res://mods-unpacked/Judah-InfDNA/content/colony/creature_art.gd")
 const Lib = preload("res://mods-unpacked/Judah-InfDNA/content/colony/art_lib.gd")
+const Critters = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ground_critters.gd")
 const SPINE_N = 18           # joints in a worm's spine
 const INK = Color("#15121a")
 const FONT_PATH = "res://resources/fonts/raw/Anybody-Medium.ttf"
@@ -82,6 +83,10 @@ func draw_enemy(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade: flo
 		_draw_kin(ci, e, feet, depth_scale, shade, alpha, moving)
 	elif e.def.get("spine", "") != "" and _draw_spine(ci, e, feet, h, shade, alpha, moving):
 		pass
+	elif e.def.has("critter"):
+		_draw_critter(ci, e, feet, depth_scale, shade, alpha, moving)
+		if e.def.get("fly", false):
+			feet = feet - Vector2(0, 40.0 * depth_scale)     # its bar rides with it
 	elif art != "":
 		var fly = e.def.get("fly", false)
 		var lift = 6.0 + 22.0 * air if fly else 0.0
@@ -121,6 +126,38 @@ func draw_enemy(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade: flo
 		var top = feet + Vector2(-w * 0.5, -h - 14.0)
 		ci.draw_rect(Rect2(top - Vector2(2, 2), Vector2(w + 4, 10)), INK)
 		ci.draw_rect(Rect2(top, Vector2(w * clamp(e.hp / e.max_hp, 0.0, 1.0), 6)), Color("#e8483b"))
+
+
+# The meadow's critters (prey: they run, they never bite). Ground ones walk with legs keyed to the distance travelled; the grasshopper
+# hops; butterflies and honeybees flutter above the grass, out of reach of anything without wings.
+const BUTTERFLY_WINGS = [Color("#f2c14e"), Color("#e8728f"), Color("#7fb7e8"), Color("#f29b4e"), Color("#c9a6f2")]
+
+
+func _draw_critter(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade: float, alpha: float, moving: bool) -> void:
+	var kind = str(e.def["critter"])
+	var a = alpha * (0.75 if e.state == 2 else 1.0)
+	if kind == "butterfly" or kind == "bee":
+		var lift = (34.0 + 10.0 * sin(_t * 2.1 + e.id)) * depth_scale
+		ci.draw_set_transform(feet, 0.0, Vector2(1.0, 0.3))
+		ci.draw_circle(Vector2.ZERO, 7.0 * depth_scale, Color(0.05, 0.1, 0.03, 0.14 * a))
+		ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		if kind == "bee":
+			CreatureArt.draw("bee", ci, feet, 0.42 * depth_scale, shade, a, _t + e.id, e.facing, e.id, true, e.flash > 0.0, lift)
+		else:
+			CreatureArt.butterfly(ci, feet + Vector2(0.0, -lift - 10.0 * depth_scale), 1.3 * depth_scale, _t + e.id * 0.37, e.facing, BUTTERFLY_WINGS[e.id % BUTTERFLY_WINGS.size()], a)
+		return
+	var walk = feet.x
+	var air = 0.0
+	var crouch = 0.0
+	if kind == "grasshopper" and moving:
+		var u = fposmod(walk / 46.0, 1.0)
+		air = u if u < 0.75 else 0.0
+		crouch = clamp((u - 0.75) / 0.25, 0.0, 1.0)
+	var sh = shade * (0.6 if e.flash > 0.0 else 1.0)
+	ci.draw_set_transform(feet + Vector2(-3.0 * depth_scale, 0.0), 0.0, Vector2(1.0, 0.3))
+	ci.draw_circle(Vector2.ZERO, (9.0 + 6.0 * depth_scale) * (1.0 - air * 0.4), Color(0.05, 0.1, 0.03, 0.16 * a))
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	Critters.draw(kind, ci, feet, (1.1 if kind == "snail" else 1.0) * depth_scale, e.facing, _t + e.id, walk, moving, air / 0.75 if air > 0.0 else 0.0, crouch, sh)
 
 
 # A worm (the Tunnel Borer) has a spine: a chain of joints. The head goes where the raider is; every joint follows the one before it at
@@ -276,6 +313,8 @@ func _sprite(tex, p: Vector2, rot: float, size: float, col: Color, ci = null) ->
 
 # The hit effects (sparks, dust, bursts) go under the units and are small and faint: a fight is many hits a second, and big bright effects
 # between the bodies are what made it hard to see. Called from the `under` layer's draw.
+# Drawn from the owner's 4-frame effect pictures (dust for a puff, the hit star/burst for spark and burst: see _fx_hit_kind) at the old sizes
+# and alphas; the old procedural sprites below are the fallback when a picture is missing.
 func _draw_under() -> void:
 	if under == null:
 		return
@@ -291,6 +330,8 @@ func _draw_under() -> void:
 		var c: Color = f["color"]
 		var pos: Vector2 = f["pos"]
 		var seed_i = int(abs(pos.x)) + int(abs(pos.y))
+		if _fx_hit_kind(under, f, k, false):
+			continue
 		match f["kind"]:
 			"puff":
 				for j in 4:
@@ -313,6 +354,8 @@ func _draw_under() -> void:
 	under.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
+# Effects over the units. The sonic wave, the lightning arc and the silk snare are the owner's 4-frame pictures (see _fx_anim; the frame comes
+# from the effect's age, cross-faded), the rest is procedural; each picture effect falls back to its old drawing when the picture is missing.
 func _draw() -> void:
 	var cap = perf.fx if perf != null else 400
 	var nfx := 0
@@ -326,6 +369,11 @@ func _draw() -> void:
 		var c: Color = f["color"]
 		var pos: Vector2 = f["pos"]
 		var seed_i = int(abs(pos.x)) + int(abs(pos.y))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)     # the sprite effects leave their transform set; lines and arcs are in world px
+		if (f["kind"] in UNDER_KINDS) and _fx_hit_kind(self, f, k, true):
+			continue
+		if _fx_over_kind(f, k, seed_i):
+			continue
 		match f["kind"]:
 			"puff":
 				for j in 6:
@@ -405,3 +453,186 @@ func _draw() -> void:
 				draw_set_transform(pos, 0.0, Vector2(sc, sc))
 				draw_string(_font, Vector2(-16, -k * 40.0), f["text"], c2)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+# ---- the drawn effect animations (content/art/fx/<name>_<0..3>.png and fx_manifest.json, made by tools/art/make_fx.py) ----
+# Every effect is 4 frames played over its life: the frame comes from the age t / LIFE[kind] and cross-fades into the next one. The frames of
+# one effect share one scale (they keep their sizes relative to each other: the growth is part of the animation), so the sizes below are the
+# widest frame's width in world px.
+var _fx_anims = null   # name -> {"f": [{"tex", "c": anchor in the frame's px, "ax": [x0, x1] the bolt's ends}], "ref": widest frame px}; {} when a frame is missing
+var _fx_man = null     # the "anims" of fx_manifest.json ({} without it: anchors then default to the middle, or the bottom middle for dust and acid)
+const FX_FADE = 0.35   # share of a frame's slot spent cross-fading into the next frame
+const FX_GROUND = ["dust", "acid"]
+
+
+func _fx_anim(name: String) -> Dictionary:
+	if _fx_anims == null:
+		_fx_anims = {}
+		_fx_man = {}
+		var fh = File.new()
+		if fh.open(Lib.DIR + "fx_manifest.json", File.READ) == OK:
+			var res = JSON.parse(fh.get_as_text())
+			fh.close()
+			if res.error == OK and res.result is Dictionary and res.result.get("anims", null) is Dictionary:
+				_fx_man = res.result["anims"]
+	if _fx_anims.has(name):
+		return _fx_anims[name]
+	var ent = _fx_man.get(name, {})
+	var info = ent.get("frames", []) if ent is Dictionary else []
+	if not (info is Array):
+		info = []
+	var frames := []
+	var ref := 1.0
+	for i in 4:
+		var tex = Lib.get_lib().tex("fx/%s_%d.png" % [name, i])
+		if tex == null:
+			frames = []
+			break
+		var sz: Vector2 = tex.get_size()
+		var c = Vector2(sz.x * 0.5, sz.y if name in FX_GROUND else sz.y * 0.5)
+		var ax = [0.0, sz.x]
+		if i < info.size() and info[i] is Dictionary:
+			var cc = info[i].get("center", null)
+			if cc is Array and cc.size() == 2:
+				c = Vector2(float(cc[0]), float(cc[1]))
+			var aa = info[i].get("axis", null)
+			if aa is Array and aa.size() == 4 and float(aa[2]) > float(aa[0]):
+				ax = [float(aa[0]), float(aa[2])]
+		ref = max(ref, sz.x)
+		frames.append({"tex": tex, "c": c, "ax": ax})
+	_fx_anims[name] = {"f": frames, "ref": ref} if frames.size() == 4 else {}
+	return _fx_anims[name]
+
+
+# Frame position 0..4 for an age k in 0..1: frame i starts at marks[i - 1] (evenly spread without marks).
+func _fx_fp(k: float, marks: Array = []) -> float:
+	if marks.empty():
+		return k * 4.0
+	var prev := 0.0
+	for i in marks.size():
+		if k < marks[i]:
+			return i + (k - prev) / max(0.0001, marks[i] - prev)
+		prev = marks[i]
+	return marks.size() + (k - prev) / max(0.0001, 1.0 - prev)
+
+
+# Draws an effect animation at frame position fp: that frame, cross-faded into the next near the end of its slot (both stay at full strength
+# through the middle of the fade, so it never dips). scl: picture px -> world px, rot turns it about its anchor. stretch > 0 draws each frame's
+# bolt axis that long instead (lightning from one point to another): scl.y is then the most the thickness may scale (its sign flips it).
+func _fx_draw(ci: CanvasItem, an: Dictionary, fp: float, pos: Vector2, rot: float, scl: Vector2, col: Color, stretch: float = 0.0) -> void:
+	if col.a <= 0.01:
+		return
+	var frames: Array = an["f"]
+	var n = frames.size()
+	fp = clamp(fp, 0.0, n - 0.001)
+	var i = int(fp)
+	var b = 0.0
+	if i < n - 1:
+		b = clamp((fp - i - (1.0 - FX_FADE)) / FX_FADE, 0.0, 1.0)
+	if b < 1.0:
+		_fx_frame(ci, frames[i], pos, rot, scl, Color(col.r, col.g, col.b, col.a * min(1.0, 2.0 * (1.0 - b))), stretch)
+	if b > 0.0:
+		_fx_frame(ci, frames[i + 1], pos, rot, scl, Color(col.r, col.g, col.b, col.a * min(1.0, 2.0 * b)), stretch)
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+func _fx_frame(ci: CanvasItem, fr: Dictionary, pos: Vector2, rot: float, scl: Vector2, col: Color, stretch: float) -> void:
+	var c: Vector2 = fr["c"]
+	if stretch > 0.0:
+		var x0: float = fr["ax"][0]
+		var x1: float = fr["ax"][1]
+		var sx = stretch / max(1.0, x1 - x0)
+		c = Vector2((x0 + x1) * 0.5, c.y)
+		scl = Vector2(sx, sign(scl.y) * min(sx, abs(scl.y)))
+	ci.draw_set_transform(pos, rot, scl)
+	ci.draw_texture(fr["tex"], -c, col)
+
+
+# Puff, spark and burst from the pictures. A puff is kicked-up dust, brown as drawn (only a puff of another colour than earth, like the blue zap
+# or the green taming, is tinted toward it); a spark is the hit star drawn small, a burst the same bigger. Under the units they keep the old
+# small sizes and faint alphas; `over` (no under layer) draws them as big as the old over-the-units ones. False when a picture is missing.
+func _fx_hit_kind(ci: CanvasItem, f: Dictionary, k: float, over: bool) -> bool:
+	var c: Color = f["color"]
+	var pos: Vector2 = f["pos"]
+	var seed_i = int(abs(pos.x)) + int(abs(pos.y))
+	var flip = -1.0 if seed_i % 2 == 1 else 1.0
+	match f["kind"]:
+		"puff":
+			var an = _fx_anim("dust")
+			if an.empty():
+				return false
+			var earth = c.s < 0.15 or (c.h > 0.02 and c.h < 0.17)
+			var tint = Color(1, 1, 1) if earth else Color(1, 1, 1).linear_interpolate(c, 0.6)
+			tint.a = (0.9 if over else 0.6) * (1.0 - k * k)
+			var s = (66.0 if over else 44.0) / an["ref"]
+			_fx_draw(ci, an, _fx_fp(k, [0.16, 0.38, 0.66]), pos + Vector2(0, 3), 0.0, Vector2(s * flip, s), tint)
+			return true
+		"spark", "burst":
+			var an2 = _fx_anim("hit")
+			if an2.empty():
+				return false
+			var big = f["kind"] == "burst"
+			var s2 = (56.0 if big else 26.0) * (1.6 if over else 1.0) / an2["ref"] * (0.85 + 0.3 * k)
+			var tint2 = Color(1, 1, 1).linear_interpolate(c, 0.5)
+			tint2.a = (1.0 if over else (0.75 if big else 0.8)) * (1.0 - k * k)
+			_fx_draw(ci, an2, k * 4.0, pos, fmod(seed_i * 0.7, TAU), Vector2(s2 * flip, s2), tint2)
+			return true
+	return false
+
+
+# The sonic wave, the lightning arc, the silk snare (and an acid splash, ready for when the sim makes one) from the pictures, over the units.
+# False when the kind has no picture or one is missing (the caller then draws the old procedural effect).
+func _fx_over_kind(f: Dictionary, k: float, seed_i: int) -> bool:
+	var c: Color = f["color"]
+	var pos: Vector2 = f["pos"]
+	var white = Color(1, 1, 1)
+	match f["kind"]:
+		"wave":
+			# the shock ring grows to the pulse radius (the frames grow too; the scale adds a steady swell between them)
+			var an = _fx_anim("sonic")
+			if an.empty():
+				return false
+			var s = 2.2 * (12.0 + f.get("r", 100.0)) / an["ref"] * (0.65 + 0.35 * k)
+			var tint = white.linear_interpolate(c, 0.5)
+			tint.a = 0.85 * (1.0 - k * k)
+			_fx_draw(self, an, k * 4.0, pos, fmod(seed_i * 0.9, TAU), Vector2(s, s), tint)
+			return true
+		"arc":
+			# the bolt is stretched from pos to "to" and flipped every 1/30 s, so it crackles
+			var an2 = _fx_anim("lightning")
+			var to: Vector2 = f.get("to", pos)
+			var d = to - pos
+			if an2.empty() or d.length() < 2.0:
+				return false
+			var tint2 = white.linear_interpolate(c, 0.3)
+			tint2.a = clamp((1.0 - k) * 4.0, 0.0, 1.0)
+			var thick = 0.16 * (-1.0 if int(f["t"] * 30.0) % 2 == 1 else 1.0)
+			_fx_draw(self, an2, k * 4.0, (pos + to) * 0.5, d.angle(), Vector2(1.0, thick), tint2, d.length())
+			return true
+		"web":
+			# the silk ball hits, splats, hangs as a web over the snared raider, then drips and fades. The ball flies the way the silk line
+			# that came with it was shot (remembered on the effect once, as the line is gone long before the web)
+			var an3 = _fx_anim("web")
+			if an3.empty():
+				return false
+			if not f.has("face"):
+				f["face"] = 1.0
+				for g in sim.fx:
+					if g["kind"] == "beam" and g.get("to", Vector2.INF).distance_to(pos) < 2.0:
+						f["face"] = -1.0 if g["to"].x < g["pos"].x else 1.0
+						break
+			var s3 = 64.0 / an3["ref"]
+			var tint3 = c
+			tint3.a = 0.8 * (1.0 - k * k * k)
+			_fx_draw(self, an3, _fx_fp(k, [0.07, 0.16, 0.72]), pos, 0.0, Vector2(s3 * f["face"], s3), tint3)
+			return true
+		"acid":
+			var an4 = _fx_anim("acid")
+			if an4.empty():
+				return false
+			var s4 = 40.0 / an4["ref"]
+			var tint4 = white
+			tint4.a = 0.9 * (1.0 - k * k)
+			_fx_draw(self, an4, k * 4.0, pos, 0.0, Vector2(s4 * (-1.0 if seed_i % 2 == 1 else 1.0), s4), tint4)
+			return true
+	return false
