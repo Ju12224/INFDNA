@@ -1,26 +1,23 @@
 #!/usr/bin/env python3
 """Cut the owner's FAUNA + FOOD sheet (art_src/fauna_sheet.png) into one transparent PNG per item for the game.
 
-The sheet is a flat RGB picture on a BLACK background (the artist's cut-out was flattened onto black, not white): a thick near-black ink outline
-round every item, a JPEG-block halo hugging the outside of the ink (grey / olive / red blocks; the honeydew has a bright red one), and pure black
-beyond that.  Brightness alone cannot tell the ink from the background, so, like make_antkit.py, the matte is built from the inside out:
-  1. the bright fill of the drawing (eroded so thin halo dies, grown back inside the lenient bright mask; thin light stripes with ink on both
-     sides, the antennae, are kept by a flank test),
-  2. the ink outline: grown out from that fill, never farther than the ink is thick, so the halo outside it is left out (touching items share
-     the contested ink fairly),
-  3. holes: dark pupils, the worm's mouth and the like stay (they are part of the drawing), empty background trapped between legs does not,
-  4. a soft edge (about one pixel of alpha ramp) with everything beyond the bright fill repainted flat ink colour, so no halo can show.
-Pale interiors (cream eggs, larva, cocoon, mushroom cap, wing membranes, glints) survive because they are part of the bright fill.
-Honeydew (no black outline, a red halo) and the aphid heap (olive moss between the bugs) get their own small recipes below.
-
-Then the sheet is split into its items (islands of the fill picked by hand-tuned boxes: honeydew = one item, aphids = one, eggs = one, the
-hornet with its wings = one, the earthworm = one, berries = one ...), each trimmed to its alpha bounding box, shrunk to at most MAXSIDE px on the
-long side and saved to content/art/fauna/<name>.png.  fauna_manifest.json lists every item with size, facing, ground contact point, length of
-the body in the picture, a game size suggestion and notes on how the single picture can be animated.
+The sheet is an RGBA picture with real transparency (a thick near-black ink outline round every item, soft antialiased edges, a haze of
+nearly invisible alpha 1-9 dust round them).  So there is no matte to build and nothing to flood-fill: the alpha channel is the cut.
+  1. clean the alpha: below ALPHA_DUST (10) is dust and becomes 0, ALPHA_OPAQUE (250) and above is opaque (the file never reaches 255);
+     the colour of the antialiased rim pixels (partly transparent, within 2 px of the clear background: a smear of the old black background)
+     is repainted flat ink, so no dark or coloured fringe can show on any background (honeydew, which has a brown rim instead of ink, gets
+     its own rim colour); partly transparent pixels deeper inside (the moss shade between the aphids) keep their colour,
+  2. split the sheet into items: connected pieces of the alpha, picked by hand-tuned boxes on their centre (honeydew = one item although its
+     drops are separate islands, the crumb and apple keep their little crumbs, the aphid heap, the eggs, the hornet with its wings, the
+     earthworm, the berries are one item each),
+  3. each item is trimmed to its alpha bounding box, shrunk to at most MAXSIDE px on the long side (premultiplied LANCZOS) and saved in
+     content/art/fauna/<name>.png (optimize=True).
+fauna_manifest.json lists every item with size, facing, ground contact point, length of the body in the picture, a game size suggestion
+and notes on how the single picture can be animated.
 
 Needs Pillow only:  python3 tools/art/make_fauna.py [--contact PATH] [--debug DIR] [--only a,b]
   --contact PATH   write a verification contact sheet (every item on grey checker and on dark brown, with its label)
-  --debug DIR      write assign.png (which island went to which item) and a matte preview
+  --debug DIR      write assign.png (which piece of the sheet went to which item)
 Does not import or touch make_art.py / make_antkit.py.
 """
 import json
@@ -38,62 +35,13 @@ MANIFEST = os.path.join(ART, "fauna_manifest.json")
 INK = (21, 18, 26)          # the house outline colour (same as make_art.py / make_antkit.py)
 MAXSIDE = 320               # longest side of any saved item
 PAD = 2                     # transparent border kept round every item
-INK_PX = 6                  # how far the ink outline reaches beyond the bright fill on the sheet (px)
-CHAIN_PX = 5                # a thin island (antenna stripe, claw tip) counts only if it is this close to something solid; the halo is farther
+ALPHA_DUST = 10            # alpha below this is dust (a haze of alpha 1-9 lies round every item)
+ALPHA_OPAQUE = 240          # alpha at or above this counts as opaque (the file's solid pixels are 250-254, the honeydew drops' 247-249)
+MIN_PIECE = 30              # a connected piece with fewer opaque pixels than this is dust
 WORKER_PX = 40.0            # the game's worker ant is drawn about this long (px at scale 1); the size suggestions are relative to it
 
 
 # ---------------------------------------------------------------------------------------------------------------- helpers
-
-def _mx(im):
-    return ImageChops.lighter(ImageChops.lighter(im.getchannel("R"), im.getchannel("G")), im.getchannel("B"))
-
-
-def _binary(chan, lo, hi=255):
-    return chan.point(lambda v: 255 if lo <= v <= hi else 0)
-
-
-def reconstruct(seed, mask):
-    """Everything in `mask` that is connected to `seed` (geodesic dilation until nothing changes)."""
-    cur = seed
-    while True:
-        nxt = ImageChops.darker(cur.filter(ImageFilter.MaxFilter(3)), mask)
-        if ImageChops.difference(nxt, cur).getbbox() is None:
-            return cur
-        cur = nxt
-
-
-def _cross(m):
-    r = m
-    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-        r = ImageChops.lighter(r, ImageChops.offset(m, dx, dy))
-    return r
-
-
-def _step(m, i):
-    """One round-ish growth step (plus-shaped and square steps alternate); on a label image the larger label wins a contested pixel."""
-    return _cross(m) if i % 2 == 0 else m.filter(ImageFilter.MaxFilter(3))
-
-
-def fill_holes(mask):
-    """Close every hole of a mask (anything not reachable from its (0, 0) corner, which must be background)."""
-    inv = ImageChops.invert(mask)
-    ImageDraw.floodfill(inv, (0, 0), 128)
-    return ImageChops.invert(inv.point(lambda v: 255 if v == 128 else 0))
-
-
-def _flanked(ink_ok, reach):
-    """Pixels with ink on both sides of them (along a row, a column or a diagonal, within `reach` px): the thin light stripe of an antenna."""
-    out = Image.new("L", ink_ok.size, 0)
-    for dx, dy in ((1, 0), (0, 1), (1, 1), (1, -1)):
-        pos = Image.new("L", ink_ok.size, 0)
-        neg = Image.new("L", ink_ok.size, 0)
-        for k in range(2, reach + 1):
-            pos = ImageChops.lighter(pos, ImageChops.offset(ink_ok, -k * dx, -k * dy))
-            neg = ImageChops.lighter(neg, ImageChops.offset(ink_ok, k * dx, k * dy))
-        out = ImageChops.lighter(out, ImageChops.darker(pos, neg))
-    return out
-
 
 def label_pixels(mask):
     """Connected pieces (8-neighbour) of a mask: [{area, cx, cy, box, pts}], pts as flat (x, y) tuples."""
@@ -122,7 +70,7 @@ def label_pixels(mask):
     return comps
 
 
-def _mask_of(size, comps):
+def mask_of(size, comps):
     m = Image.new("L", size, 0)
     p = m.load()
     for c in comps:
@@ -131,197 +79,55 @@ def _mask_of(size, comps):
     return m
 
 
-def _poly_mask(size, poly, offset=(0, 0)):
-    m = Image.new("L", size, 0)
-    ImageDraw.Draw(m).polygon([(x - offset[0], y - offset[1]) for (x, y) in poly], fill=255)
-    return m
-
-
 # ---------------------------------------------------------------------------------------------------------------- the sheet
 
-class Sheet:
-    """The drawing's bright fill and its islands."""
-
-    def __init__(self, fill_lo=100, lenient_lo=60, erode=3, ink_hi=52, thin_reach=9):
-        self.im = Image.open(SRC).convert("RGB")
-        self.size = self.im.size
-        self.L = self.im.convert("L")
-        ink_ok = _binary(_mx(self.im), 4, ink_hi)
-        bright = _binary(self.L, fill_lo)
-        core = bright.filter(ImageFilter.MinFilter(erode))
-        # thin light stripes (antennae seen in the ink) are too narrow to survive the erosion: keep the bright pixels that have ink on both sides
-        core = ImageChops.lighter(core, ImageChops.darker(bright, _flanked(ink_ok, thin_reach)))
-        self.fill = reconstruct(core, _binary(self.L, lenient_lo))
-        self.comps = None
-
-    def override(self, box, mask_fn):
-        """Replace the fill inside `box` by what mask_fn(rgb crop) says (for the items whose colours the brightness test cannot handle)."""
-        crop = self.im.crop(box)
-        self.fill.paste(mask_fn(crop), box[:2])
-
-    def label(self, min_area=40):
-        self.comps = label_pixels(self.fill)
-        px = self.im.load()
-        for c in self.comps:
-            c["junk"] = c["area"] < min_area
-            if not c["junk"] and c["area"] < 400:
-                # specks of halo / JPEG noise: small, neutral grey islands (the drawing's own small bits are coloured)
-                ch = 0
-                step = max(1, len(c["pts"]) // 60)
-                n = 0
-                for (x, y) in c["pts"][::step]:
-                    r, g, b = px[x, y]
-                    ch += max(r, g, b) - min(r, g, b)
-                    n += 1
-                c["junk"] = (ch / n) < 14
-            c["thin"] = False
-        self._weed_thin()
-
-    def _weed_thin(self):
-        """Thin islands (under about 7 px wide: the bright edge lines and blocks of the JPEG halo) are junk unless they sit inside the outline band
-        of something solid (antenna stripes, tiny claws, leg tips: chained to a solid neighbour within an outline's width).  The halo lies
-        beyond the ink, so it is farther away than that."""
-        thin, solid = [], []
-        for i, c in enumerate(self.comps):
-            if c["junk"]:
-                continue
-            x0, y0, x1, y1 = c["box"]
-            m = Image.new("L", (x1 - x0 + 8, y1 - y0 + 8), 0)
-            p = m.load()
-            for (x, y) in c["pts"]:
-                p[x - x0 + 4, y - y0 + 4] = 255
-            if m.filter(ImageFilter.MinFilter(3)).filter(ImageFilter.MinFilter(3)).filter(ImageFilter.MinFilter(3)).getbbox() is None:
-                thin.append(i)
-            else:
-                solid.append(i)
-        reach_n = CHAIN_PX
-        for _ in range(8):
-            reach = Image.new("L", self.size, 0)
-            rp = reach.load()
-            for i in solid:
-                for (x, y) in self.comps[i]["pts"]:
-                    rp[x, y] = 255
-            for k in range(reach_n):
-                reach = _step(reach, k)
-            rp = reach.load()
-            moved = []
-            for i in thin:
-                pts = self.comps[i]["pts"]
-                if sum(1 for (x, y) in pts if rp[x, y]) >= 0.35 * len(pts):
-                    moved.append(i)
-            if not moved:
-                break
-            solid += moved
-            thin = [i for i in thin if i not in moved]
-        for i in thin:
-            self.comps[i]["junk"] = True
-
-    def pick(self, boxes, drop=(), min_area=40):
-        """Indices of the islands whose centre lies in any of the boxes (and in none of the `drop` boxes)."""
-        out = []
-        for i, c in enumerate(self.comps):
-            if c["area"] < min_area or c["junk"]:
-                continue
-            if any(x0 <= c["cx"] < x1 and y0 <= c["cy"] < y1 for (x0, y0, x1, y1) in drop):
-                continue
-            for (x0, y0, x1, y1) in boxes:
-                if x0 <= c["cx"] < x1 and y0 <= c["cy"] < y1:
-                    out.append(i)
-                    break
-        return out
-
-    def owners(self, groups, reach):
-        """Label image: item number (1..) on every pixel that belongs to an item (its fill plus `reach[item]` px of outline grown all round it) and
-        a second one with the fills alone.  Islands of nobody (dust, other items' bits) block the growth (label 254).  Items grow at the same
-        pace, so touching outlines are shared fairly."""
-        core = Image.new("L", self.size, 0)
-        cp = core.load()
-        for c in self.comps:
-            if c["area"] >= 40 and not c["junk"]:
-                for (x, y) in c["pts"]:
-                    cp[x, y] = 254
-        for gi, g in enumerate(groups):
-            for ci in g:
-                for (x, y) in self.comps[ci]["pts"]:
-                    cp[x, y] = gi + 1
-        lab = core
-        for i in range(max(reach)):
-            lut = [0] * 256
-            for gi, r in enumerate(reach):
-                if r > i:
-                    lut[gi + 1] = gi + 1
-            active = lab.point(lut)
-            grown = _step(active, i)
-            todo = lab.point(lambda v: 255 if v == 0 else 0)
-            lab = Image.composite(grown, lab, todo)
-        return lab, core
+def load_sheet():
+    """The sheet as RGBA with the alpha cleaned (dust gone, solid pixels fully opaque) and the colour of the soft edge repainted ink."""
+    im = Image.open(SRC).convert("RGBA")
+    a = im.getchannel("A").point(lambda v: 0 if v < ALPHA_DUST else (255 if v >= ALPHA_OPAQUE else v))
+    return im, a
 
 
-# ---------------------------------------------------------------------------------------------------------------- one item
+def find_pieces(a):
+    """Connected pieces of the cleaned alpha (8-neighbour), without dust: [{area, cx, cy, box, pts}]."""
+    solid = a.point(lambda v: 255 if v >= 128 else 0)
+    comps = label_pixels(a.point(lambda v: 255 if v > 0 else 0))
+    sp = solid.load()
+    out = []
+    for c in comps:
+        c["solid"] = sum(1 for (x, y) in c["pts"] if sp[x, y])
+        if c["solid"] >= MIN_PIECE:
+            out.append(c)
+    return out
 
-def piece_image(sh, lab, core, pid, opts):
-    """RGBA crop for item number pid: the owned pixels, holes decided, outline smoothed and everything beyond the fill repainted flat ink.
-    Returns (RGBA image, (x, y) of its top-left corner on the sheet)."""
-    m = lab.point(lambda v: 255 if v == pid else 0)
+
+def pick(pieces, boxes, claimed):
+    """The pieces whose centre lies in any of the boxes and that nobody has taken yet."""
+    out = []
+    for i, c in enumerate(pieces):
+        if i in claimed:
+            continue
+        if any(x0 <= c["cx"] < x1 and y0 <= c["cy"] < y1 for (x0, y0, x1, y1) in boxes):
+            out.append(i)
+    return out
+
+
+def item_image(im, a, pieces, idx, opts):
+    """RGBA crop of one item: the pixels of its pieces only (neighbours' bits cut away), alpha as cleaned, edge colours repainted ink."""
+    m = mask_of(im.size, [pieces[i] for i in idx])
     bb = m.getbbox()
-    if bb is None:
-        return None, None
-    pad = 14
-    box = (max(0, bb[0] - pad), max(0, bb[1] - pad), min(sh.size[0], bb[2] + pad), min(sh.size[1], bb[3] + pad))
+    box = (max(0, bb[0] - 2), max(0, bb[1] - 2), min(im.size[0], bb[2] + 2), min(im.size[1], bb[3] + 2))
     m = m.crop(box)
-    rgb = sh.im.crop(box)
-    cm = core.point(lambda v: 255 if v == pid else 0).crop(box)          # the fill of this item alone
-    for (x0, y0, x1, y1) in opts.get("erase", ()):
-        ImageDraw.Draw(m).rectangle((x0 - box[0], y0 - box[1], x1 - box[0], y1 - box[1]), fill=0)
-    if opts.get("clip"):
-        m = ImageChops.darker(m, _poly_mask(m.size, opts["clip"], box[:2]))
-    r = opts.get("close", 1)
-    if r:
-        m = m.filter(ImageFilter.MaxFilter(2 * r + 1)).filter(ImageFilter.MinFilter(2 * r + 1))
-    # holes: dark pupils, the worm's throat and the like stay (they are part of the drawing); empty background trapped between legs does not
-    keep = Image.new("L", m.size, 0)
-    mode = opts.get("holes", "auto")
-    if mode != "none":
-        filled = fill_holes(m)
-        holes = ImageChops.subtract(filled, m)
-        if mode == "all":
-            keep = holes
-        else:
-            mxc = _mx(rgb)
-            mp = mxc.load()
-            kp = keep.load()
-            for c in label_pixels(holes):
-                vals = sorted(mp[x, y] for (x, y) in c["pts"])
-                med = vals[len(vals) // 2]
-                if c["area"] < opts.get("hole_small", 260) or med >= opts.get("hole_med", 24) or any(
-                        x0 - 4 <= c["cx"] + box[0] <= x1 + 4 and y0 - 4 <= c["cy"] + box[1] <= y1 + 4 for (x0, y0, x1, y1) in opts.get("keep_holes", ())):
-                    for (x, y) in c["pts"]:
-                        kp[x, y] = 255
-        m = ImageChops.lighter(m, keep)
-    # smooth the outline: blur the hard mask and cut again a little on the generous side (keeps spike tips, drops pixel noise)
-    m = m.filter(ImageFilter.GaussianBlur(1.1)).point(lambda v: 255 if v > 105 else 0)
-    # leave out dust islands that were never part of the item's picture
-    min_island = opts.get("min_island", 200)
-    if min_island:
-        keepi = Image.new("L", m.size, 0)
-        kp = keepi.load()
-        for c in label_pixels(m):
-            if c["area"] >= min_island:
-                for (x, y) in c["pts"]:
-                    kp[x, y] = 255
-        m = keepi
-    # everything farther than 2 px from the bright fill (and not a kept hole: pupils, throats) is the ink band: repainted flat ink, no halo, no noise
-    near = cm.filter(ImageFilter.MaxFilter(5))
-    keepd = keep.filter(ImageFilter.MaxFilter(3))
-    band = ImageChops.subtract(ImageChops.subtract(m, near), keepd)
+    alpha = ImageChops.multiply(a.crop(box), m.point(lambda v: 255 if v else 0))
+    rgb = im.crop(box).convert("RGB")
     ink = tuple(opts.get("ink_color", INK))
-    rgb = Image.composite(Image.new("RGB", rgb.size, ink), rgb, band)
-    a = m.filter(ImageFilter.GaussianBlur(0.8))
-    a = a.point(lambda v: 0 if v < 40 else (255 if v > 215 else int((v - 40) * 255 / 175)))
+    # the colour of the rim (the antialiased edge pixels) and of the clear pixels is the ink colour: no halo of the old black background, and
+    # a filtered (bilinear) texture never blends a coloured fringe in
+    clear = alpha.point(lambda v: 255 if v == 0 else 0).filter(ImageFilter.MaxFilter(5))            # within 2 px of the clear background
+    edge = ImageChops.darker(clear, alpha.point(lambda v: 255 if v < 255 else 0))        # (the clear pixels themselves included)
+    rgb = Image.composite(Image.new("RGB", rgb.size, ink), rgb, edge)
     out = rgb.convert("RGBA")
-    # clear pixels carry the ink colour, so a filtered (bilinear) texture never blends a white or black fringe in
-    out = Image.composite(out, Image.new("RGBA", out.size, ink + (0,)), a.point(lambda v: 255 if v > 0 else 0))
-    out.putalpha(a)
+    out.putalpha(alpha)
     return out, box[:2]
 
 
@@ -342,13 +148,13 @@ def shrink(im, maxside=MAXSIDE):
 
 
 # ---------------------------------------------------------------------------------------------------------------- catalogue
-# name -> where the item sits on the sheet (boxes: fill islands whose centre is inside belong to it; earlier entries win) and its recipe.
+# name -> where the item sits on the sheet (boxes: connected pieces of the alpha whose centre is inside belong to it) and its recipe.
 #   kind     creature / brood / food / plant  (the game side)
 #   facing   which way the picture looks (right / left / none); the ants and beetles look right
 #   len      game length in px at scale 1 for a worker ant drawn 40 px long (the item's body span in the picture is scaled to it)
 #   anim     how the single picture can be moved: bob (px up and down at game size), squash (fraction of height; stretch is the same the other
 #            way), wiggle (degrees of sway), pulse (grow and shrink)
-#   ink      outline reach in px on the sheet (default INK_PX);  holes / close / min_island / clip / erase / drop / ink_color: see piece_image
+#   ink_color  colour of the soft edge pixels (default INK; honeydew has a brown rim)
 
 def P(name, kind, boxes, facing, length, anim, note, **opts):
     if boxes and isinstance(boxes[0], (int, float)):
@@ -360,7 +166,7 @@ def P(name, kind, boxes, facing, length, anim, note, **opts):
 
 CATALOGUE = [
     # ---- top row: the brood and the queen
-    P("queen_full", "creature", [(0, 0, 672, 300)], "right", 90, {"bob": 1.2, "squash": 0.03, "wiggle": 0}, "Queen with the egg-laden gaster; walks slowly, no separate legs."),
+    P("queen_full", "creature", [(0, 0, 672, 284)], "right", 90, {"bob": 1.2, "squash": 0.03, "wiggle": 0}, "Queen with the egg-laden gaster; walks slowly, no separate legs."),
     P("eggs", "brood", [(672, 60, 912, 280)], "none", 16, {"pulse": 0.04}, "A pile of cream eggs (one picture)."),
     P("larva", "brood", [(912, 40, 1112, 280)], "left", 22, {"squash": 0.10, "wiggle": 4}, "Fat cream larva, head at the lower left; can wriggle by squashing."),
     P("pupa", "brood", [(1112, 40, 1298, 280)], "none", 24, {"pulse": 0.03, "wiggle": 2}, "Pupa wrapped in a silk cocoon with the brown pupa showing in the slit."),
@@ -372,40 +178,22 @@ CATALOGUE = [
     P("apple", "food", [(540, 280, 690, 450)], "none", 22, {}, "Bitten apple with three crumbs."),
     P("beetle", "creature", [(690, 290, 890, 450)], "right", 40, {"bob": 1.0, "squash": 0.04}, "Small dark beetle."),
     P("honeydew", "food", [(890, 290, 1022, 450)], "none", 14, {"pulse": 0.05}, "Honeydew droplets: six golden drops (one item, gaps transparent).",
-      ink=5, holes="none", ink_color=(64, 38, 12), fill="gold"),
-    P("aphids", "creature", [(1022, 270, 1185, 450)], "none", 8, {"squash": 0.05, "wiggle": 3}, "Heap of five green aphids on moss (one item).",
-      ink=6, holes="all"),
+      ink_color=(64, 38, 12)),
+    P("aphids", "creature", [(1022, 270, 1185, 450)], "none", 8, {"squash": 0.05, "wiggle": 3}, "Heap of five green aphids on moss (one item)."),
     P("mushrooms", "food", [(1185, 265, 1375, 450)], "none", 26, {}, "Cluster of white mushrooms on a mound of earth."),
     P("leaf", "plant", [(1375, 265, 1536, 450)], "none", 28, {}, "Green leaf with three holes and a bitten edge."),
     # ---- third row: bigger animals
     P("stagbeetle", "creature", [(0, 445, 405, 662)], "right", 90, {"bob": 1.5, "squash": 0.03}, "Stag beetle with big red jaws."),
-    P("centipede", "creature", [(405, 445, 775, 645)], "right", 120, {"bob": 1.0, "wiggle": 3, "squash": 0.03}, "Centipede, head right."),
+    P("centipede", "creature", [(405, 445, 775, 628)], "right", 120, {"bob": 1.0, "wiggle": 3, "squash": 0.03}, "Centipede, head right."),
     P("scorpion", "creature", [(775, 440, 1085, 640)], "right", 110, {"bob": 1.0, "squash": 0.03}, "Scorpion, claws and head to the right, stinger raised."),
     P("moth", "creature", [(1085, 470, 1536, 612), (1370, 600, 1420, 650)], "right", 60, {"bob": 2.0, "squash": 0.03}, "Furry brown moth-like winged insect, flies."),
-    P("earthworm", "creature", [(40, 620, 800, 790)], "right", 180, {"squash": 0.12, "wiggle": 2}, "Earthworm; the open mouth is at the right.",
-      holes="all"),
-    P("hornet", "creature", [(1100, 615, 1500, 700), (1150, 700, 1500, 862)], "right", 70, {"bob": 2.5, "squash": 0.02}, "Yellow-black hornet with its pale wings (one item).", min_island=60),
+    P("earthworm", "creature", [(40, 620, 800, 790)], "right", 180, {"squash": 0.12, "wiggle": 2}, "Earthworm; the open mouth is at the right."),
+    P("hornet", "creature", [(1100, 615, 1500, 700), (1150, 700, 1500, 862)], "right", 70, {"bob": 2.5, "squash": 0.02}, "Yellow-black hornet with its pale wings (one item)."),
     # ---- bottom row: the red ants, small to big, in profile
     P("redant_small", "creature", [(0, 800, 265, 990)], "right", 36, {"bob": 1.0, "squash": 0.04}, "Small red ant."),
     P("redant_soldier", "creature", [(265, 780, 650, 990)], "right", 48, {"bob": 1.0, "squash": 0.04}, "Red soldier ant."),
     P("redant_major", "creature", [(650, 700, 1215, 990)], "right", 80, {"bob": 1.5, "squash": 0.03}, "Red major ant with horns."),
 ]
-
-
-def gold_fill(crop):
-    """Honeydew: the golden drops by colour (the brightness test would run into the bright red halo round them)."""
-    px = crop.load()
-    m = Image.new("L", crop.size, 0)
-    mp = m.load()
-    for y in range(crop.size[1]):
-        for x in range(crop.size[0]):
-            r, g, b = px[x, y]
-            if r >= 140 and g >= 95 and r - b >= 80 and g - b >= 40:
-                mp[x, y] = 255
-    return m.filter(ImageFilter.MinFilter(3)).filter(ImageFilter.MaxFilter(3))
-
-
-FILLS = {"gold": gold_fill}
 
 
 # ---------------------------------------------------------------------------------------------------------------- metrics
@@ -443,101 +231,98 @@ def ground_point(im, bm):
 
 # -------------------------------------------------------------------------------------------------------------------- build
 
-def assign_debug(sh, groups, names, path):
-    """Debug picture: every fill island coloured by the item it was given to (red = left over and big enough to matter, dim grey = junk)."""
+def assign_debug(im, a, pieces, groups, names, path):
+    """Debug picture: every piece of the sheet coloured by the item it was given to (red = left over and big enough to matter)."""
     import colorsys
-    img = sh.im.convert("RGB").point(lambda v: v // 3)
+    img = Image.new("RGB", im.size, (30, 30, 30))
+    img.paste(im.convert("RGB").point(lambda v: v // 3), mask=a.point(lambda v: 255 if v else 0))
     px = img.load()
     for gi, g in enumerate(groups):
         r, gg, b = colorsys.hsv_to_rgb((gi * 0.137) % 1.0, 0.8, 1.0)
         col = (int(r * 255), int(gg * 255), int(b * 255))
         for ci in g:
-            for (x, y) in sh.comps[ci]["pts"]:
+            for (x, y) in pieces[ci]["pts"]:
                 px[x, y] = col
     taken = set(ci for g in groups for ci in g)
-    for ci, c in enumerate(sh.comps):
-        if ci not in taken and c["area"] >= 60 and not c["junk"]:
+    for ci, c in enumerate(pieces):
+        if ci not in taken:
             for (x, y) in c["pts"]:
                 px[x, y] = (255, 0, 0)
     d = ImageDraw.Draw(img)
     f = ImageFont.load_default()
     for gi, g in enumerate(groups):
         if g:
-            cx = sum(sh.comps[ci]["cx"] for ci in g) / len(g)
-            cy = sum(sh.comps[ci]["cy"] for ci in g) / len(g)
+            cx = sum(pieces[ci]["cx"] for ci in g) / len(g)
+            cy = sum(pieces[ci]["cy"] for ci in g) / len(g)
             d.text((cx - 20, cy), names[gi], fill=(255, 255, 255), font=f)
     img.save(path)
 
 
 def build(contact=None, debug=None, only=None):
     os.makedirs(OUT, exist_ok=True)
-    partial = bool(only)
-    if not partial:
+    if not only:
         for fn in os.listdir(OUT):
             if fn.endswith(".png"):
                 os.remove(os.path.join(OUT, fn))
-    sh = Sheet()
-    for sp in CATALOGUE:
-        if sp.get("fill"):
-            b = sp["boxes"][0]
-            sh.override(b, FILLS[sp["fill"]])
-    sh.label()
+    im, a = load_sheet()
+    sheet_pieces = find_pieces(a)
     claimed = set()
     groups = []
     for sp in CATALOGUE:
-        g = [c for c in sh.pick(sp["boxes"], drop=sp.get("drop", ())) if c not in claimed]
+        g = pick(sheet_pieces, sp["boxes"], claimed)
         claimed.update(g)
         groups.append(g)
         if not g:
             print("!! nothing found for", sp["name"])
-    lab, core = sh.owners(groups, [sp.get("ink", INK_PX) for sp in CATALOGUE])
+    left = [i for i in range(len(sheet_pieces)) if i not in claimed]
+    if left:
+        print("!! pieces of the sheet that no item took:", [tuple(sheet_pieces[i]["box"]) for i in left])
     if debug:
         os.makedirs(debug, exist_ok=True)
-        assign_debug(sh, groups, [sp["name"] for sp in CATALOGUE], os.path.join(debug, "assign.png"))
+        assign_debug(im, a, sheet_pieces, groups, [sp["name"] for sp in CATALOGUE], os.path.join(debug, "assign.png"))
     manifest = {
-        "_about": "Fauna and food cut from art_src/fauna_sheet.png by tools/art/make_fauna.py. Every item is a trimmed transparent PNG, long side <= %d px, "
-                  "outlined in thick ink like the rest of the art. The sheet was drawn on black; the matte was rebuilt from the inside out (no halo). "
+        "_about": "Fauna and food cut from art_src/fauna_sheet.png (RGBA, cut from its alpha) by tools/art/make_fauna.py. Every item is a trimmed transparent PNG, "
+                  "long side <= %d px, outlined in thick ink like the rest of the art; the soft edge pixels carry the ink colour (no halo on any background). "
                   "'facing': the way the picture looks (the ants and beetles look RIGHT; 'none' = symmetric or not a creature; flip to turn). "
                   "'ground': suggested ground contact point in the item's own pixels (middle of the body span, bottom of the lowest foot). "
                   "'length_px': nose-to-tail span in the picture (antennae and leg tips excluded; wings included). 'game_len': suggested length in game px at "
                   "scale 1 for a worker ant drawn about %d px long. 'scale' = game_len / length_px: multiply the picture by it. 'anim': how the single "
                   "picture can be moved (bob = px up and down at game size, squash = fraction of height squeezed (stretch the width by the same), "
-                  "wiggle = degrees of sway, pulse = grow and shrink). The creatures are single pictures, no separate legs." % (MAXSIDE, WORKER_PX),
+                  "wiggle = degrees of sway, pulse = grow and shrink). The creatures are single pictures, no separate legs (the rig is in fauna_rig/)."
+                  % (MAXSIDE, WORKER_PX),
         "worker_ref_px": WORKER_PX, "items": {}}
-    if partial and os.path.exists(MANIFEST):
+    if only and os.path.exists(MANIFEST):
         with open(MANIFEST) as f:
             manifest["items"] = json.load(f).get("items", {})
-    pieces = {}
+    items = {}
     for i, sp in enumerate(CATALOGUE):
         if only and sp["name"] not in only:
             continue
         if not groups[i]:
             continue
-        im, pos = piece_image(sh, lab, core, i + 1, sp)
-        if im is None:
-            continue
-        im = trim(im)
-        im, k = shrink(im)
+        img, pos = item_image(im, a, sheet_pieces, groups[i], sp)
+        img = trim(img)
+        img, k = shrink(img)
         fn = sp["name"] + ".png"
-        im.save(os.path.join(OUT, fn), optimize=True)
-        bm = body_metrics(im)
-        ground = ground_point(im, bm)
-        ent = {"file": "fauna/" + fn, "w": im.size[0], "h": im.size[1], "kind": sp["kind"], "facing": sp["facing"],
+        img.save(os.path.join(OUT, fn), optimize=True)
+        bm = body_metrics(img)
+        ground = ground_point(img, bm)
+        ent = {"file": "fauna/" + fn, "w": img.size[0], "h": img.size[1], "kind": sp["kind"], "facing": sp["facing"],
                "ground": ground, "length_px": bm["length"], "game_len": float(sp["len"]),
                "scale": round(sp["len"] / float(bm["length"]), 4), "anim": sp["anim"], "single_picture": True,
                "note": sp["note"], "sheet_scale": round(k, 4)}
         manifest["items"][sp["name"]] = ent
-        pieces[sp["name"]] = (im, ent)
-        print("%-15s %4dx%-4d %s ground %s span %d" % (sp["name"], im.size[0], im.size[1], "(x%.2f)" % k if k < 1 else "        ", ground, bm["length"]))
+        items[sp["name"]] = (img, ent)
+        print("%-15s %4dx%-4d %s ground %s span %d" % (sp["name"], img.size[0], img.size[1], "(x%.2f)" % k if k < 1 else "        ", ground, bm["length"]))
     order = {sp["name"]: i for i, sp in enumerate(CATALOGUE)}
     manifest["items"] = dict(sorted(manifest["items"].items(), key=lambda kv: order.get(kv[0], 0)))
     with open(MANIFEST, "w") as f:
         json.dump(manifest, f, indent=1)
     total = sum(os.path.getsize(os.path.join(OUT, fn)) for fn in os.listdir(OUT))
-    print("%d items, %.2f MB in %s" % (len(pieces), total / 1048576.0, OUT))
+    print("%d items, %.2f MB in %s" % (len(items), total / 1048576.0, OUT))
     if contact:
-        make_contact(pieces, contact)
-    return pieces
+        make_contact(items, contact)
+    return items
 
 
 # ----------------------------------------------------------------------------------------------------------------- contact

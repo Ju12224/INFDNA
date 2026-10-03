@@ -1,20 +1,20 @@
 {
- "_about": "Fauna and food cut from art_src/fauna_sheet.png by tools/art/make_fauna.py. Every item is a trimmed transparent PNG, long side <= 320 px, outlined in thick ink like the rest of the art. The sheet was drawn on black; the matte was rebuilt from the inside out (no halo). 'facing': the way the picture looks (the ants and beetles look RIGHT; 'none' = symmetric or not a creature; flip to turn). 'ground': suggested ground contact point in the item's own pixels (middle of the body span, bottom of the lowest foot). 'length_px': nose-to-tail span in the picture (antennae and leg tips excluded; wings included). 'game_len': suggested length in game px at scale 1 for a worker ant drawn about 40 px long. 'scale' = game_len / length_px: multiply the picture by it. 'anim': how the single picture can be moved (bob = px up and down at game size, squash = fraction of height squeezed (stretch the width by the same), wiggle = degrees of sway, pulse = grow and shrink). The creatures are single pictures, no separate legs.",
+ "_about": "Fauna and food cut from art_src/fauna_sheet.png (RGBA, cut from its alpha) by tools/art/make_fauna.py. Every item is a trimmed transparent PNG, long side <= 320 px, outlined in thick ink like the rest of the art; the soft edge pixels carry the ink colour (no halo on any background). 'facing': the way the picture looks (the ants and beetles look RIGHT; 'none' = symmetric or not a creature; flip to turn). 'ground': suggested ground contact point in the item's own pixels (middle of the body span, bottom of the lowest foot). 'length_px': nose-to-tail span in the picture (antennae and leg tips excluded; wings included). 'game_len': suggested length in game px at scale 1 for a worker ant drawn about 40 px long. 'scale' = game_len / length_px: multiply the picture by it. 'anim': how the single picture can be moved (bob = px up and down at game size, squash = fraction of height squeezed (stretch the width by the same), wiggle = degrees of sway, pulse = grow and shrink). The creatures are single pictures, no separate legs (the rig is in fauna_rig/).",
  "worker_ref_px": 40.0,
  "items": {
   "queen_full": {
    "file": "fauna/queen_full.png",
    "w": 320,
-   "h": 143,
+   "h": 128,
    "kind": "creature",
    "facing": "right",
    "ground": [
-    176.0,
-    141.0
+    159.5,
+    126.0
    ],
-   "length_px": 314,
+   "length_px": 299,
    "game_len": 90.0,
-   "scale": 0.2866,
+   "scale": 0.301,
    "anim": {
     "bob": 1.2,
     "squash": 0.03,
@@ -22,21 +22,21 @@
    },
    "single_picture": true,
    "note": "Queen with the egg-laden gaster; walks slowly, no separate legs.",
-   "sheet_scale": 0.5324
+   "sheet_scale": 0.4755
   },
   "eggs": {
    "file": "fauna/eggs.png",
-   "w": 265,
-   "h": 201,
+   "w": 239,
+   "h": 180,
    "kind": "brood",
    "facing": "none",
    "ground": [
-    105.0,
-    198.0
+    114.0,
+    177.0
    ],
-   "length_px": 258,
+   "length_px": 232,
    "game_len": 16.0,
-   "scale": 0.062,
+   "scale": 0.069,
    "anim": {
     "pulse": 0.04
    },
@@ -46,38 +46,38 @@
   },
   "larva": {
    "file": "fauna/larva.png",
-   "w": 320,
-   "h": 188,
+   "w": 191,
+   "h": 173,
    "kind": "brood",
    "facing": "left",
    "ground": [
-    148.0,
-    186.0
+    58.5,
+    170.0
    ],
-   "length_px": 313,
+   "length_px": 184,
    "game_len": 22.0,
-   "scale": 0.0703,
+   "scale": 0.1196,
    "anim": {
     "squash": 0.1,
     "wiggle": 4
    },
    "single_picture": true,
    "note": "Fat cream larva, head at the lower left; can wriggle by squashing.",
-   "sheet_scale": 0.802
+   "sheet_scale": 1.0
   },
   "pupa": {
    "file": "fauna/pupa.png",
    "w": 192,
-   "h": 207,
+   "h": 211,
    "kind": "brood",
    "facing": "none",
    "ground": [
     82.0,
-    204.0
+    208.0
    ],
-   "length_px": 185,
+   "length_px": 186,
    "game_len": 24.0,
-   "scale": 0.1297,
+   "scale": 0.129,
    "anim": {
     "pulse": 0.03,
     "wiggle": 2
@@ -88,17 +88,17 @@
   },
   "worker_small": {
    "file": "fauna/worker_small.png",
-   "w": 192,
-   "h": 133,
+   "w": 230,
+   "h": 157,
    "kind": "creature",
    "facing": "right",
    "ground": [
-    67.5,
-    130.0
+    92.0,
+    154.0
    ],
-   "length_px": 185,
+   "length_px": 221,
    "game_len": 34.0,
-   "scale": 0.1838,
+   "scale": 0.1538,
    "anim": {
     "bob": 1.0,
     "squash": 0.04
@@ -109,17 +109,17 @@
   },
   "seeds": {
    "file": "fauna/seeds.png",
-   "w": 179,
-   "h": 138,
+   "w": 176,
+   "h": 136,
    "kind": "food",
    "facing": "none",
    "ground": [
-    87.0,
-    135.0
+    86.0,
+    133.0
    ],
-   "length_px": 170,
+   "length_px": 167,
    "game_len": 16.0,
-   "scale": 0.0941,
+   "scale": 0.0958,
    "anim": {},
    "single_picture": true,
    "note": "Heap of seeds and grains.",
@@ -128,16 +128,16 @@
   "berries": {
    "file": "fauna/berries.png",
    "w": 166,
-   "h": 133,
+   "h": 132,
    "kind": "food",
    "facing": "none",
    "ground": [
-    101.5,
-    130.0
+    83.5,
+    129.0
    ],
-   "length_px": 160,
+   "length_px": 159,
    "game_len": 14.0,
-   "scale": 0.0875,
+   "scale": 0.0881,
    "anim": {},
    "single_picture": true,
    "note": "Cluster of red berries with leaves.",
@@ -145,17 +145,17 @@
   },
   "crumb": {
    "file": "fauna/crumb.png",
-   "w": 166,
-   "h": 129,
+   "w": 163,
+   "h": 125,
    "kind": "food",
    "facing": "none",
    "ground": [
-    117.0,
-    126.0
+    108.5,
+    122.0
    ],
-   "length_px": 158,
+   "length_px": 154,
    "game_len": 12.0,
-   "scale": 0.0759,
+   "scale": 0.0779,
    "anim": {},
    "single_picture": true,
    "note": "Bread crumb with three little crumbs beside it.",
@@ -164,16 +164,16 @@
   "apple": {
    "file": "fauna/apple.png",
    "w": 151,
-   "h": 139,
+   "h": 137,
    "kind": "food",
    "facing": "none",
    "ground": [
-    86.0,
-    136.0
+    85.5,
+    134.0
    ],
-   "length_px": 143,
+   "length_px": 142,
    "game_len": 22.0,
-   "scale": 0.1538,
+   "scale": 0.1549,
    "anim": {},
    "single_picture": true,
    "note": "Bitten apple with three crumbs.",
@@ -181,17 +181,17 @@
   },
   "beetle": {
    "file": "fauna/beetle.png",
-   "w": 170,
-   "h": 105,
+   "w": 196,
+   "h": 132,
    "kind": "creature",
    "facing": "right",
    "ground": [
-    96.5,
-    102.0
+    92.5,
+    129.0
    ],
-   "length_px": 163,
+   "length_px": 185,
    "game_len": 40.0,
-   "scale": 0.2454,
+   "scale": 0.2162,
    "anim": {
     "bob": 1.0,
     "squash": 0.04
@@ -202,17 +202,17 @@
   },
   "honeydew": {
    "file": "fauna/honeydew.png",
-   "w": 125,
-   "h": 145,
+   "w": 123,
+   "h": 142,
    "kind": "food",
    "facing": "none",
    "ground": [
-    84.0,
-    142.0
+    83.5,
+    139.0
    ],
-   "length_px": 116,
+   "length_px": 113,
    "game_len": 14.0,
-   "scale": 0.1207,
+   "scale": 0.1239,
    "anim": {
     "pulse": 0.05
    },
@@ -222,17 +222,17 @@
   },
   "aphids": {
    "file": "fauna/aphids.png",
-   "w": 156,
-   "h": 156,
+   "w": 164,
+   "h": 166,
    "kind": "creature",
    "facing": "none",
    "ground": [
-    65.0,
-    153.0
+    73.5,
+    163.0
    ],
-   "length_px": 150,
+   "length_px": 153,
    "game_len": 8.0,
-   "scale": 0.0533,
+   "scale": 0.0523,
    "anim": {
     "squash": 0.05,
     "wiggle": 3
@@ -243,17 +243,17 @@
   },
   "mushrooms": {
    "file": "fauna/mushrooms.png",
-   "w": 181,
-   "h": 182,
+   "w": 177,
+   "h": 167,
    "kind": "food",
    "facing": "none",
    "ground": [
-    89.5,
-    179.0
+    86.0,
+    165.0
    ],
-   "length_px": 175,
+   "length_px": 170,
    "game_len": 26.0,
-   "scale": 0.1486,
+   "scale": 0.1529,
    "anim": {},
    "single_picture": true,
    "note": "Cluster of white mushrooms on a mound of earth.",
@@ -262,12 +262,12 @@
   "leaf": {
    "file": "fauna/leaf.png",
    "w": 139,
-   "h": 167,
+   "h": 168,
    "kind": "plant",
    "facing": "none",
    "ground": [
     44.5,
-    164.0
+    165.0
    ],
    "length_px": 133,
    "game_len": 28.0,
@@ -280,16 +280,16 @@
   "stagbeetle": {
    "file": "fauna/stagbeetle.png",
    "w": 320,
-   "h": 154,
+   "h": 179,
    "kind": "creature",
    "facing": "right",
    "ground": [
-    135.5,
-    152.0
+    135.0,
+    176.0
    ],
-   "length_px": 311,
+   "length_px": 312,
    "game_len": 90.0,
-   "scale": 0.2894,
+   "scale": 0.2885,
    "anim": {
     "bob": 1.5,
     "squash": 0.03
@@ -301,16 +301,16 @@
   "centipede": {
    "file": "fauna/centipede.png",
    "w": 320,
-   "h": 127,
+   "h": 157,
    "kind": "creature",
    "facing": "right",
    "ground": [
-    168.5,
-    124.0
+    132.0,
+    154.0
    ],
-   "length_px": 310,
+   "length_px": 291,
    "game_len": 120.0,
-   "scale": 0.3871,
+   "scale": 0.4124,
    "anim": {
     "bob": 1.0,
     "wiggle": 3,
@@ -318,21 +318,21 @@
    },
    "single_picture": true,
    "note": "Centipede, head right.",
-   "sheet_scale": 0.9552
+   "sheet_scale": 0.8556
   },
   "scorpion": {
    "file": "fauna/scorpion.png",
-   "w": 301,
-   "h": 223,
+   "w": 305,
+   "h": 222,
    "kind": "creature",
    "facing": "right",
    "ground": [
-    163.0,
+    169.0,
     220.0
    ],
-   "length_px": 290,
+   "length_px": 296,
    "game_len": 110.0,
-   "scale": 0.3793,
+   "scale": 0.3716,
    "anim": {
     "bob": 1.0,
     "squash": 0.03
@@ -344,33 +344,33 @@
   "moth": {
    "file": "fauna/moth.png",
    "w": 320,
-   "h": 131,
+   "h": 135,
    "kind": "creature",
    "facing": "right",
    "ground": [
-    231.5,
-    129.0
+    229.0,
+    133.0
    ],
-   "length_px": 308,
+   "length_px": 304,
    "game_len": 60.0,
-   "scale": 0.1948,
+   "scale": 0.1974,
    "anim": {
     "bob": 2.0,
     "squash": 0.03
    },
    "single_picture": true,
    "note": "Furry brown moth-like winged insect, flies.",
-   "sheet_scale": 0.7407
+   "sheet_scale": 0.7289
   },
   "earthworm": {
    "file": "fauna/earthworm.png",
    "w": 320,
-   "h": 67,
+   "h": 68,
    "kind": "creature",
    "facing": "right",
    "ground": [
-    130.0,
-    66.0
+    127.5,
+    67.0
    ],
    "length_px": 316,
    "game_len": 180.0,
@@ -381,42 +381,42 @@
    },
    "single_picture": true,
    "note": "Earthworm; the open mouth is at the right.",
-   "sheet_scale": 0.4295
+   "sheet_scale": 0.4301
   },
   "hornet": {
    "file": "fauna/hornet.png",
    "w": 320,
-   "h": 212,
+   "h": 177,
    "kind": "creature",
    "facing": "right",
    "ground": [
-    200.0,
-    209.0
+    165.5,
+    174.0
    ],
-   "length_px": 313,
+   "length_px": 311,
    "game_len": 70.0,
-   "scale": 0.2236,
+   "scale": 0.2251,
    "anim": {
     "bob": 2.5,
     "squash": 0.02
    },
    "single_picture": true,
    "note": "Yellow-black hornet with its pale wings (one item).",
-   "sheet_scale": 0.9668
+   "sheet_scale": 0.806
   },
   "redant_small": {
    "file": "fauna/redant_small.png",
-   "w": 209,
-   "h": 112,
+   "w": 244,
+   "h": 157,
    "kind": "creature",
    "facing": "right",
    "ground": [
-    105.5,
-    109.0
+    98.5,
+    154.0
    ],
-   "length_px": 203,
+   "length_px": 235,
    "game_len": 36.0,
-   "scale": 0.1773,
+   "scale": 0.1532,
    "anim": {
     "bob": 1.0,
     "squash": 0.04
@@ -428,44 +428,44 @@
   "redant_soldier": {
    "file": "fauna/redant_soldier.png",
    "w": 320,
-   "h": 162,
+   "h": 155,
    "kind": "creature",
    "facing": "right",
    "ground": [
-    126.0,
-    159.0
+    114.0,
+    153.0
    ],
-   "length_px": 314,
+   "length_px": 312,
    "game_len": 48.0,
-   "scale": 0.1529,
+   "scale": 0.1538,
    "anim": {
     "bob": 1.0,
     "squash": 0.04
    },
    "single_picture": true,
    "note": "Red soldier ant.",
-   "sheet_scale": 0.9816
+   "sheet_scale": 0.8377
   },
   "redant_major": {
    "file": "fauna/redant_major.png",
    "w": 320,
-   "h": 157,
+   "h": 149,
    "kind": "creature",
    "facing": "right",
    "ground": [
-    162.5,
-    155.0
+    147.0,
+    147.0
    ],
-   "length_px": 316,
+   "length_px": 314,
    "game_len": 80.0,
-   "scale": 0.2532,
+   "scale": 0.2548,
    "anim": {
     "bob": 1.5,
     "squash": 0.03
    },
    "single_picture": true,
    "note": "Red major ant with horns.",
-   "sheet_scale": 0.6049
+   "sheet_scale": 0.5546
   }
  }
 }

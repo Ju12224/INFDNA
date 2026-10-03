@@ -10,6 +10,14 @@ const GroundView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/grou
 const EnemyDefs = preload("res://mods-unpacked/Judah-InfDNA/core/enemy_defs.gd")
 const Sim = preload("res://mods-unpacked/Judah-InfDNA/core/colony_sim.gd")
 const Orders = preload("res://mods-unpacked/Judah-InfDNA/core/orders.gd")
+const Kit = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ui_kit.gd")
+
+# Detail by mutation (genome.mutation_score): a plain ant is drawn the cheap way (one soft shadow, no dust, only the poses that carry
+# information, and the baker bakes half its walk frames while it is seen from afar). From MS_PLAIN the detail grows and by MS_RICH a
+# monstrosity gets everything: a heavier shadow, more dust, a menacing sway, drifting spores. The five Apex ants also stand in a golden aura.
+const MS_PLAIN = 12.0
+const MS_RICH = 70.0
+const APEX_GOLD = Color(1.0, 0.82, 0.32)
 
 const CASTE_COLORS = [Color("#6cc644"), Color("#c9863b"), Color("#e8483b")]
 const CASTE_ICONS = ["res://items/all/fruit_basket/fruit_basket_icon.png", "res://items/all/improved_tools/improved_tools_icon.png",
@@ -48,6 +56,8 @@ const BACK_SHADE = 0.5
 
 
 var _glow_tex = null
+var _tag_font = null
+var _mk := 0.0           # how mutated the ant being drawn is, 0 (plain) .. 1 (monstrosity), read by the pose code
 
 
 func _ready() -> void:
@@ -55,6 +65,7 @@ func _ready() -> void:
 		_glow_tex = load("res://particles/sprites/particle_28.png")
 	for p in CASTE_ICONS:
 		_caste_tex.append(load(p) if ResourceLoader.exists(p) else null)
+	_tag_font = Kit.font(15, 2)
 
 
 func _process(delta: float) -> void:
@@ -249,6 +260,14 @@ func _draw() -> void:
 	for it in items:
 		if it[1] == 0 and show_castes and (badges_visible or it[2] == selected):
 			_draw_caste_badge(it[2])
+	if not sim.apex.empty():
+		var z = cam.zoom.x if cam != null else 1.0
+		for ap in sim.apex:
+			if ap == selected or z < 0.8:
+				var ax = (ap.x + 0.5) * C0
+				var ay = (ap.y + 0.5) * C0
+				if ax >= vr.position.x and ax <= vr.end.x and ay >= vr.position.y and ay <= vr.end.y:
+					_draw_apex_tag(ap, z)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
@@ -292,14 +311,24 @@ func _draw_shadows(items: Array) -> void:
 			rx = EnemyDefs.height_of(u) * 0.36 * d[1]
 			air = sk if u.def.get("fly", false) else 0.0
 		var a = sk * d[3] * (1.0 - 0.5 * air) * (1.0 - 0.8 * (day.night if day != null else 0.0))     # no sun, no shadows
-		if q == 1:
+		var qq = q
+		var heavy = 0.0
+		if it[1] == 0:
+			var ms = u.genome.mutation_score()
+			if ms < MS_PLAIN:
+				qq = min(q, 1)                 # a plain ant: one soft ellipse
+			else:
+				heavy = clamp((ms - MS_PLAIN) / (MS_RICH - MS_PLAIN), 0.0, 1.0)
+		if qq == 1:
 			draw_set_transform(pos + Vector2(-rx * 0.3 - air * 14.0, 0), 0.0, Vector2(1.0, 0.3))
-			draw_circle(Vector2.ZERO, rx, Color(0.05, 0.1, 0.03, 0.2 * a))
+			draw_circle(Vector2.ZERO, rx, Color(0.05, 0.1, 0.03, (0.24 if q > 1 else 0.2) * a))
 			continue
 		draw_set_transform(pos + Vector2(-rx * 0.3 - air * 14.0, 0), _slope(pos.x), Vector2(1.0, 0.3))
 		draw_circle(Vector2.ZERO, rx * 1.15 * (1.0 + 0.2 * air), Color(0.05, 0.1, 0.03, 0.09 * a))
 		draw_circle(Vector2.ZERO, rx * 0.85, Color(0.05, 0.1, 0.03, 0.12 * a))
 		draw_circle(Vector2(rx * 0.1, 0), rx * 0.5, Color(0.05, 0.1, 0.03, 0.15 * a))
+		if heavy > 0.0:
+			draw_circle(Vector2(-rx * 0.1, 0), rx * (1.45 + 0.25 * heavy), Color(0.08, 0.04, 0.12, 0.09 * heavy * a))      # a monstrosity darkens the ground around it
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
@@ -325,6 +354,51 @@ func pick(world_pos: Vector2, radius: float = 30.0):
 			bd = q
 			best = a
 	return best
+
+
+# The Apex ants (the five most mutated alive) stand in a soft golden aura: a glow behind the body, a ring on the ground, all breathing slowly.
+# The best of them is the strongest, with a second ring and motes of light rising off it. One dictionary lookup per ant decides who gets this.
+func _draw_apex_aura(a, feet: Vector2, n: Vector2, d: Array, rank: int) -> void:
+	var k = d[1] * (clamp(cam.zoom.x, 1.0, 2.2) if cam != null else 1.0)       # a little bigger zoomed out, so it can still be found
+	var pulse = 0.5 + 0.5 * sin(_t * 1.6 + a.id * 0.9)
+	var top = 1.0 if rank == 0 else 0.6 - 0.07 * rank
+	var al = top * (0.62 + 0.38 * pulse) * min(1.0, d[2] + 0.25) * d[3]
+	var c = feet - n * 16.0 * k
+	if _glow_tex != null:
+		var gw = (130.0 + 90.0 * top) * k * (0.94 + 0.1 * pulse)
+		draw_texture_rect(_glow_tex, Rect2(c - Vector2(gw, gw * 0.8) * 0.5, Vector2(gw, gw * 0.8)), false, Color(APEX_GOLD.r, APEX_GOLD.g, APEX_GOLD.b, 0.85 * al))
+	var R = (31.0 + 3.0 * pulse) * k
+	draw_set_transform(feet + Vector2(0, 3.0 * k), 0.0, Vector2(1.0, 0.34))
+	draw_arc(Vector2.ZERO, R, 0.0, TAU, 28, Color(0.1, 0.06, 0.0, 0.4 * al), 6.0, true)
+	draw_arc(Vector2.ZERO, R, 0.0, TAU, 28, Color(1.0, 0.86, 0.38, 0.9 * al), 3.0, true)
+	if rank == 0:
+		draw_arc(Vector2.ZERO, R * 1.3, _t * 0.5, _t * 0.5 + TAU * 0.7, 24, Color(1.0, 0.92, 0.55, 0.55 * al), 2.2, true)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	if rank == 0:
+		for j in 3:
+			var ph = fmod(_t * 0.35 + j * 0.333 + a.id * 0.07, 1.0)
+			var mp = c + Vector2(sin(_t * 1.1 + j * 2.1 + a.id) * 18.0 * k, 10.0 * k - ph * 52.0 * k)
+			draw_circle(mp, (2.4 - ph * 1.2) * k, Color(1.0, 0.92, 0.55, 0.85 * (1.0 - ph) * al))
+
+
+# The tag over an Apex ant when it is selected or the camera is close: "APEX 148", about the same size on screen at any zoom.
+func _draw_apex_tag(a, z: float) -> void:
+	var d = _depth(a.id, lane_of(a, a.id))
+	var C = sim.grid.CELL
+	var pos = sim.ant_pos(a) + Vector2(0, d[0])
+	var sc = clamp(z, 0.4, 1.5)
+	var lift = 27.0 * d[1] + 6.0
+	if show_castes:
+		lift += 2.0 * clamp(6.0 * z, 2.0, 9.0) + 8.0       # above the caste badge
+	var txt = "APEX %d" % int(sim.ms_of(a))
+	var w = _tag_font.get_string_size(txt).x + 14.0
+	var al = d[3]
+	draw_set_transform(pos + Vector2(0, C * 0.5 - lift), 0.0, Vector2(sc, sc))
+	draw_rect(Rect2(-w * 0.5 - 2.0, -24.0, w + 4.0, 22.0), Color(INK.r, INK.g, INK.b, 0.95 * al))
+	draw_rect(Rect2(-w * 0.5, -22.0, w, 18.0), Color(0.34, 0.24, 0.05, 0.95 * al))
+	draw_rect(Rect2(-w * 0.5, -22.0, w, 2.0), Color(APEX_GOLD.r, APEX_GOLD.g, APEX_GOLD.b, al))
+	draw_string(_tag_font, Vector2(-w * 0.5 + 7.0, -8.0), txt, Color(1.0, 0.92, 0.6, al))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 # Every ant in the player's selection stands in a white ring; one under an order wears a ring in the order's colour (blue guard, red attack,
@@ -531,6 +605,46 @@ func _apply_pose(a, raw: Vector2, moving: bool) -> void:
 		_p_rot += 0.3 * (1.0 - a.age / 0.5) * sin(a.age * 40.0)   # wobbly first steps
 	if a.carry > 0.0 and moving:
 		_p_rot += a.facing * 0.07                               # leaning into the load
+	if _mk > 0.0:
+		_p_rot += _mk * 0.035 * sin(_t * 1.7 + a.id * 1.3)      # a monstrosity sways, heavy and slow
+		_p_sy *= 1.0 + _mk * 0.02 * sin(_t * 2.9 + a.id)
+
+
+# The pose of a plain ant: only what tells the player something (the fight lunge, the dig jackhammer, a rear-up on guard, the flinch from
+# a hit, the lean under a load, a newborn's wobble). No breathing, grooming, nursing rock, grab-nod or hop, and no per-ant dictionary.
+func _apply_pose_lite(a, raw: Vector2, moving: bool) -> void:
+	_p_off = Vector2.ZERO
+	_p_rot = 0.0
+	_p_sx = 1.0
+	_p_sy = 1.0
+	_p_face = a.facing
+	var fwd = Vector2(cos(a.rot), sin(a.rot)) * a.facing
+	if (a.task == 4 or a.hurt > 0.0) and not _foes.empty() and _nearest_foe(raw) < 900.0:
+		_p_face = 1 if _foe_pos.x >= raw.x else -1
+		fwd = Vector2(cos(a.rot), sin(a.rot)) * _p_face
+		var lunge = max(0.0, sin(_t * 13.0 + a.id * 1.9))
+		lunge *= lunge
+		_p_off += fwd * (6.0 * lunge)
+		_p_rot += _p_face * (0.24 * lunge - 0.04)
+		_p_sy *= 1.0 - 0.07 * lunge
+	elif a.dig_timer > 0.0:
+		if a.dig_cell.x != a.x:
+			_p_face = 1 if a.dig_cell.x > a.x else -1
+			fwd = Vector2(cos(a.rot), sin(a.rot)) * _p_face
+		var jh = sin(_t * 34.0 + a.id)
+		_p_off += fwd * (2.2 * jh)
+		_p_off.y += 0.8 * sin(_t * 61.0)
+		_p_rot += _p_face * (0.12 + 0.03 * jh)
+	elif a.task == 4 and not moving:
+		_p_rot -= a.facing * (0.28 + 0.06 * sin(_t * 3.0 + a.id))
+	if a.hurt > 0.0:
+		var hu = clamp(a.hurt / 0.12, 0.0, 1.0)
+		_p_off -= fwd * (3.0 * hu)
+		_p_off.x += sin(_t * 70.0 + a.id) * 1.2 * hu
+	if a.age < 0.5:
+		_p_rot += 0.3 * (1.0 - a.age / 0.5) * sin(a.age * 40.0)
+	if a.carry > 0.0 and moving:
+		_p_rot += a.facing * 0.07
 
 
 # World px of ground covered by one walk cycle at scale 1, from this body plan's leg length (matches the
@@ -633,12 +747,17 @@ func _draw_ant(a) -> void:
 		feet += Vector2(0, -lift * d[1])      # hover; the shadow stays on the ground
 	var moving = a.tx != a.x or a.ty != a.y
 	var detail = perf.ants if perf != null else 2
+	var ms = a.genome.mutation_score()
+	var plain = ms < MS_PLAIN
+	_mk = clamp((ms - MS_PLAIN) / (MS_RICH - MS_PLAIN), 0.0, 1.0) if detail >= 2 else 0.0
 	if detail == 0 or (cam != null and cam.zoom.x > 1.7):
 		_p_off = Vector2.ZERO          # too small to see, or the machine is struggling: skip the pose animation
 		_p_rot = 0.0
 		_p_sx = 1.0
 		_p_sy = 1.0
 		_p_face = a.facing
+	elif plain:
+		_apply_pose_lite(a, raw, moving)
 	else:
 		_apply_pose(a, raw, moving)
 	if air > 0.01:
@@ -654,17 +773,20 @@ func _draw_ant(a) -> void:
 		draw_arc(feet - n * 10.0, pr, _t * 1.5, _t * 1.5 + TAU * 0.8, 28, Color.white, 3.0, true)
 	if a.squad != 0 or sel_ids.has(a.id):
 		_draw_order_ring(a, feet, d[1])
+	var rank = int(sim.apex_ids.get(a.id, -1))
+	if rank >= 0 and detail >= 1:
+		_draw_apex_aura(a, feet, n, d, rank)
 	var frame = int(fposmod(_gait_ph.get(a.id, 0.0), 1.0) * baker.FRAMES) % baker.FRAMES if moving else 0
-	var tex = baker.get_texture(a.genome, 1.0, frame)
+	var tex = baker.get_texture(a.genome, 1.0, frame, plain and cam != null and cam.zoom.x > 0.6)     # a plain ant seen from afar: half the walk frames
 	var sk = _surf_k.get(a.id, 0.0)
-	if moving and sk > 0.5 and detail >= 2:
-		# little dust kicked up behind a running ant
+	if moving and sk > 0.5 and detail >= 2 and not plain:
+		# little dust kicked up behind a running ant (more of it behind a monstrosity)
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		var back = Vector2(cos(a.rot), sin(a.rot)) * a.facing
-		for j in 2:
+		for j in 2 + int(round(_mk * 2.0)):
 			var dph = fmod(_t * 3.5 + a.id * 0.37 + j * 0.5, 1.0)
 			var dp = feet - back * (8.0 + dph * 16.0) + Vector2(0, -1.0 - dph * 5.0)
-			draw_circle(dp, (2.0 + dph * 3.0) * d[1], Color(0.62, 0.52, 0.38, (1.0 - dph) * 0.22 * sk))
+			draw_circle(dp, (2.0 + dph * 3.0) * d[1] * (1.0 + 0.4 * _mk), Color(0.62, 0.52, 0.38, (1.0 - dph) * 0.22 * sk))
 	var fk = _face_k.get(a.id, float(_p_face))
 	fk = move_toward(fk, float(_p_face), _dt * 9.0)
 	_face_k[a.id] = fk
@@ -711,3 +833,9 @@ func _draw_ant(a) -> void:
 			var pp = Vector2(86.0 + (-40.0 + 28.0 * j) * ph2 * 0.8, -14.0 - 70.0 * ph2 + 120.0 * ph2 * ph2)
 			draw_circle(pp, 9.0 * (1.0 - ph2 * 0.5), Color(0.5 + 0.03 * j, 0.36, 0.22, 0.9 * (1.0 - ph2)))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	if _mk > 0.35:
+		# spores shed by a heavily mutated body: a few motes drifting up off its back
+		for j in 2:
+			var ph3 = fmod(_t * 0.45 + a.id * 0.173 + j * 0.5, 1.0)
+			var sp = feet - n * (14.0 + ph3 * 34.0) * d[1] + Vector2(sin(_t * 1.3 + a.id + j * 3.0) * 7.0 * d[1], 0.0)
+			draw_circle(sp, (1.6 + 1.2 * _mk) * d[1] * (1.0 - ph3 * 0.5), Color(0.74, 0.5, 1.0, 0.5 * (1.0 - ph3) * _mk * alpha))

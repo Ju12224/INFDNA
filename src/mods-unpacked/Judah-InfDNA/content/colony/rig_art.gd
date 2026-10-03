@@ -49,6 +49,13 @@ static func draw(ci: CanvasItem, name: String, feet: Vector2, scale: float, faci
 		if layer == "body":
 			_body(ci, lib, e, base, fv, btex, t, moving, mouth, mod, bob)
 		else:
+			# many legs a side (a centipede, the Void Maw): they move in a wave that runs from tail to head, not all at once
+			var n_side := 0
+			for p in e["parts"]:
+				if p["layer"] == layer:
+					n_side += 1
+			var wave = n_side > 5
+			var cw = max(1.0, float(e["canvas"][0]))
 			for p in e["parts"]:
 				if p["layer"] != layer:
 					continue
@@ -56,11 +63,13 @@ static func draw(ci: CanvasItem, name: String, feet: Vector2, scale: float, faci
 				if tx == null:
 					continue
 				var ph = float(p["phase"]) * PI + (0.0 if layer == "near" else 0.7)
+				if wave:
+					ph = -float(p["pivot"][0]) / cw * TAU * 1.5 + (0.0 if layer == "near" else PI)
 				var sw = sin(t * gait + ph)
-				var lift = max(0.0, cos(t * gait + ph)) * (9.0 if moving else 0.0)
+				var lift = max(0.0, cos(t * gait + ph)) * (9.0 if moving else 0.0) * (0.6 if wave else 1.0)
 				var pos = Vector2(float(p["x"]), float(p["y"])) - fv + Vector2(0, -lift)
 				var pv = Vector2(float(p["pivot"][0]), float(p["pivot"][1])) - fv
-				_put(ci, base, tx, pos, pv, sw * amp, mod)
+				_put(ci, base, tx, pos, pv, sw * amp * (0.7 if wave else 1.0), mod)
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	return true
 

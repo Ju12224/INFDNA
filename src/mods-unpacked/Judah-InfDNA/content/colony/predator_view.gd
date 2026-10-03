@@ -184,7 +184,7 @@ static func draw_feather(ci: CanvasItem, p: Vector2, a: float, L: float, cream: 
 func _shed(delta: float, b, f) -> void:
 	if (b != null and float(b.get("hit", 0.0)) > 0.0) or f != null:
 		_spawn -= delta
-		var cap = 14 if f != null else 8
+		var cap = 10 if f != null else 8
 		if _spawn <= 0.0 and _feathers.size() < cap:
 			_spawn = 0.07 if f != null else 0.16
 			var at: Vector2

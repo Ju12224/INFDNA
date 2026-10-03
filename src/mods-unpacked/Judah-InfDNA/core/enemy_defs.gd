@@ -25,7 +25,7 @@ const DEFS = {
 		"tex": ["res://entities/units/enemies/bruiser/bruiser.png"]},
 	"isopod": {"name": "Giant Isopod", "hp": 380.0, "dmg": 7.5, "speed": 1.5, "cls": "elite", "food": 50.0, "cost": 8,
 		"tex": ["res://dlcs/dlc_1/enemies/giant_isopod/giant_isopod.png", "res://entities/units/enemies/horned_bruiser/horned_bruiser.png"]},
-	"borer": {"name": "Tunnel Borer", "hp": 190.0, "dmg": 7.0, "ant_mult": 0.3, "speed": 2.8, "cls": "burrower", "food": 24.0, "cost": 4,
+	"borer": {"name": "Tunnel Borer", "hp": 190.0, "dmg": 7.0, "ant_mult": 0.3, "speed": 2.8, "cls": "burrower", "food": 24.0, "cost": 4, "spine": "worm_strip.png",
 		"tex": ["res://entities/units/enemies/lamprey/lamprey.png", "res://dlcs/dlc_1/enemies/impaled_worm/impaled_worm.png"]},
 	"butcher": {"name": "Butcher", "hp": 700.0, "dmg": 15.0, "speed": 1.7, "cls": "boss", "food": 140.0, "cost": 18,
 		"tex": ["res://entities/units/enemies/butcher/butcher.png"]},

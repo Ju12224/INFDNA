@@ -2923,6 +2923,11 @@ func _burrower_arrive(e) -> void:
 			_go(e, Vector2(e.x, e.y))
 			return
 		e.state = 3
+		# it dives in: the soil it throws up lands beside the hole
+		var cols = grid.deposit(e.x - e.facing * 2, 2.0, rng)
+		if not cols.empty():
+			_unbury(cols)
+		fx.append({"kind": "puff", "pos": grid.center(e.x, grid.surf_y(e.x) - 1), "t": 0.0, "color": Color("#8a6a48")})
 	var cur = Vector2(e.x, e.y)
 	if cur.distance_to(e.dest) <= 1.6 or (grid.is_under(e.x, e.y) and grid.field(grid.dist_home, e.x, e.y) >= 0 and grid.field(grid.dist_home, e.x, e.y) <= 1):
 		_go(e, cur)   # arrived: gnaws at the queen (see _combat)

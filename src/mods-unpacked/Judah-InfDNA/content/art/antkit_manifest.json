@@ -1,293 +1,269 @@
 {
- "_about": "Ant part kit cut from art_src/antkit_*.png by tools/art/make_antkit.py. Every piece is a trimmed transparent PNG, long side <= 256 px. 'pivot' is a suggested hinge in the piece's own pixels (legs: top joint; mandibles: where they attach; antennae: base; wings: root; abdomens: front attachment; thorax/misc: centre; heads: neck). Ants in the pictures face RIGHT. _l/_r name the place on the sheet (mirror a piece with a flip for the other side). 'scale' is how much the piece was shrunk from the sheet. Full bodies carry 'length' (nose to tail, antennae and leg tips excluded) and 'feet' (ground contact, bottom centre).",
+ "_about": "Ant part kit cut from art_src/antkit_*.png by tools/art/make_antkit.py. Every piece is a trimmed transparent PNG (2 px margin), long side <= 256 px. 'pivot' is a suggested hinge in the piece's own pixels (legs: top joint; mandibles: where they attach; antennae: base; wings: root; abdomens: front attachment; thorax/eggs/brood/misc: centre; heads: neck, the back of the head). Ants in the pictures face RIGHT. _l/_r name the place on the sheet (a pair is two mirrored shapes: use flip_h for the other side). 'scale' is how much the piece was shrunk from the sheet. Full bodies carry 'length' (nose to tail, antennae and leg tips excluded) and 'feet' (ground contact, bottom centre).",
  "pieces": {
   "head_1": {
    "file": "antkit/head_1.png",
-   "w": 192,
+   "w": 195,
    "h": 256,
    "kind": "head",
    "sheet": "antkit_heads_a.png",
    "pivot": [
-    17.5,
-    169.6
+    16.9,
+    168.3
    ],
-   "scale": 0.501
-  },
-  "claw_1": {
-   "file": "antkit/claw_1.png",
-   "w": 55,
-   "h": 74,
-   "kind": "misc",
-   "sheet": "antkit_parts_b.png",
-   "pivot": [
-    11.4,
-    6.4
-   ],
-   "scale": 1.0
-  },
-  "claw_2": {
-   "file": "antkit/claw_2.png",
-   "w": 45,
-   "h": 48,
-   "kind": "misc",
-   "sheet": "antkit_parts_b.png",
-   "pivot": [
-    8.1,
-    5.4
-   ],
-   "scale": 1.0
+   "scale": 0.4971
   },
   "head_2": {
    "file": "antkit/head_2.png",
-   "w": 188,
+   "w": 190,
    "h": 256,
    "kind": "head",
    "sheet": "antkit_heads_a.png",
    "pivot": [
-    16.9,
-    151.3
+    17.1,
+    161.5
    ],
-   "scale": 0.4904
+   "scale": 0.483
   },
   "head_3": {
    "file": "antkit/head_3.png",
-   "w": 207,
+   "w": 210,
    "h": 256,
    "kind": "head",
    "sheet": "antkit_heads_a.png",
    "pivot": [
-    19.4,
-    165.5
+    19.7,
+    163.6
    ],
-   "scale": 0.5039
+   "scale": 0.4971
   },
   "head_4": {
    "file": "antkit/head_4.png",
-   "w": 168,
+   "w": 171,
    "h": 256,
    "kind": "head",
    "sheet": "antkit_heads_a.png",
    "pivot": [
-    16.9,
-    161.4
+    17.2,
+    158.8
    ],
-   "scale": 0.4942
+   "scale": 0.4858
   },
   "mandible_1_l": {
    "file": "antkit/mandible_1_l.png",
-   "w": 116,
-   "h": 174,
+   "w": 122,
+   "h": 179,
    "kind": "mandible",
    "sheet": "antkit_heads_a.png",
    "pivot": [
-    80.3,
-    12.9
+    83.6,
+    13.7
    ],
    "scale": 1.0
   },
   "mandible_1_r": {
    "file": "antkit/mandible_1_r.png",
-   "w": 116,
-   "h": 177,
+   "w": 122,
+   "h": 182,
    "kind": "mandible",
    "sheet": "antkit_heads_a.png",
    "pivot": [
-    41.6,
-    13.4
+    44.1,
+    12.8
    ],
    "scale": 1.0
   },
   "mandible_2_l": {
    "file": "antkit/mandible_2_l.png",
-   "w": 172,
+   "w": 186,
    "h": 256,
    "kind": "mandible",
    "sheet": "antkit_heads_a.png",
    "pivot": [
-    93.0,
-    18.2
+    94.2,
+    18.4
    ],
-   "scale": 0.9588
+   "scale": 0.9412
   },
   "mandible_2_r": {
    "file": "antkit/mandible_2_r.png",
-   "w": 126,
-   "h": 252,
+   "w": 129,
+   "h": 256,
    "kind": "mandible",
    "sheet": "antkit_heads_a.png",
    "pivot": [
-    40.6,
-    17.5
+    43.3,
+    18.1
    ],
-   "scale": 1.0
+   "scale": 0.9734
   },
   "mandible_3_l": {
    "file": "antkit/mandible_3_l.png",
-   "w": 151,
+   "w": 146,
    "h": 256,
    "kind": "mandible",
    "sheet": "antkit_heads_a.png",
    "pivot": [
-    65.2,
-    18.1
+    63.8,
+    18.2
    ],
-   "scale": 0.9309
+   "scale": 0.8767
   },
   "mandible_3_r": {
    "file": "antkit/mandible_3_r.png",
-   "w": 143,
+   "w": 142,
    "h": 256,
    "kind": "mandible",
    "sheet": "antkit_heads_a.png",
    "pivot": [
-    42.3,
-    17.8
+    43.0,
+    17.9
    ],
-   "scale": 0.9176
+   "scale": 0.8737
   },
   "mandible_4_l": {
    "file": "antkit/mandible_4_l.png",
-   "w": 183,
-   "h": 251,
+   "w": 189,
+   "h": 256,
    "kind": "mandible",
    "sheet": "antkit_heads_a.png",
    "pivot": [
-    101.0,
-    17.7
+    105.1,
+    18.2
    ],
-   "scale": 1.0
+   "scale": 0.9961
   },
   "mandible_4_r": {
    "file": "antkit/mandible_4_r.png",
-   "w": 134,
-   "h": 246,
+   "w": 140,
+   "h": 250,
    "kind": "mandible",
    "sheet": "antkit_heads_a.png",
    "pivot": [
-    62.2,
-    16.7
+    49.1,
+    18.4
    ],
    "scale": 1.0
   },
   "head_5": {
    "file": "antkit/head_5.png",
    "w": 256,
-   "h": 219,
+   "h": 218,
    "kind": "head",
    "sheet": "antkit_heads_b.png",
    "pivot": [
     26.8,
-    124.7
+    123.7
    ],
-   "scale": 0.6809
+   "scale": 0.6737
   },
   "head_6": {
    "file": "antkit/head_6.png",
    "w": 256,
-   "h": 255,
+   "h": 253,
    "kind": "head",
    "sheet": "antkit_heads_b.png",
    "pivot": [
-    26.7,
-    128.1
+    26.8,
+    125.7
    ],
-   "scale": 0.7232
+   "scale": 0.7091
   },
   "head_7": {
    "file": "antkit/head_7.png",
    "w": 256,
-   "h": 215,
+   "h": 220,
    "kind": "head",
    "sheet": "antkit_heads_b.png",
    "pivot": [
     27.1,
-    114.0
+    116.0
    ],
-   "scale": 0.6667
+   "scale": 0.6564
   },
   "head_8": {
    "file": "antkit/head_8.png",
-   "w": 229,
+   "w": 228,
    "h": 256,
    "kind": "head",
    "sheet": "antkit_heads_b.png",
    "pivot": [
-    28.0,
-    146.5
+    29.8,
+    147.6
    ],
-   "scale": 0.5845
+   "scale": 0.5689
   },
   "mandible_5_l": {
    "file": "antkit/mandible_5_l.png",
-   "w": 121,
-   "h": 169,
+   "w": 136,
+   "h": 175,
    "kind": "mandible",
    "sheet": "antkit_heads_b.png",
    "pivot": [
-    57.9,
-    12.2
+    63.0,
+    12.4
    ],
    "scale": 1.0
   },
   "mandible_5_r": {
    "file": "antkit/mandible_5_r.png",
-   "w": 90,
-   "h": 160,
+   "w": 107,
+   "h": 175,
    "kind": "mandible",
    "sheet": "antkit_heads_b.png",
    "pivot": [
-    21.2,
-    11.8
+    35.5,
+    11.6
    ],
    "scale": 1.0
   },
   "mandible_6_l": {
    "file": "antkit/mandible_6_l.png",
-   "w": 227,
+   "w": 240,
    "h": 256,
    "kind": "mandible",
    "sheet": "antkit_heads_b.png",
    "pivot": [
-    82.7,
-    17.9
+    80.8,
+    17.4
    ],
-   "scale": 0.892
+   "scale": 0.8737
   },
   "mandible_6_r": {
    "file": "antkit/mandible_6_r.png",
-   "w": 194,
+   "w": 197,
    "h": 256,
    "kind": "mandible",
    "sheet": "antkit_heads_b.png",
    "pivot": [
-    36.2,
-    17.7
+    46.6,
+    17.5
    ],
-   "scale": 0.8858
+   "scale": 0.8285
   },
   "mandible_7_l": {
    "file": "antkit/mandible_7_l.png",
-   "w": 147,
+   "w": 152,
    "h": 256,
    "kind": "mandible",
    "sheet": "antkit_heads_b.png",
    "pivot": [
-    33.7,
-    15.8
+    46.9,
+    16.0
    ],
-   "scale": 0.7829
+   "scale": 0.7151
   },
   "mandible_7_r": {
    "file": "antkit/mandible_7_r.png",
-   "w": 179,
+   "w": 165,
    "h": 256,
    "kind": "mandible",
    "sheet": "antkit_heads_b.png",
    "pivot": [
-    44.0,
-    17.0
+    41.4,
+    17.1
    ],
-   "scale": 0.8533
+   "scale": 0.7688
   },
   "mandible_8_l": {
    "file": "antkit/mandible_8_l.png",
@@ -296,104 +272,200 @@
    "kind": "mandible",
    "sheet": "antkit_heads_b.png",
    "pivot": [
-    70.2,
-    19.3
+    50.3,
+    19.6
    ],
-   "scale": 0.9588
+   "scale": 0.9343
   },
   "mandible_8_r": {
    "file": "antkit/mandible_8_r.png",
-   "w": 162,
-   "h": 254,
+   "w": 182,
+   "h": 256,
    "kind": "mandible",
    "sheet": "antkit_heads_b.png",
    "pivot": [
-    28.0,
-    17.7
+    44.9,
+    18.5
+   ],
+   "scale": 0.9771
+  },
+  "thorax_1": {
+   "file": "antkit/thorax_1.png",
+   "w": 231,
+   "h": 201,
+   "kind": "thorax",
+   "sheet": "antkit_parts_a.png",
+   "pivot": [
+    120.6,
+    95.3
+   ],
+   "scale": 1.0
+  },
+  "thorax_2": {
+   "file": "antkit/thorax_2.png",
+   "w": 228,
+   "h": 214,
+   "kind": "thorax",
+   "sheet": "antkit_parts_a.png",
+   "pivot": [
+    117.1,
+    111.5
+   ],
+   "scale": 1.0
+  },
+  "thorax_3": {
+   "file": "antkit/thorax_3.png",
+   "w": 249,
+   "h": 216,
+   "kind": "thorax",
+   "sheet": "antkit_parts_a.png",
+   "pivot": [
+    126.7,
+    107.4
    ],
    "scale": 1.0
   },
   "abdomen_1": {
    "file": "antkit/abdomen_1.png",
-   "w": 169,
-   "h": 246,
+   "w": 172,
+   "h": 248,
    "kind": "abdomen",
    "sheet": "antkit_parts_a.png",
    "pivot": [
-    143.9,
-    25.3
+    145.6,
+    26.0
    ],
    "scale": 1.0
   },
   "abdomen_2": {
    "file": "antkit/abdomen_2.png",
-   "w": 132,
+   "w": 128,
    "h": 256,
    "kind": "abdomen",
    "sheet": "antkit_parts_a.png",
    "pivot": [
-    108.3,
-    26.5
+    110.2,
+    20.3
    ],
-   "scale": 0.9588
+   "scale": 0.9014
   },
   "abdomen_3": {
    "file": "antkit/abdomen_3.png",
-   "w": 162,
+   "w": 149,
    "h": 256,
    "kind": "abdomen",
    "sheet": "antkit_parts_a.png",
    "pivot": [
-    141.6,
-    26.0
+    126.9,
+    18.9
    ],
-   "scale": 0.9275
+   "scale": 0.9552
   },
   "abdomen_4": {
    "file": "antkit/abdomen_4.png",
-   "w": 139,
+   "w": 140,
    "h": 256,
    "kind": "abdomen",
    "sheet": "antkit_parts_a.png",
    "pivot": [
-    108.6,
-    35.9
+    109.8,
+    36.5
    ],
-   "scale": 0.8982
+   "scale": 0.892
   },
   "abdomen_5": {
    "file": "antkit/abdomen_5.png",
-   "w": 121,
+   "w": 112,
    "h": 256,
    "kind": "abdomen",
    "sheet": "antkit_parts_a.png",
    "pivot": [
-    96.6,
-    19.8
+    87.4,
+    21.3
    ],
-   "scale": 0.8393
+   "scale": 0.8366
+  },
+  "leg_1": {
+   "file": "antkit/leg_1.png",
+   "w": 123,
+   "h": 256,
+   "kind": "leg",
+   "sheet": "antkit_parts_a.png",
+   "pivot": [
+    57.9,
+    17.2
+   ],
+   "scale": 0.6755
+  },
+  "leg_2": {
+   "file": "antkit/leg_2.png",
+   "w": 118,
+   "h": 256,
+   "kind": "leg",
+   "sheet": "antkit_parts_a.png",
+   "pivot": [
+    34.1,
+    17.7
+   ],
+   "scale": 0.6827
+  },
+  "leg_3": {
+   "file": "antkit/leg_3.png",
+   "w": 127,
+   "h": 256,
+   "kind": "leg",
+   "sheet": "antkit_parts_a.png",
+   "pivot": [
+    30.0,
+    18.5
+   ],
+   "scale": 0.679
+  },
+  "leg_4": {
+   "file": "antkit/leg_4.png",
+   "w": 141,
+   "h": 256,
+   "kind": "leg",
+   "sheet": "antkit_parts_a.png",
+   "pivot": [
+    37.7,
+    18.2
+   ],
+   "scale": 0.6755
+  },
+  "leg_5": {
+   "file": "antkit/leg_5.png",
+   "w": 148,
+   "h": 256,
+   "kind": "leg",
+   "sheet": "antkit_parts_a.png",
+   "pivot": [
+    39.4,
+    17.2
+   ],
+   "scale": 0.6938
   },
   "antenna_1_l": {
    "file": "antkit/antenna_1_l.png",
-   "w": 200,
-   "h": 169,
+   "w": 198,
+   "h": 168,
    "kind": "antenna",
    "sheet": "antkit_parts_a.png",
    "pivot": [
-    186.8,
-    152.9
+    11.8,
+    103.9
    ],
    "scale": 1.0
   },
   "antenna_1_r": {
    "file": "antkit/antenna_1_r.png",
-   "w": 178,
+   "w": 176,
    "h": 178,
    "kind": "antenna",
    "sheet": "antkit_parts_a.png",
    "pivot": [
-    12.8,
-    158.5
+    12.4,
+    158.3
    ],
    "scale": 1.0
   },
@@ -404,103 +476,99 @@
    "kind": "antenna",
    "sheet": "antkit_parts_a.png",
    "pivot": [
-    193.0,
-    181.4
+    11.7,
+    114.1
    ],
    "scale": 1.0
   },
   "antenna_2_r": {
    "file": "antkit/antenna_2_r.png",
-   "w": 178,
-   "h": 200,
+   "w": 179,
+   "h": 199,
    "kind": "antenna",
    "sheet": "antkit_parts_a.png",
    "pivot": [
-    11.8,
-    170.0
+    11.7,
+    168.7
    ],
    "scale": 1.0
   },
   "wing_1_fore": {
    "file": "antkit/wing_1_fore.png",
    "w": 256,
-   "h": 66,
+   "h": 68,
    "kind": "wing",
    "sheet": "antkit_parts_a.png",
    "pivot": [
-    16.1,
-    23.2
+    16.0,
+    24.1
    ],
-   "scale": 0.4923,
-   "alpha_hint": "membrane is drawn opaque in the source; the game may draw wings at about 0.85 alpha"
+   "scale": 0.4858
   },
   "wing_1_hind": {
    "file": "antkit/wing_1_hind.png",
    "w": 256,
-   "h": 90,
+   "h": 82,
    "kind": "wing",
    "sheet": "antkit_parts_a.png",
    "pivot": [
-    17.2,
-    41.8
+    16.2,
+    41.1
    ],
-   "scale": 0.5039,
-   "alpha_hint": "membrane is drawn opaque in the source; the game may draw wings at about 0.85 alpha"
+   "scale": 0.4981
   },
   "wing_2_fore": {
    "file": "antkit/wing_2_fore.png",
    "w": 256,
-   "h": 78,
+   "h": 80,
    "kind": "wing",
    "sheet": "antkit_parts_a.png",
    "pivot": [
-    16.8,
-    36.4
+    15.8,
+    34.2
    ],
-   "scale": 0.5172,
-   "alpha_hint": "membrane is drawn opaque in the source; the game may draw wings at about 0.85 alpha"
+   "scale": 0.5203
   },
   "wing_2_hind": {
    "file": "antkit/wing_2_hind.png",
    "w": 256,
-   "h": 97,
+   "h": 89,
    "kind": "wing",
    "sheet": "antkit_parts_a.png",
    "pivot": [
-    17.1,
-    48.7
+    15.9,
+    52.2
    ],
-   "scale": 0.5753,
-   "alpha_hint": "membrane is drawn opaque in the source; the game may draw wings at about 0.85 alpha"
+   "scale": 0.5702
   },
-  "thorax_1": {
-   "file": "antkit/thorax_1.png",
-   "w": 256,
-   "h": 173,
+  "thorax_5": {
+   "file": "antkit/thorax_5.png",
+   "w": 206,
+   "h": 181,
    "kind": "thorax",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    104.6,
-    81.8
-   ],
-   "scale": 0.9275
-  },
-  "thorax_2": {
-   "file": "antkit/thorax_2.png",
-   "w": 194,
-   "h": 211,
-   "kind": "thorax",
-   "sheet": "antkit_parts_b.png",
-   "pivot": [
-    95.0,
-    107.4
+    99.3,
+    84.4
    ],
    "scale": 1.0
   },
-  "thorax_3": {
-   "file": "antkit/thorax_3.png",
-   "w": 194,
-   "h": 203,
+  "thorax_6": {
+   "file": "antkit/thorax_6.png",
+   "w": 198,
+   "h": 218,
+   "kind": "thorax",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    95.5,
+    110.5
+   ],
+   "scale": 1.0
+  },
+  "thorax_7": {
+   "file": "antkit/thorax_7.png",
+   "w": 192,
+   "h": 204,
    "kind": "thorax",
    "sheet": "antkit_parts_b.png",
    "pivot": [
@@ -509,647 +577,933 @@
    ],
    "scale": 1.0
   },
-  "thorax_4": {
-   "file": "antkit/thorax_4.png",
-   "w": 233,
-   "h": 197,
+  "thorax_8": {
+   "file": "antkit/thorax_8.png",
+   "w": 188,
+   "h": 198,
    "kind": "thorax",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    124.6,
-    92.3
+    91.8,
+    91.9
    ],
    "scale": 1.0
   },
-  "leg_1": {
-   "file": "antkit/leg_1.png",
-   "w": 135,
-   "h": 256,
-   "kind": "leg",
-   "sheet": "antkit_parts_b.png",
-   "pivot": [
-    82.1,
-    17.4
-   ],
-   "scale": 0.9275
-  },
-  "leg_2": {
-   "file": "antkit/leg_2.png",
-   "w": 125,
-   "h": 256,
-   "kind": "leg",
-   "sheet": "antkit_parts_b.png",
-   "pivot": [
-    47.2,
-    17.0
-   ],
-   "scale": 0.8505
-  },
-  "leg_3": {
-   "file": "antkit/leg_3.png",
-   "w": 140,
-   "h": 256,
-   "kind": "leg",
-   "sheet": "antkit_parts_b.png",
-   "pivot": [
-    56.1,
-    17.7
-   ],
-   "scale": 0.892
-  },
-  "leg_4": {
-   "file": "antkit/leg_4.png",
-   "w": 147,
-   "h": 256,
-   "kind": "leg",
-   "sheet": "antkit_parts_b.png",
-   "pivot": [
-    66.5,
-    19.0
-   ],
-   "scale": 0.8562
-  },
-  "leg_5": {
-   "file": "antkit/leg_5.png",
-   "w": 204,
-   "h": 256,
-   "kind": "leg",
-   "sheet": "antkit_parts_b.png",
-   "pivot": [
-    76.0,
-    19.4
-   ],
-   "scale": 0.8232
-  },
   "leg_6": {
    "file": "antkit/leg_6.png",
-   "w": 153,
+   "w": 128,
    "h": 256,
    "kind": "leg",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    51.9,
-    16.4
+    74.6,
+    17.6
    ],
-   "scale": 0.8477
+   "scale": 0.9176,
+   "dup": true
+  },
+  "leg_7": {
+   "file": "antkit/leg_7.png",
+   "w": 129,
+   "h": 256,
+   "kind": "leg",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    48.1,
+    17.1
+   ],
+   "scale": 0.8737,
+   "dup": true
+  },
+  "leg_8": {
+   "file": "antkit/leg_8.png",
+   "w": 137,
+   "h": 256,
+   "kind": "leg",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    53.7,
+    18.2
+   ],
+   "scale": 0.8828,
+   "dup": true
+  },
+  "leg_9": {
+   "file": "antkit/leg_9.png",
+   "w": 137,
+   "h": 256,
+   "kind": "leg",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    55.1,
+    18.9
+   ],
+   "scale": 0.8591,
+   "dup": true
+  },
+  "leg_10": {
+   "file": "antkit/leg_10.png",
+   "w": 150,
+   "h": 256,
+   "kind": "leg",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    58.2,
+    17.9
+   ],
+   "scale": 0.8889,
+   "dup": true
+  },
+  "leg_11": {
+   "file": "antkit/leg_11.png",
+   "w": 142,
+   "h": 256,
+   "kind": "leg",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    33.9,
+    17.9
+   ],
+   "scale": 0.8449,
+   "dup": true
   },
   "antenna_3_l": {
    "file": "antkit/antenna_3_l.png",
-   "w": 159,
-   "h": 198,
+   "w": 161,
+   "h": 191,
    "kind": "antenna",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    30.3,
+    30.6,
     28.1
    ],
    "scale": 1.0
   },
   "antenna_3_r": {
    "file": "antkit/antenna_3_r.png",
-   "w": 124,
-   "h": 175,
+   "w": 126,
+   "h": 178,
    "kind": "antenna",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    24.0,
-    22.4
+    25.6,
+    21.9
    ],
    "scale": 1.0
   },
   "antenna_4_l": {
    "file": "antkit/antenna_4_l.png",
-   "w": 256,
-   "h": 90,
+   "w": 232,
+   "h": 170,
    "kind": "antenna",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    207.1,
-    76.1
+    13.0,
+    153.9
    ],
-   "scale": 0.9624
+   "scale": 1.0
   },
   "antenna_4_r": {
    "file": "antkit/antenna_4_r.png",
-   "w": 163,
-   "h": 168,
+   "w": 152,
+   "h": 162,
    "kind": "antenna",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    14.3,
-    15.2
+    11.9,
+    13.6
    ],
    "scale": 1.0
   },
   "antenna_5_l": {
    "file": "antkit/antenna_5_l.png",
-   "w": 226,
-   "h": 256,
+   "w": 197,
+   "h": 85,
    "kind": "antenna",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    38.9,
-    37.8
+    9.9,
+    4.8
    ],
    "scale": 1.0
   },
   "antenna_5_r": {
    "file": "antkit/antenna_5_r.png",
-   "w": 204,
-   "h": 165,
+   "w": 207,
+   "h": 157,
    "kind": "antenna",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    152.5,
-    44.5
+    156.2,
+    46.8
    ],
    "scale": 1.0
   },
-  "antenna_6_r": {
-   "file": "antkit/antenna_6_r.png",
-   "w": 165,
-   "h": 197,
+  "antenna_6": {
+   "file": "antkit/antenna_6.png",
+   "w": 169,
+   "h": 193,
    "kind": "antenna",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    32.9,
-    25.4
+    39.7,
+    28.3
    ],
    "scale": 1.0
   },
   "sting_1": {
    "file": "antkit/sting_1.png",
-   "w": 170,
+   "w": 108,
    "h": 256,
    "kind": "misc",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    60.6,
-    18.0
+    51.4,
+    17.0
    ],
-   "scale": 0.9624
+   "scale": 0.9808
   },
   "horn_1": {
    "file": "antkit/horn_1.png",
-   "w": 110,
+   "w": 117,
    "h": 256,
    "kind": "spine",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    54.3,
-    238.1
+    56.4,
+    237.8
    ],
-   "scale": 1.0
+   "scale": 0.9884
   },
   "horn_2": {
    "file": "antkit/horn_2.png",
-   "w": 91,
-   "h": 129,
+   "w": 82,
+   "h": 130,
    "kind": "spine",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    44.4,
-    118.0
+    39.7,
+    118.4
    ],
    "scale": 1.0
   },
   "horn_3": {
    "file": "antkit/horn_3.png",
-   "w": 136,
-   "h": 97,
+   "w": 143,
+   "h": 98,
    "kind": "spine",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    10.0,
+    9.9,
     42.0
    ],
    "scale": 1.0
   },
   "horn_4": {
    "file": "antkit/horn_4.png",
-   "w": 142,
-   "h": 220,
+   "w": 144,
+   "h": 218,
    "kind": "spine",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    42.4,
-    204.2
+    37.0,
+    199.5
    ],
    "scale": 1.0
   },
   "frill_1": {
    "file": "antkit/frill_1.png",
    "w": 183,
-   "h": 162,
+   "h": 163,
    "kind": "misc",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    66.8,
-    12.1
+    63.0,
+    12.3
    ],
    "scale": 1.0
   },
   "plate_1": {
    "file": "antkit/plate_1.png",
-   "w": 169,
-   "h": 147,
+   "w": 165,
+   "h": 138,
    "kind": "misc",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    85.8,
-    72.9
+    84.2,
+    68.2
    ],
    "scale": 1.0
   },
   "plate_2": {
    "file": "antkit/plate_2.png",
-   "w": 191,
-   "h": 158,
+   "w": 194,
+   "h": 163,
    "kind": "misc",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    92.9,
-    68.7
+    95.7,
+    70.6
    ],
    "scale": 1.0
   },
   "spine_1": {
    "file": "antkit/spine_1.png",
    "w": 256,
-   "h": 142,
+   "h": 141,
    "kind": "spine",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    147.1,
-    128.8
+    148.6,
+    127.5
    ],
-   "scale": 0.9209
+   "scale": 0.911
   },
   "spine_2": {
    "file": "antkit/spine_2.png",
    "w": 256,
-   "h": 150,
+   "h": 151,
    "kind": "spine",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    172.0,
-    142.8
+    233.3,
+    138.7
    ],
-   "scale": 0.4346
+   "scale": 0.8767
   },
   "spine_3": {
    "file": "antkit/spine_3.png",
-   "w": 173,
-   "h": 138,
+   "w": 193,
+   "h": 187,
    "kind": "spine",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    150.1,
-    126.4
+    139.7,
+    170.4
    ],
    "scale": 1.0
   },
   "spine_4": {
    "file": "antkit/spine_4.png",
-   "w": 167,
-   "h": 191,
+   "w": 169,
+   "h": 195,
    "kind": "spine",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    35.6,
-    175.6
+    35.8,
+    179.7
    ],
    "scale": 1.0
   },
   "spine_5": {
    "file": "antkit/spine_5.png",
-   "w": 178,
-   "h": 130,
+   "w": 115,
+   "h": 110,
    "kind": "spine",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    38.6,
-    118.2
+    20.3,
+    100.3
    ],
    "scale": 1.0
   },
   "spine_6": {
    "file": "antkit/spine_6.png",
-   "w": 199,
-   "h": 127,
+   "w": 191,
+   "h": 130,
    "kind": "spine",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    106.2,
-    115.5
+    95.8,
+    118.4
    ],
    "scale": 1.0
   },
-  "spine_7": {
-   "file": "antkit/spine_7.png",
-   "w": 198,
-   "h": 256,
-   "kind": "spine",
-   "sheet": "antkit_parts_b.png",
-   "pivot": [
-    56.9,
-    238.6
-   ],
-   "scale": 0.9624
-  },
   "plate_3": {
    "file": "antkit/plate_3.png",
-   "w": 124,
-   "h": 92,
+   "w": 130,
+   "h": 97,
    "kind": "misc",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    69.7,
-    47.3
+    72.8,
+    49.3
    ],
    "scale": 1.0
   },
   "egg_sac_1": {
    "file": "antkit/egg_sac_1.png",
-   "w": 164,
-   "h": 182,
+   "w": 170,
+   "h": 188,
    "kind": "egg",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    80.5,
-    89.8
+    83.6,
+    92.4
    ],
    "scale": 1.0
   },
   "eye_1": {
    "file": "antkit/eye_1.png",
-   "w": 93,
-   "h": 104,
+   "w": 95,
+   "h": 102,
    "kind": "eye",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    46.1,
-    51.6
+    45.7,
+    51.2
    ],
    "scale": 1.0
   },
   "eye_2": {
    "file": "antkit/eye_2.png",
-   "w": 100,
-   "h": 106,
+   "w": 99,
+   "h": 105,
    "kind": "eye",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    49.6,
-    52.6
+    51.0,
+    52.4
    ],
    "scale": 1.0
   },
   "fur_1": {
    "file": "antkit/fur_1.png",
-   "w": 124,
-   "h": 153,
+   "w": 129,
+   "h": 157,
    "kind": "fur",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    86.8,
-    139.6
+    88.8,
+    142.5
    ],
    "scale": 1.0
   },
   "fur_2": {
    "file": "antkit/fur_2.png",
-   "w": 154,
-   "h": 256,
+   "w": 102,
+   "h": 145,
    "kind": "fur",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    109.7,
-    238.4
+    57.8,
+    133.4
    ],
-   "scale": 0.8828
+   "scale": 1.0
+  },
+  "spine_7": {
+   "file": "antkit/spine_7.png",
+   "w": 143,
+   "h": 160,
+   "kind": "spine",
+   "sheet": "antkit_parts_b.png",
+   "pivot": [
+    95.2,
+    146.4
+   ],
+   "scale": 1.0
   },
   "fur_3": {
    "file": "antkit/fur_3.png",
-   "w": 128,
+   "w": 124,
    "h": 114,
    "kind": "fur",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    63.6,
+    64.5,
     56.9
    ],
    "scale": 1.0
   },
   "fur_4": {
    "file": "antkit/fur_4.png",
-   "w": 96,
-   "h": 115,
+   "w": 89,
+   "h": 109,
    "kind": "fur",
    "sheet": "antkit_parts_b.png",
    "pivot": [
-    48.3,
-    55.6
+    41.5,
+    54.0
    ],
    "scale": 1.0
   },
   "queen_full": {
    "file": "antkit/queen_full.png",
    "w": 256,
-   "h": 125,
+   "h": 124,
    "kind": "body",
    "sheet": "antkit_full.png",
    "pivot": [
-    120.7,
-    124.0
+    127.2,
+    123.0
    ],
-   "scale": 0.4324,
-   "length": 247,
+   "scale": 0.4163,
+   "length": 242,
+   "nose_x": 246,
+   "tail_x": 4,
    "feet": [
-    120.7,
-    124.0
-   ],
-   "ground_y": 124.0,
-   "nose_x": 251,
-   "tail_x": 4
+    127.2,
+    123.0
+   ]
   },
   "alate_full": {
    "file": "antkit/alate_full.png",
    "w": 256,
-   "h": 190,
+   "h": 192,
    "kind": "body",
    "sheet": "antkit_full.png",
    "pivot": [
-    25.1,
-    188.0
+    117.2,
+    190.0
    ],
-   "scale": 0.5899,
-   "length": 249,
+   "scale": 0.6465,
+   "length": 244,
+   "nose_x": 250,
+   "tail_x": 6,
    "feet": [
-    25.1,
-    188.0
-   ],
-   "ground_y": 188.0,
-   "nose_x": 252,
-   "tail_x": 3
+    117.2,
+    190.0
+   ]
   },
   "soldier_full": {
    "file": "antkit/soldier_full.png",
    "w": 256,
-   "h": 204,
+   "h": 196,
    "kind": "body",
    "sheet": "antkit_full.png",
    "pivot": [
-    29.9,
-    201.0
+    98.9,
+    193.0
    ],
-   "scale": 0.862,
-   "length": 237,
+   "scale": 0.8258,
+   "length": 235,
+   "nose_x": 251,
+   "tail_x": 16,
    "feet": [
-    29.9,
-    201.0
-   ],
-   "ground_y": 201.0,
-   "nose_x": 249,
-   "tail_x": 12
+    98.9,
+    193.0
+   ]
   },
   "worker_full": {
    "file": "antkit/worker_full.png",
-   "w": 184,
-   "h": 125,
+   "w": 224,
+   "h": 139,
    "kind": "body",
    "sheet": "antkit_full.png",
    "pivot": [
-    72.6,
-    122.0
+    98.8,
+    136.0
    ],
    "scale": 1.0,
-   "length": 170,
+   "length": 198,
+   "nose_x": 218,
+   "tail_x": 20,
    "feet": [
-    72.6,
-    122.0
-   ],
-   "ground_y": 122.0,
-   "nose_x": 181,
-   "tail_x": 11
+    98.8,
+    136.0
+   ]
   },
   "egg_cluster": {
    "file": "antkit/egg_cluster.png",
-   "w": 232,
-   "h": 161,
+   "w": 215,
+   "h": 145,
    "kind": "egg",
    "sheet": "antkit_full.png",
    "pivot": [
-    115.9,
-    87.7
+    106.0,
+    83.1
    ],
    "scale": 1.0
   },
   "larva_1": {
    "file": "antkit/larva_1.png",
-   "w": 151,
-   "h": 158,
+   "w": 135,
+   "h": 152,
    "kind": "brood",
    "sheet": "antkit_full.png",
    "pivot": [
-    73.1,
-    83.0
+    68.9,
+    77.8
    ],
    "scale": 1.0
   },
   "larva_2": {
    "file": "antkit/larva_2.png",
-   "w": 232,
-   "h": 155,
+   "w": 222,
+   "h": 153,
    "kind": "brood",
    "sheet": "antkit_full.png",
    "pivot": [
-    117.7,
-    78.9
+    109.7,
+    76.2
    ],
    "scale": 1.0
   },
   "pupa_1": {
    "file": "antkit/pupa_1.png",
-   "w": 201,
-   "h": 178,
+   "w": 190,
+   "h": 173,
    "kind": "brood",
    "sheet": "antkit_full.png",
    "pivot": [
-    106.2,
-    94.6
+    99.5,
+    92.6
    ],
    "scale": 1.0
   },
   "worker_small_full": {
    "file": "antkit/worker_small_full.png",
-   "w": 226,
-   "h": 127,
+   "w": 220,
+   "h": 126,
    "kind": "body",
    "sheet": "antkit_full.png",
    "pivot": [
-    105.8,
-    124.0
+    90.0,
+    123.0
    ],
    "scale": 1.0,
-   "length": 217,
+   "length": 208,
+   "nose_x": 212,
+   "tail_x": 4,
    "feet": [
-    105.8,
-    124.0
-   ],
-   "ground_y": 124.0,
-   "nose_x": 221,
-   "tail_x": 4
+    90.0,
+    123.0
+   ]
   },
   "pupa_2": {
    "file": "antkit/pupa_2.png",
-   "w": 192,
-   "h": 161,
+   "w": 194,
+   "h": 162,
    "kind": "brood",
    "sheet": "antkit_full.png",
    "pivot": [
-    94.6,
-    81.9
+    97.1,
+    83.5
    ],
    "scale": 1.0
   },
   "pupa_3": {
    "file": "antkit/pupa_3.png",
    "w": 256,
-   "h": 158,
+   "h": 164,
    "kind": "brood",
    "sheet": "antkit_full.png",
    "pivot": [
-    126.1,
-    75.7
+    123.9,
+    82.4
    ],
-   "scale": 0.9143
+   "scale": 0.9808
+  },
+  "thorax_4": {
+   "file": "antkit/thorax_4.png",
+   "w": 169,
+   "h": 154,
+   "kind": "thorax",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    85.5,
+    73.3
+   ],
+   "scale": 1.0
+  },
+  "x_thorax_a": {
+   "file": "antkit/x_thorax_a.png",
+   "w": 167,
+   "h": 148,
+   "kind": "thorax",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    86.8,
+    68.7
+   ],
+   "scale": 1.0,
+   "dup": true
+  },
+  "x_thorax_b": {
+   "file": "antkit/x_thorax_b.png",
+   "w": 163,
+   "h": 149,
+   "kind": "thorax",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    82.4,
+    69.7
+   ],
+   "scale": 1.0,
+   "dup": true
+  },
+  "x_thorax_c": {
+   "file": "antkit/x_thorax_c.png",
+   "w": 174,
+   "h": 156,
+   "kind": "thorax",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    89.7,
+    77.6
+   ],
+   "scale": 1.0,
+   "dup": true
+  },
+  "abdomen_6": {
+   "file": "antkit/abdomen_6.png",
+   "w": 193,
+   "h": 145,
+   "kind": "abdomen",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    32.3,
+    33.0
+   ],
+   "scale": 1.0,
+   "dup": true
+  },
+  "x_abdomen_b": {
+   "file": "antkit/x_abdomen_b.png",
+   "w": 147,
+   "h": 157,
+   "kind": "abdomen",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    22.1,
+    18.6
+   ],
+   "scale": 1.0,
+   "dup": true
+  },
+  "x_abdomen_c": {
+   "file": "antkit/x_abdomen_c.png",
+   "w": 146,
+   "h": 155,
+   "kind": "abdomen",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    26.7,
+    26.7
+   ],
+   "scale": 1.0,
+   "dup": true
+  },
+  "x_abdomen_d": {
+   "file": "antkit/x_abdomen_d.png",
+   "w": 182,
+   "h": 158,
+   "kind": "abdomen",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    23.9,
+    31.5
+   ],
+   "scale": 1.0,
+   "dup": true
+  },
+  "x_abdomen_e": {
+   "file": "antkit/x_abdomen_e.png",
+   "w": 161,
+   "h": 161,
+   "kind": "abdomen",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    27.1,
+    33.6
+   ],
+   "scale": 1.0,
+   "dup": true
+  },
+  "x_head_a": {
+   "file": "antkit/x_head_a.png",
+   "w": 177,
+   "h": 140,
+   "kind": "head",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    17.7,
+    76.9
+   ],
+   "scale": 1.0,
+   "dup": true
+  },
+  "x_head_b": {
+   "file": "antkit/x_head_b.png",
+   "w": 167,
+   "h": 159,
+   "kind": "head",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    18.2,
+    84.2
+   ],
+   "scale": 1.0,
+   "dup": true
+  },
+  "x_head_c": {
+   "file": "antkit/x_head_c.png",
+   "w": 174,
+   "h": 154,
+   "kind": "head",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    18.4,
+    87.6
+   ],
+   "scale": 1.0,
+   "dup": true
+  },
+  "x_leg_a": {
+   "file": "antkit/x_leg_a.png",
+   "w": 134,
+   "h": 224,
+   "kind": "leg",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    70.1,
+    16.0
+   ],
+   "scale": 1.0,
+   "dup": true
+  },
+  "x_leg_b": {
+   "file": "antkit/x_leg_b.png",
+   "w": 134,
+   "h": 229,
+   "kind": "leg",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    59.5,
+    16.3
+   ],
+   "scale": 1.0,
+   "dup": true
+  },
+  "x_leg_c": {
+   "file": "antkit/x_leg_c.png",
+   "w": 146,
+   "h": 225,
+   "kind": "leg",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    59.6,
+    16.3
+   ],
+   "scale": 1.0,
+   "dup": true
+  },
+  "x_leg_d": {
+   "file": "antkit/x_leg_d.png",
+   "w": 160,
+   "h": 232,
+   "kind": "leg",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    76.0,
+    17.9
+   ],
+   "scale": 1.0,
+   "dup": true
+  },
+  "x_leg_e": {
+   "file": "antkit/x_leg_e.png",
+   "w": 146,
+   "h": 228,
+   "kind": "leg",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    65.0,
+    16.2
+   ],
+   "scale": 1.0,
+   "dup": true
+  },
+  "x_antenna_a": {
+   "file": "antkit/x_antenna_a.png",
+   "w": 69,
+   "h": 167,
+   "kind": "antenna",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    12.7,
+    12.1
+   ],
+   "scale": 1.0,
+   "dup": true
+  },
+  "x_antenna_b": {
+   "file": "antkit/x_antenna_b.png",
+   "w": 109,
+   "h": 156,
+   "kind": "antenna",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    21.1,
+    11.3
+   ],
+   "scale": 1.0,
+   "dup": true
+  },
+  "x_antenna_c": {
+   "file": "antkit/x_antenna_c.png",
+   "w": 105,
+   "h": 175,
+   "kind": "antenna",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    20.1,
+    12.6
+   ],
+   "scale": 1.0,
+   "dup": true
+  },
+  "x_antenna_d": {
+   "file": "antkit/x_antenna_d.png",
+   "w": 104,
+   "h": 173,
+   "kind": "antenna",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    25.3,
+    12.4
+   ],
+   "scale": 1.0,
+   "dup": true
+  },
+  "x_antenna_e": {
+   "file": "antkit/x_antenna_e.png",
+   "w": 93,
+   "h": 175,
+   "kind": "antenna",
+   "sheet": "antkit_full.png",
+   "pivot": [
+    19.1,
+    12.5
+   ],
+   "scale": 1.0,
+   "dup": true
   },
   "wing_3_fore": {
    "file": "antkit/wing_3_fore.png",
    "w": 256,
-   "h": 105,
+   "h": 89,
    "kind": "wing",
    "sheet": "antkit_full.png",
    "pivot": [
-    17.8,
-    75.9
+    17.3,
+    57.6
    ],
-   "scale": 0.8232,
-   "alpha_hint": "membrane is drawn opaque in the source; the game may draw wings at about 0.85 alpha"
+   "scale": 0.8127,
+   "dup": true
   },
   "wing_3_hind": {
    "file": "antkit/wing_3_hind.png",
    "w": 256,
-   "h": 85,
+   "h": 88,
    "kind": "wing",
    "sheet": "antkit_full.png",
    "pivot": [
-    17.2,
-    25.0
+    17.3,
+    20.5
    ],
-   "scale": 0.795,
-   "alpha_hint": "membrane is drawn opaque in the source; the game may draw wings at about 0.85 alpha"
+   "scale": 0.7877,
+   "dup": true
   }
  }
 }

@@ -22,12 +22,18 @@ func _key(g, scale_mult: float, frame: int) -> int:
 	return g.uid * FRAMES + frame if scale_mult == 1.0 else -(g.uid * FRAMES + frame) - 1
 
 
-func get_texture(g, scale_mult: float = 1.0, frame: int = 0):
+# lite: the caller is a plain ant seen from afar (ant_view, detail by mutation): only every second walk frame is baked and the odd ones
+# show the frame before, which halves the cost of a new body plan. Asking for the full cycle later (zooming in) bakes the rest.
+func get_texture(g, scale_mult: float = 1.0, frame: int = 0, lite: bool = false):
+	if lite:
+		frame = frame & ~1
 	var key = _key(g, scale_mult, frame)
 	if cache.has(key):
 		return cache[key]
 	if not _queued.has(key):
 		for f in FRAMES:   # bake the whole walk cycle together
+			if lite and (f & 1) == 1:
+				continue
 			var k2 = _key(g, scale_mult, f)
 			if not _queued.has(k2) and not cache.has(k2):
 				_queued[k2] = true

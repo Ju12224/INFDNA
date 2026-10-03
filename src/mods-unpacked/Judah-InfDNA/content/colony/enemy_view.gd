@@ -4,6 +4,8 @@ extends Node2D
 
 const EnemyDefs = preload("res://mods-unpacked/Judah-InfDNA/core/enemy_defs.gd")
 const CreatureArt = preload("res://mods-unpacked/Judah-InfDNA/content/colony/creature_art.gd")
+const Lib = preload("res://mods-unpacked/Judah-InfDNA/content/colony/art_lib.gd")
+const SPINE_N = 18           # joints in a worm's spine
 const INK = Color("#15121a")
 const FONT_PATH = "res://resources/fonts/raw/Anybody-Medium.ttf"
 
@@ -25,6 +27,7 @@ var _ring
 var _tex := {}
 var _font: DynamicFont
 var _t := 0.0
+var _spines := {}     # raider id -> {"pts": [Vector2], "ph": crawl phase, "t": last time, "flip": bool}: the worms' spines (see _draw_spine)
 var under: Node2D     # hit sparks, dust and bursts are drawn on this layer, UNDER the ants and raiders (the scene puts it there), so a fight is never covered by its own effects
 const UNDER_KINDS = ["spark", "puff", "burst"]
 
@@ -52,6 +55,8 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_t += delta
+	if not _spines.empty() and int(_t * 2.0) != int((_t - delta) * 2.0):
+		forget_spines()
 	var i = 0
 	while i < sim.fx.size():
 		var f = sim.fx[i]
@@ -75,6 +80,8 @@ func draw_enemy(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade: flo
 	var art = e.def.get("art", "")
 	if e.genome != null:
 		_draw_kin(ci, e, feet, depth_scale, shade, alpha, moving)
+	elif e.def.get("spine", "") != "" and _draw_spine(ci, e, feet, h, shade, alpha, moving):
+		pass
 	elif art != "":
 		var fly = e.def.get("fly", false)
 		var lift = 6.0 + 22.0 * air if fly else 0.0
@@ -114,6 +121,127 @@ func draw_enemy(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade: flo
 		var top = feet + Vector2(-w * 0.5, -h - 14.0)
 		ci.draw_rect(Rect2(top - Vector2(2, 2), Vector2(w + 4, 10)), INK)
 		ci.draw_rect(Rect2(top, Vector2(w * clamp(e.hp / e.max_hp, 0.0, 1.0), 6)), Color("#e8483b"))
+
+
+# A worm (the Tunnel Borer) has a spine: a chain of joints. The head goes where the raider is; every joint follows the one before it at
+# a fixed distance, like links of a rope, so the body trails along the very path the worm took (down through the soil, round a bend).
+# A squeeze runs from head to tail as it crawls: a segment shortens and swells, then stretches thin, as an earthworm does. The owner's
+# picture (straightened into content/art/worm_strip.png by tools/art/make_worm.py) is laid along the spine one slice per link, so the
+# drawing itself bends and bulges. Returns false if the picture is missing (the old sprite is drawn instead).
+func _draw_spine(ci: CanvasItem, e, feet: Vector2, h: float, shade: float, alpha: float, moving: bool) -> bool:
+	var tex = Lib.get_lib().tex(str(e.def["spine"]))
+	if tex == null:
+		return false
+	var length = h * 4.2
+	var thick = length * float(tex.get_height()) / float(tex.get_width())
+	var seg = length / float(SPINE_N - 1)
+	var boring = e.state == 3
+	var C = sim.grid.CELL
+	var ground = feet.y - thick * 0.42
+	# where the head wants to be: on the meadow a little ahead of the raider's spot; boring, in the middle of the cell it is chewing
+	var target = feet - Vector2(0.0, C * 0.5) if boring else feet + Vector2(e.facing * length * 0.3, -thick * 0.42)
+	if e.state == 0:
+		# the wind-up before it bores: it rears up, then plunges head first into the soil
+		var k1 = clamp(e.timer / 1.3, 0.0, 1.0)
+		var k2 = clamp((e.timer - 1.3) / 0.9, 0.0, 1.0)
+		target += Vector2(e.facing * thick * 0.6 * k2, -thick * 1.1 * sin(k1 * PI) * (1.0 - k2) + thick * 1.4 * k2)
+	var sp = _spines.get(e.id)
+	if sp == null or sp["head"].distance_to(target) > length * 1.5:
+		var pts := []
+		for i in SPINE_N:
+			pts.append(target - Vector2(e.facing * seg * i, 0.0))
+		sp = {"pts": pts, "ph": 0.0, "t": _t, "flip": e.facing < 0, "head": target, "hole": null}
+		_spines[e.id] = sp
+	var dt = clamp(_t - sp["t"], 0.0, 0.1)
+	sp["t"] = _t
+	sp["ph"] += dt * (7.0 if (moving or boring) else 1.4)
+	var ph = sp["ph"]
+	var pts: Array = sp["pts"]
+	sp["head"] = sp["head"].linear_interpolate(target, clamp(dt * 9.0, 0.0, 1.0))
+	if boring and sp["hole"] == null:
+		sp["hole"] = Vector2(sp["head"].x, ground + thick * 0.42)     # where it went in: a hole with a ring of thrown-up dirt stays there
+	# the head probes a little from side to side; the rest follows
+	pts[0] = sp["head"] + Vector2(0.0, sin(ph * 0.5) * thick * (0.05 if boring else 0.12))
+	var on_ground = not boring            # out on the meadow it lies along the ground; boring, it trails up its own tunnel
+	if sp["hole"] != null:
+		_draw_hole(ci, sp["hole"], thick, shade, alpha)
+	var k := []
+	for i in range(1, SPINE_N):
+		var f = 1.0 + 0.16 * sin(ph - i * 0.7)
+		k.append(f)
+		var d: Vector2 = pts[i] - pts[i - 1]
+		var want = seg * f
+		if d.length() > 0.001:
+			pts[i] = pts[i - 1] + d.normalized() * min(d.length(), want) if d.length() < want * 0.6 else pts[i - 1] + d.normalized() * want
+		if on_ground:
+			pts[i].y = lerp(pts[i].y, ground, clamp(dt * 6.0, 0.0, 1.0))
+	k.push_front(k[0])
+	# keep the top of the picture up: decide which way it lies from head to tail (with a margin, so it never flips back and forth)
+	var dx = pts[0].x - pts[SPINE_N - 1].x
+	if sp["flip"] and dx > seg:
+		sp["flip"] = false
+	elif not sp["flip"] and dx < -seg:
+		sp["flip"] = true
+	var up_sign = -1.0 if sp["flip"] else 1.0
+	var mod = Color(shade, shade, shade, (0.75 if e.state == 2 else 1.0) * alpha)
+	if e.flash > 0.0:
+		mod = Color(shade, shade * 0.5, shade * 0.5, mod.a)
+	var cols = PoolColorArray([mod, mod, mod, mod])
+	var tops := []
+	var bots := []
+	for i in SPINE_N:
+		var a: Vector2 = pts[max(0, i - 1)]
+		var b: Vector2 = pts[min(SPINE_N - 1, i + 1)]
+		var t = (a - b).normalized()
+		var n = Vector2(t.y, -t.x) * up_sign
+		var w = thick * 0.5 * clamp(1.0 - 1.6 * (k[i] - 1.0), 0.75, 1.3)
+		tops.append(pts[i] + n * w)
+		bots.append(pts[i] - n * w)
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	for i in range(SPINE_N - 1):
+		var u0 = 1.0 - float(i) / (SPINE_N - 1)
+		var u1 = 1.0 - float(i + 1) / (SPINE_N - 1)
+		var v0 = 0.0 if not sp["flip"] else 0.0
+		ci.draw_primitive(PoolVector2Array([tops[i], tops[i + 1], bots[i + 1], bots[i]]), cols,
+			PoolVector2Array([Vector2(u0, v0), Vector2(u1, v0), Vector2(u1, 1.0), Vector2(u0, 1.0)]), tex)
+	if boring or (e.state == 0 and e.timer > 1.3):
+		# clods of soil flicked back from the mouth as it chews
+		var fwd = (pts[0] - pts[2]).normalized()
+		for j in 5:
+			var life = fposmod(ph * 0.45 + j * 0.2, 1.0)
+			var side = (1.0 if j % 2 == 0 else -1.0) * (0.6 + 0.25 * (j % 3))
+			var dirv = (-fwd + Vector2(fwd.y, -fwd.x) * side).normalized()
+			var cp = pts[0] + fwd * thick * 0.4 + dirv * thick * (0.3 + 1.6 * life) + Vector2(0.0, thick * 0.9 * life * life)
+			var r = thick * (0.11 - 0.05 * life)
+			var cc = Color(0.45 * shade, 0.32 * shade, 0.2 * shade, alpha * (1.0 - life))
+			ci.draw_circle(cp, r + 1.5, Color(INK.r, INK.g, INK.b, cc.a))
+			ci.draw_circle(cp, r, cc)
+	return true
+
+
+# The hole a worm bored into the meadow: dark mouth, a lip of churned soil thrown up on both sides.
+func _draw_hole(ci: CanvasItem, at: Vector2, thick: float, shade: float, alpha: float) -> void:
+	var w = thick * 0.8
+	ci.draw_set_transform(at, 0.0, Vector2(1.0, 0.38))
+	ci.draw_circle(Vector2.ZERO, w + 3.0, Color(INK.r, INK.g, INK.b, 0.9 * alpha))
+	ci.draw_circle(Vector2.ZERO, w, Color(0.12 * shade, 0.08 * shade, 0.06 * shade, alpha))
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	for j in 6:
+		var sx = (-1.0 if j < 3 else 1.0) * (w * (0.9 + 0.28 * (j % 3)))
+		var r = thick * (0.2 - 0.04 * (j % 3))
+		var cp = at + Vector2(sx, -r * 0.4)
+		ci.draw_circle(cp, r + 2.0, Color(INK.r, INK.g, INK.b, 0.85 * alpha))
+		ci.draw_circle(cp, r, Color(0.5 * shade, 0.36 * shade, 0.23 * shade, alpha))
+
+
+func forget_spines() -> void:
+	# called now and then: drop the spines of worms that are gone
+	var alive := {}
+	for e in sim.enemies:
+		alive[e.id] = true
+	for id in _spines.keys():
+		if not alive.has(id):
+			_spines.erase(id)
 
 
 # The rival's descendants: the very body plan your old colony bred, baked like any ant and given a red cast so it is never mistaken for
