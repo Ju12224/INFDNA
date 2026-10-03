@@ -285,6 +285,27 @@ func draw_slice(ci: CanvasItem, s: int) -> void:
 			continue
 		var sw = amp * sin(_t * 1.15 + e[0] * 1.7 + s * 0.45)
 		ci.draw_mesh(m, null, null, Transform2D(Vector2(1, 0), Vector2(sw, 1), Vector2(-sw * e[1]["oy"], 0)))
+	if detail > 0:
+		var gust0 = 1.0 + 1.6 * sim.rain
+		var shk = -1.0
+		var au0 = day.autumn if day != null else 0.0
+		var berry = 0.0
+		if day != null:
+			var yp = Seasons.phase(day.sea_t)
+			berry = smoothstep(0.38, 0.44, yp) * (1.0 - smoothstep(0.71, 0.76, yp))      # berries from late summer through autumn
+		var n_drawn = 0
+		for e in _vis:
+			var lst = e[1].get("spr", {}).get(s)
+			if lst == null:
+				continue
+			for it in lst:
+				n_drawn += 1
+				if detail == 1 and n_drawn % 2 == 0:
+					continue
+				if it["kind"] == "shroom" and shk < 0.0:
+					shk = _shroom_k()
+				_draw_scenery(ci, it, gust0, shk, au0, berry)
+		ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if _vis_f[s].empty():
 		return
 	# how close the camera is (a zoom below 1 is a magnified view) and what part of the world it sees: the close-up layers of a tree are only drawn for trees in view
@@ -674,7 +695,7 @@ func visible_slices() -> Array:
 		var any = not _vis_f[s].empty()
 		if not any:
 			for e in _vis:
-				if e[1]["sl"][s] != null:
+				if e[1]["sl"][s] != null or e[1].get("spr", {}).has(s):
 					any = true
 					break
 		if any:
@@ -702,15 +723,27 @@ func _build_chunk(ci: int) -> Dictionary:
 	var sl := []
 	for s in SLICES + 1:
 		sl.append(MK.new())
+	var spr := []
 	_band(band, c0, sy, mf)
-	_decor(sl, shade, band, c0, sy, mf)
+	_decor(sl, shade, band, c0, sy, mf, spr)
 	var outs := []
 	for mk in sl:
 		outs.append(mk.build())
 	var oy := 0.0
 	for i in CH + 1:
 		oy += sy[i]
-	return {"band": band.build(), "shade": shade.build(), "sl": outs, "sy": sy, "mf": mf, "oy": oy / (CH + 1), "t": _t, "sk": _sk}
+	# the drawn scenery, per lane slice, back to front
+	spr.sort_custom(self, "_by_lane")
+	var by_slice := {}
+	for e in spr:
+		if not by_slice.has(e["slice"]):
+			by_slice[e["slice"]] = []
+		by_slice[e["slice"]].append(e)
+	return {"band": band.build(), "shade": shade.build(), "sl": outs, "sy": sy, "mf": mf, "oy": oy / (CH + 1), "t": _t, "sk": _sk, "spr": by_slice}
+
+
+func _by_lane(a, b) -> bool:
+	return a["lane"] < b["lane"]
 
 
 func _lane_col(lane: float, mfv: float, i: int, j: int, slope: float = 0.0) -> Color:
@@ -866,8 +899,9 @@ func _band(mk, c0: int, sy: PoolRealArray, mf: PoolRealArray) -> void:
 			mk.ellipse(p2, 5.5 * ps2, 1.9 * ps2, hz(lc, lane2), 8, (MK.hash1(col2) - 0.5) * 0.9)
 
 
-func _decor(sl: Array, shade, band, c0: int, sy: PoolRealArray, mf: PoolRealArray) -> void:
+func _decor(sl: Array, shade, band, c0: int, sy: PoolRealArray, mf: PoolRealArray, spr: Array = []) -> void:
 	var C = g.CELL
+	var drawn = _scenery_ready()
 	var ents := []
 	for en in g.entrances:
 		ents.append(int(en.x))
@@ -905,14 +939,25 @@ func _decor(sl: Array, shade, band, c0: int, sy: PoolRealArray, mf: PoolRealArra
 		elif r < 0.68:
 			_pebbles(mkr, shade, p, ps, sd, lane)
 		elif r < 0.76:
-			if MK.hash1(col * 6.1 + 2.0) < float(_P["shroom"]):
+			if drawn:
+				if MK.hash1(col * 6.1 + 2.0) > 0.6 or not _scenery_add(spr, shade, "shroom", col, c0, sy):
+					_tuft(mkr, p, ps, sd, lane)
+			elif MK.hash1(col * 6.1 + 2.0) < float(_P["shroom"]):
 				_mushroom(mkr, shade, p, ps, sd, lane)
 			else:
 				_tuft(mkr, p, ps, sd, lane)
 		elif r < 0.87:
-			_bush(mkr, shade, p, ps, sd, lane)
+			if drawn:
+				if MK.hash1(col * 7.3 + 3.0) > 0.42 or not _scenery_add(spr, shade, "bush", col, c0, sy):
+					_tuft(mkr, p, ps, sd, lane)
+			else:
+				_bush(mkr, shade, p, ps, sd, lane)
 		else:
-			_fern(mkr, p, ps, sd, lane)
+			if drawn:
+				if MK.hash1(col * 8.9 + 4.0) > 0.36 or not _scenery_add(spr, shade, "fern", col, c0, sy):
+					_tuft(mkr, p, ps, sd, lane)
+			else:
+				_fern(mkr, p, ps, sd, lane)
 	# foreground: tall grass in front of everything (units walk behind it)
 	for i in range(0, CH, 6):
 		var col2 = c0 + i
@@ -923,6 +968,149 @@ func _decor(sl: Array, shade, band, c0: int, sy: PoolRealArray, mf: PoolRealArra
 		var px2 = (col2 + MK.hash1(col2 * 2.9)) * C
 		var p2 = Vector2(px2, lane_y(_sy_at(sy, c0, px2, C), lane2))
 		_tall(sl[SLICES], p2, persp(lane2), col2 * 2.11 + 0.3, lane2)
+
+
+# ---------------------------------------------------------------- drawn scenery (the owner's bushes, ferns and mushrooms; scenery_art.py cuts them)
+# They stand in the back lanes only (behind the trails, so the ants and the fights in front stay readable), a modest few per chunk, each picked,
+# sized, flipped and placed from its column (the same every time). The season is read when the chunk is built (a change of season rebuilds it):
+# bushes turn in autumn (live crossfade) and bear berries from late summer through autumn, ferns go rust-brown and in winter lie flat or are gone,
+# mushrooms come up in autumn and after rain (sim.wet, read live: they grow out of the ground) and never in winter.
+const SCENERY_LANE = [0.02, 0.27]
+var _scen = null      # manifest items by kind, once read
+
+
+func _scenery_ready() -> bool:
+	if _scen == null:
+		_scen = {}
+		var sc = AL.get_lib().manifest().get("scenery", {})
+		var items = sc.get("items", {}) if sc is Dictionary else {}
+		var names = items.keys()
+		names.sort()
+		for nm in names:
+			var it = items[nm]
+			if not (it is Dictionary) or not it.has("files"):
+				continue
+			var k = str(it.get("kind", ""))
+			if not _scen.has(k):
+				_scen[k] = []
+			_scen[k].append(it)
+	return not _scen.empty()
+
+
+# One drawn item of `kind` for the decor spot at column col (false when none goes here: no art, the season, or too close to the last one).
+func _scenery_add(spr: Array, shade, kind: String, col: int, c0: int, sy: PoolRealArray) -> bool:
+	var list = _scen.get(kind, [])
+	if list.empty():
+		return false
+	var snow = float(_P["snow"])
+	var ph = Seasons.phase(day.sea_t) if day != null else 0.3
+	var hs = MK.hash1(col * 2.71 + 11.0)
+	if kind == "shroom" and snow > 0.3:
+		return false                                   # no mushrooms in winter
+	if kind == "fern" and snow > 0.5 and hs < 0.65:
+		return false                                   # most ferns are gone in winter; the rest lie flat
+	if kind == "bush" and snow > 0.5 and hs < 0.5:
+		return false
+	var def = list[int(MK.hash1(col * 3.31 + 5.0) * list.size() * 0.999)]
+	var C = g.CELL
+	var lane = lerp(SCENERY_LANE[0], SCENERY_LANE[1], MK.hash1(col * 4.73 + 1.3))
+	var ps = persp(lane)
+	var gh = lerp(float(def["game_h"][0]), float(def["game_h"][1]), MK.hash1(col * 5.97 + 2.0)) * ps
+	var k = gh / float(def["h"])
+	var size = Vector2(float(def["w"]), float(def["h"])) * k
+	var px = (col + MK.hash1(col * 9.1)) * C
+	for o in spr:
+		if abs(o["x"] - px) < (o["size"].x + size.x) * 0.32:
+			return false                               # never two in a heap
+	var by = lane_y(_sy_at(sy, c0, px, C), lane) + 2.0 * ps
+	var foot = Vector2(float(def["foot"][0]), float(def["foot"][1])) * k
+	var flip = MK.hash1(col * 2.23 + 9.0) > 0.5
+	var lib = AL.get_lib()
+	var files = def["files"]
+	var pos = Vector2(px - foot.x, by - foot.y)          # (a flipped one is mirrored about its foot when drawn)
+	var e = {"kind": kind, "lane": lane, "slice": slice_of(lane), "x": px, "by": by, "size": size, "flip": flip, "ph": col * 0.37, "pos": pos, "sy": 1.0, "sway": 0.0}
+	# lane shading: cooler and a little darker toward the back, and no two quite alike
+	var v = 0.93 + 0.1 * MK.hash1(col * 6.37 + 3.0)
+	var tint = Color.white.linear_interpolate(Color(0.84, 0.9, 0.93), (1.0 - lane) * 0.45)
+	e["mod"] = Color(tint.r * v, tint.g * v, tint.b * v)
+	if kind == "bush":
+		e["sway"] = 0.012
+		var berry = files.has("summer_nb")
+		e["berry"] = berry
+		for lk in ["summer", "autumn", "summer_nb", "autumn_nb"]:
+			e[lk] = lib.tex_mip(str(files[lk])) if files.has(lk) else null
+		if snow > 0.5:
+			e["winter"] = true
+			e["mod"] = Color(e["mod"].r * 0.72, e["mod"].g * 0.72, e["mod"].b * 0.8)
+	elif kind == "fern":
+		e["sway"] = 0.03
+		e["summer"] = lib.tex_mip(str(files["summer"]))
+		e["autumn"] = lib.tex_mip(str(files.get("autumn", files["summer"])))
+		if snow > 0.5:
+			e["winter"] = true
+			e["sway"] = 0.0
+			e["sy"] = 0.38
+			e["mod"] = Color(e["mod"].r * 0.62, e["mod"].g * 0.56, e["mod"].b * 0.52)
+	else:
+		e["summer"] = lib.tex_mip(str(files["summer"]))
+		e["thr"] = MK.hash1(col * 7.77 + 6.0)
+	if e["summer"] == null:
+		return false
+	spr.append(e)
+	if kind != "shroom":
+		shade.shadow(Vector2(px, by + 1.0), size.x * 0.4, 3.0 + size.y * 0.05, Color(0.06, 0.1, 0.04, 0.18), 3)
+	return true
+
+
+# How much the year and the weather bring mushrooms up (0 none, 1 all of them), read live each frame.
+func _shroom_k() -> float:
+	if day == null:
+		return 0.3
+	var sk = Seasons.blend(day.sea_t, [0.12, 0.1, 0.85, 0.0])
+	var w = float(sim.wet)
+	return clamp(sk + 0.6 * w * max(sk * 1.5, 0.3), 0.0, 1.0) * (1.0 - float(day.snow))
+
+
+# One drawn item: its picture(s) blended by the season, swayed by the wind (a shear about its foot), flipped, flattened or grown as it stands.
+func _draw_scenery(ci: CanvasItem, e: Dictionary, gust: float, shk: float, au: float, berry: float) -> void:
+	var gx = 1.0
+	var gy = float(e["sy"])
+	var mod: Color = e["mod"]
+	if e["kind"] == "shroom":
+		var gk = smoothstep(e["thr"], e["thr"] + 0.12, shk)
+		if gk < 0.03:
+			return
+		gx = 0.55 + 0.45 * gk
+		gy = gk
+	var sw = 0.0
+	if e["sway"] > 0.0:
+		sw = float(e["sway"]) * gust * (sin(_t * 1.3 + e["ph"]) + 0.35 * sin(_t * 2.9 + e["ph"] * 1.7))
+	var sx = -gx if e["flip"] else gx
+	var by: float = e["by"]
+	var cx: float = e["x"]
+	ci.draw_set_transform_matrix(Transform2D(Vector2(sx, 0), Vector2(sw, gy), Vector2(cx - sx * cx - sw * by, by - gy * by)))
+	var rect = Rect2(e["pos"], e["size"])
+	if e["kind"] == "bush":
+		var a = 1.0 if e.has("winter") else au
+		var b = berry if e["berry"] else 0.0
+		var t0 = e["summer_nb"] if e["berry"] else e["summer"]
+		var t1 = e["autumn_nb"] if e["berry"] else e["autumn"]
+		if a < 0.98:
+			ci.draw_texture_rect(t0, rect, false, mod)
+			if b > 0.02:
+				ci.draw_texture_rect(e["summer"], rect, false, Color(mod.r, mod.g, mod.b, b))
+		if a > 0.02 and t1 != null:
+			ci.draw_texture_rect(t1, rect, false, Color(mod.r, mod.g, mod.b, a if a < 0.98 else 1.0))
+			if b > 0.02 and e["autumn"] != null:
+				ci.draw_texture_rect(e["autumn"], rect, false, Color(mod.r, mod.g, mod.b, a * b))
+	elif e["kind"] == "fern":
+		var a2 = 1.0 if e.has("winter") else au
+		if a2 < 0.98:
+			ci.draw_texture_rect(e["summer"], rect, false, mod)
+		if a2 > 0.02:
+			ci.draw_texture_rect(e["autumn"], rect, false, Color(mod.r, mod.g, mod.b, a2 if a2 < 0.98 else 1.0))
+	else:
+		ci.draw_texture_rect(e["summer"], rect, false, mod)
 
 
 func _tuft(mk, p: Vector2, ps: float, sd: float, lane: float, big: float = 1.0) -> void:

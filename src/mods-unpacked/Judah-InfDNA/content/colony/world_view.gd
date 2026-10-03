@@ -318,14 +318,14 @@ func _draw_pit(ci: CanvasItem) -> void:
 	ci.draw_circle(Vector2(0, -rx * 0.02), rx * 0.96, Color(0.33, 0.22, 0.15, k))          # the far wall of the hole, earth in layers
 	ci.draw_arc(Vector2(0, rx * 0.1), rx * 0.9, PI * 1.12, PI * 1.88, 28, Color(0.21, 0.13, 0.09, k), 4.0)
 	ci.draw_arc(Vector2(0, rx * 0.17), rx * 0.88, PI * 1.18, PI * 1.82, 28, Color(0.42, 0.3, 0.2, 0.8 * k), 3.0)
-	ci.draw_circle(Vector2(0, rx * 0.24), rx * 0.83, Color(0.05, 0.03, 0.07, k))           # and below it nothing: the void
-	ci.draw_circle(Vector2(0, rx * 0.32), rx * 0.6, Color(0.1, 0.04, 0.17, k))
+	ci.draw_circle(Vector2(0, rx * 0.24), rx * 0.83, Color(0.03, 0.02, 0.05, k))           # and below it nothing: the void
+	ci.draw_circle(Vector2(0, rx * 0.34), rx * 0.5, Color(0.07, 0.03, 0.12, k))
 	ci.draw_arc(Vector2.ZERO, rx * 1.005, 0.0, TAU, 56, Color(vv.r, vv.g, vv.b, (0.5 + 0.3 * pulse) * k), 4.0, true)
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	# light far down in it, breathing
 	if gt != null:
-		var dw = Vector2(rx * 1.5, rx * 1.5 * PIT_FLAT * 1.3)
-		ci.draw_texture_rect(gt, Rect2(c + Vector2(0, rx * PIT_FLAT * 0.2) - dw * 0.5, dw), false, Color(0.62, 0.3, 0.95, (0.45 + 0.3 * pulse) * k))
+		var dw = Vector2(rx * 1.0, rx * PIT_FLAT * 1.0)
+		ci.draw_texture_rect(gt, Rect2(c + Vector2(0, rx * PIT_FLAT * 0.34) - dw * 0.5, dw), false, Color(0.62, 0.3, 0.95, (0.35 + 0.3 * pulse) * k))
 	draw_pit_lip(ci, c, rx, k)
 	# clods of turf and earth thrown up round the edge
 	for j in 16:

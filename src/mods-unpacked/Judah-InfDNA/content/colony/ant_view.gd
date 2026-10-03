@@ -18,7 +18,7 @@ const Kit = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ui_kit.gd")
 const MS_PLAIN = 12.0
 const MS_RICH = 70.0
 const APEX_GOLD = Color(1.0, 0.82, 0.32)
-const APEX_TAG_ZOOM = 0.62     # the APEX tags show over every Apex ant in view only this close (camera zoom below it); the selected one always
+const APEX_TAG_ZOOM = 0.8      # the APEX tags show over every Apex ant in view only this close (camera zoom below it; farther out meadow_depth marks them); the selected one always
 
 const CASTE_COLORS = [Color("#6cc644"), Color("#c9863b"), Color("#e8483b")]
 const CASTE_ICONS = ["res://items/all/fruit_basket/fruit_basket_icon.png", "res://items/all/improved_tools/improved_tools_icon.png",

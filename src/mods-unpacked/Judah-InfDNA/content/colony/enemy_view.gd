@@ -183,8 +183,8 @@ func _draw_emerging(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade:
 			var bx = (float(j) / 9.0 - 0.5) * rx * 1.9
 			var dp = pc + Vector2(bx + sin(_t * 0.8 + j) * 10.0, ry * 0.8 - ph * (50.0 + 100.0 * hj))
 			var ds = (70.0 + 80.0 * hj) * (0.55 + 0.7 * ph)
-			var dc = Color(0.7, 0.6, 0.5).linear_interpolate(Color(0.6, 0.48, 0.74), 0.35 * hj)
-			dc.a = sin(PI * ph) * 0.55 * fade * alpha
+			var dc = Color(0.82, 0.74, 0.64).linear_interpolate(Color(0.7, 0.58, 0.84), 0.35 * hj)
+			dc.a = sin(PI * ph) * 0.85 * fade * alpha
 			ci.draw_texture_rect(_glow, Rect2(dp - Vector2(ds, ds * 0.8) * 0.5, Vector2(ds, ds * 0.8)), false, dc)
 	for j in 7:
 		var hj = fmod(abs(sin(j * 3.77 + 5.0) * 43758.5453), 1.0)

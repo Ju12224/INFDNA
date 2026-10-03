@@ -133,7 +133,7 @@ def green_center(im):
     return float(h[m].mean()) if m.any() else 0.37
 
 
-def recolor(im, hue_to, sat_k, val_k, val_add=0.0, center=None):
+def recolor(im, hue_to, sat_k, val_k, val_add=0.0, center=None, sat_min=0.0):
     """Move the green of the leaves to another colour (the trunk, brown and grey, stays): the autumn and spring versions of a tree. The change is blended in by how
     green a pixel is, so the dark edge where leaves meet shadow shifts smoothly and leaves no speckle."""
     rgb, a = to_arrays(im)
@@ -145,7 +145,7 @@ def recolor(im, hue_to, sat_k, val_k, val_add=0.0, center=None):
     sw = np.clip((s - 0.08) / 0.16, 0, 1)
     w = hw * sw * (a >= 8 / 255.0)
     nh = (hue_to + (h - center) * 0.35) % 1.0
-    ns = np.minimum(1.0, s * sat_k)
+    ns = np.clip(s * sat_k, sat_min, 1.0)                   # (autumn leaves keep some colour even where the drawing's highlights were pale)
     nv = np.minimum(1.0, v * val_k + val_add * np.minimum(1.0, v * 3.0))
     c2 = _hsv_to_rgb(nh, ns, nv)
     out = c * (1 - w[..., None]) + c2 * w[..., None]
@@ -474,7 +474,7 @@ def detail_layer(parts, P, Dleaf, Dbark, theta, rng, line_close):
         n1 = _noise(rng, (HH, HW), 12.0 * S)
         n2 = _noise(rng, (HH, HW), 3.0 * S)
         n3 = _noise(rng, (HH, HW), 0.7 * S)
-        field = n1 * 0.75 + n2 * 0.3 + low * 2.8 + left * 0.5 - 2.65
+        field = n1 * 0.75 + n2 * 0.3 + low * 2.8 + left * 0.5 - 2.85
         patch = smooth(field, 0.0, 0.45) * np.clip(bh, 0, 1) * smooth(yf, 0.42, 0.62) * P["moss"]
         grain = smooth(n3, -0.8, 0.9)
         d = 2 * S
@@ -592,6 +592,7 @@ def leaf_rgb(im):
 
 # ------------------------------------------------------------------ one tree, all its files
 LOOKS = {"summer": (0.31, 1.05, 1.2, 0.03), "spring": (0.22, 1.0, 1.42, 0.06), "orange": (0.07, 1.25, 1.75, 0.1), "red": (0.0, 1.35, 1.55, 0.04), "gold": (0.13, 1.2, 1.85, 0.12)}
+SAT_MIN = {"orange": 0.55, "red": 0.55, "gold": 0.5}
 MIST_HEIGHT = 300
 
 
@@ -614,10 +615,10 @@ def build_tree(out_dir, nm, img, leafy, kind, seed, sways=True):
     leaf_cols = {}
     if leafy:
         for lk, args in LOOKS.items():
-            rc = recolor(base, *args, center=center)
+            rc = recolor(base, *args, center=center, sat_min=SAT_MIN.get(lk, 0.0))
             entry["looks"][lk] = put("tree_%s_%s.png" % (nm, lk), rc)
             leaf_cols[lk] = leaf_rgb(rc)
-            entry["mist"][lk] = put("mist_%s_%s.png" % (nm, lk), mist(recolor(small, *args, center=center), height=MIST_HEIGHT), 128)
+            entry["mist"][lk] = put("mist_%s_%s.png" % (nm, lk), mist(recolor(small, *args, center=center, sat_min=SAT_MIN.get(lk, 0.0)), height=MIST_HEIGHT), 128)
         entry["file"] = entry["looks"]["summer"]
     else:
         entry["file"] = entry["looks"]["summer"] = put("tree_%s.png" % nm, base)

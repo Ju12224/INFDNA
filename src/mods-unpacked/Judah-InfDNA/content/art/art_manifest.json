@@ -1553,5 +1553,163 @@
   "width": 1180.0,
   "height": 582.0,
   "scale": 0.35593
+ },
+ "scenery": {
+  "_about": "Meadow scenery cut from art_src/scenery_*.png by tools/art/scenery_art.py; game_h is the height in px at perspective 1, foot the texture px that stands on the ground.",
+  "ant_px": 40.0,
+  "items": {
+   "bush_round": {
+    "kind": "bush",
+    "files": {
+     "summer": "scenery/bush_round_summer.png",
+     "autumn": "scenery/bush_round_autumn.png"
+    },
+    "w": 382,
+    "h": 348,
+    "foot": [
+     171.0,
+     343.0
+    ],
+    "game_h": [
+     60.0,
+     120.0
+    ]
+   },
+   "bush_wide": {
+    "kind": "bush",
+    "files": {
+     "summer": "scenery/bush_wide_summer.png",
+     "autumn": "scenery/bush_wide_autumn.png"
+    },
+    "w": 527,
+    "h": 286,
+    "foot": [
+     288.6,
+     281.0
+    ],
+    "game_h": [
+     60.0,
+     120.0
+    ]
+   },
+   "bush_berry": {
+    "kind": "bush",
+    "files": {
+     "summer": "scenery/bush_berry_summer.png",
+     "summer_nb": "scenery/bush_berry_summer_nb.png",
+     "autumn": "scenery/bush_berry_autumn.png",
+     "autumn_nb": "scenery/bush_berry_autumn_nb.png"
+    },
+    "w": 445,
+    "h": 275,
+    "foot": [
+     211.3,
+     269.0
+    ],
+    "game_h": [
+     60.0,
+     120.0
+    ]
+   },
+   "fern_upright": {
+    "kind": "fern",
+    "files": {
+     "summer": "scenery/fern_upright_summer.png",
+     "autumn": "scenery/fern_upright_autumn.png"
+    },
+    "w": 426,
+    "h": 318,
+    "foot": [
+     235.7,
+     313.0
+    ],
+    "game_h": [
+     80.0,
+     120.0
+    ]
+   },
+   "fern_arching": {
+    "kind": "fern",
+    "files": {
+     "summer": "scenery/fern_arching_summer.png",
+     "autumn": "scenery/fern_arching_autumn.png"
+    },
+    "w": 476,
+    "h": 341,
+    "foot": [
+     414.0,
+     336.0
+    ],
+    "game_h": [
+     80.0,
+     120.0
+    ]
+   },
+   "fern_big": {
+    "kind": "fern",
+    "files": {
+     "summer": "scenery/fern_big_summer.png",
+     "autumn": "scenery/fern_big_autumn.png"
+    },
+    "w": 577,
+    "h": 348,
+    "foot": [
+     329.0,
+     342.0
+    ],
+    "game_h": [
+     80.0,
+     120.0
+    ]
+   },
+   "shroom_agaric": {
+    "kind": "shroom",
+    "files": {
+     "summer": "scenery/shroom_agaric_summer.png"
+    },
+    "w": 197,
+    "h": 179,
+    "foot": [
+     87.0,
+     176.0
+    ],
+    "game_h": [
+     40.0,
+     60.0
+    ]
+   },
+   "shroom_inkcap": {
+    "kind": "shroom",
+    "files": {
+     "summer": "scenery/shroom_inkcap_summer.png"
+    },
+    "w": 164,
+    "h": 214,
+    "foot": [
+     80.0,
+     211.0
+    ],
+    "game_h": [
+     40.0,
+     60.0
+    ]
+   },
+   "shroom_cep": {
+    "kind": "shroom",
+    "files": {
+     "summer": "scenery/shroom_cep_summer.png"
+    },
+    "w": 212,
+    "h": 130,
+    "foot": [
+     109.6,
+     127.0
+    ],
+    "game_h": [
+     40.0,
+     60.0
+    ]
+   }
+  }
  }
 }

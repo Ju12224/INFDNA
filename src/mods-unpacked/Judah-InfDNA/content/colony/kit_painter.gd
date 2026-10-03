@@ -150,6 +150,7 @@ var _bp = null        # body_painter used as a library for the procedural extras
 var _L := []          # per layer: ops, either {"kit": ...} or a body_painter op
 var _bb := Rect2()    # bounds of the kit pieces (painter units), for the fit
 var _bb_on := false
+var _reach := 0.0     # longest leg's forward / backward reach beyond the rest pose (fit margin for the stride)
 
 
 # ------------------------------------------------------------------------------------------------ kit loading (shared, static)
@@ -324,7 +325,7 @@ func _draw() -> void:
 		_bb_on = false
 		fit = 1.0
 		if _bb.size.x > 0.0:
-			var ext_x = (max(-_bb.position.x, _bb.end.x) + 6.0) * f0
+			var ext_x = (max(-_bb.position.x, _bb.end.x) + 6.0 + _reach) * f0
 			var ext_up = (-_bb.position.y + 6.0) * f0
 			var ext_dn = (_bb.end.y + 2.0) * f0
 			fit = min(1.0, min(FIT_W / ext_x, min(FIT_UP / ext_up, FIT_DOWN / max(1.0, ext_dn))))
@@ -403,8 +404,12 @@ func _build(k: Dictionary, animate: bool) -> float:
 		if segs[i]["limb"] == "leg" and segs[i]["n"] > 0:
 			has_legs = true
 			lmax = max(lmax, float(segs[i]["len"]) * stilt)
+	_reach = lmax * 0.46
 	var yb = -(lmax * 0.9 + RY[1 if ns > 2 else 0] * 0.45 + 8.0) if has_legs else -(max_ry * 0.95 + 6.0)
 	yb = min(yb, -(max_ry * 0.75 + 8.0))
+	if not has_legs:
+		for i in range(1, ns - 1):
+			yb = min(yb, -(HX[i] * 1.1 + 4.0))     # a legless body rests on its thorax pieces' coxae, not below the ground
 
 	# --- layout rear (left) -> head (right), as body_painter ---
 	var waist: float = (12.0 + 10.0 * nodes) if ns > 2 else 4.0
@@ -475,6 +480,9 @@ func _build(k: Dictionary, animate: bool) -> float:
 		var gax: Vector2 = g_inf["far"] - g_inf["pivot"]
 		var gs = HX[0] * 2.35 / max(1.0, gax.length())
 		var droop = 0.62 + 0.1 * repl
+		# a low body (no legs, short legs): the gaster hangs less, its tip stays above the ground
+		var glen = gax.length() * gs
+		droop = min(droop, asin(clamp((-6.0 - g_attach.y) / max(1.0, glen), -1.0, 1.0)) + 0.35)
 		var grot = (PI - droop) - gax.angle() + ang[0]
 		g_xf = _xf_piece(g_inf, g_attach, grot, gs)
 		g_tip = g_xf.xform(g_inf["far"])
@@ -629,7 +637,7 @@ func _build(k: Dictionary, animate: bool) -> float:
 		var af = _info(k, _role(k, ar + "_far")) if ar + "_far" in ROLES else an
 		if af.empty():
 			af = an
-		var alen_u = hhx * 2.0 * (0.45 + 0.017 * alen) * (1.25 if f_ant == 3 else 1.0)
+		var alen_u = hhx * 2.0 * (0.45 + 0.017 * alen) * [1.0, 0.78, 0.95, 1.25, 1.0][clamp(f_ant, 0, 4)]
 		for side in 2:
 			var inf = af if side == 0 else an
 			if inf.empty():
@@ -661,7 +669,7 @@ func _build(k: Dictionary, animate: bool) -> float:
 			if wn.empty():
 				continue
 			var wv: Vector2 = wn["far"] - wn["pivot"]
-			var wl = total * (0.62 if w == 0 else 0.78)
+			var wl = max(HX[0] * 1.6, wroot.x - g_tip.x + 14.0) * (0.86 if w == 0 else 1.06)   # just past the gaster tip
 			var flutter = sin(g * TAU * 2.0 + w) * 0.02 if animate else 0.0
 			var wa = PI + (0.1 if w == 0 else 0.2) - wv.angle() + flutter
 			# the wing pieces are drawn root-right; rotate so the root-to-tip line runs back and a little up
@@ -854,9 +862,10 @@ func _leg_kit(k: Dictionary, hip: Vector2, L: float, t: float, i: int, j: int, s
 	if role == 1 and form == 3:
 		# raptorial foreleg: held up and folded in front of the head, never on the ground
 		var sway = sin(g * TAU) * 0.06
-		var rs = L * 0.62 / max(1.0, (inf["far"] - inf["pivot"]).length())
-		var rot = -2.1 + sway
-		_kit_op(K_NEAR if side == 1 else K_FAR, inf, _xf_piece(inf, hip + Vector2(2, -2), rot, rs, true), tint.lightened(0.1) if side == 1 else tint)
+		var rv: Vector2 = inf["low"] - inf["pivot"]
+		var rs = L * 0.85 / max(1.0, rv.length())
+		var rot = -0.5 + sway - rv.angle()      # hip-to-claw line raised forward and up
+		_kit_op(K_NEAR if side == 1 else K_FAR, inf, _xf_piece(inf, hip + Vector2(3, -3), rot, rs), tint.lightened(0.1) if side == 1 else tint)
 		return
 	# gait phase: tripods alternate by (leg + side) parity; frames sample the middle of each sixth of the cycle
 	var cyc = fposmod(g + 1.0 / 12.0 + (0.5 if (j + side) % 2 == 1 else 0.0) + i * 0.04, 1.0)
@@ -891,7 +900,7 @@ func _leg_kit(k: Dictionary, hip: Vector2, L: float, t: float, i: int, j: int, s
 	if form == 4:
 		thick = 0.7
 	elif role == 2:
-		thick = 1.2
+		thick = 1.45
 	elif role == 1:
 		thick = 1.12
 	var xf = Transform2D(tv.angle(), hip) * Transform2D(Vector2(stretch, 0), Vector2(0, thick), Vector2.ZERO) * Transform2D(-v0.angle(), Vector2.ZERO) \

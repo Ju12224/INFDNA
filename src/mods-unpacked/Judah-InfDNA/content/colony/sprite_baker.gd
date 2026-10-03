@@ -3,6 +3,7 @@ extends Node
 # so hundreds of ants cost one draw_texture each instead of ~150 draw calls.
 
 const Painter = preload("res://mods-unpacked/Judah-InfDNA/core/body_painter.gd")
+const KitPainter = preload("res://mods-unpacked/Judah-InfDNA/content/colony/kit_painter.gd")   # ants built from the owner's part kit (v0.35)
 const SIZE = Vector2(170, 136)
 const FEET = Vector2(85, 126)
 var batch := 6           # viewport bakes per frame (one body plan = 6 frames); 16 readbacks at once hitched at high speed; perf.gd lowers it
@@ -64,7 +65,7 @@ func _bake_batch() -> void:
 		vp.usage = Viewport.USAGE_2D
 		vp.render_target_v_flip = true
 		vp.render_target_update_mode = Viewport.UPDATE_ONCE
-		var p = Painter.new()
+		var p = KitPainter.new() if KitPainter.available() else Painter.new()
 		p.genome = job[0]
 		p.paint_scale = paint_scale * m
 		p.gait = job[3] / float(FRAMES)
