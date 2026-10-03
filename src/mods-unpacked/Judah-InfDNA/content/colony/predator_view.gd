@@ -291,8 +291,9 @@ static func _put(ci: CanvasItem, base: Transform2D, tex, pos: Vector2, pivot: Ve
 # wing-beat pose it died in, 1 lets them hang and loll; `flutter` is the time they stir in the wind of the fall), the head dropped, the eye
 # crossed out. Turned by `ang` about the middle of the body, which sits at `piv`; `scale` as for Rig.bird. `pa` is an optional list of five
 # alphas (far foot, far wing, near wing, head, near foot) for a bird coming apart; `flop` (radians) lets the limp wings flap loosely with
-# `flutter`, as in the wind of a fall. Returns false when the art is missing.
-static func draw_dead(ci: CanvasItem, piv: Vector2, scale: float, face: int, ang: float, limp: float, fold: float, flutter: float, alpha: float, tint: Color, pa = null, flop: float = 0.0) -> bool:
+# `flutter`, as in the wind of a fall; `outer` (a Transform2D) is applied on top of it all, e.g. to slump a rotting carcass toward the
+# ground. Returns false when the art is missing.
+static func draw_dead(ci: CanvasItem, piv: Vector2, scale: float, face: int, ang: float, limp: float, fold: float, flutter: float, alpha: float, tint: Color, pa = null, flop: float = 0.0, outer = null) -> bool:
 	var lib = Lib.get_lib()
 	var th = lib.tex("bird_head.png")
 	var twb = lib.tex("bird_wing_b.png")
@@ -303,6 +304,8 @@ static func draw_dead(ci: CanvasItem, piv: Vector2, scale: float, face: int, ang
 		return false
 	var s = scale
 	var base = Transform2D(ang, piv) * Transform2D(Vector2(face * s, 0), Vector2(0, s), Vector2.ZERO) * Transform2D(0.0, -DEAD_PIVOT)
+	if outer != null:
+		base = outer * base
 	var a0 = alpha
 	var al = [1.0, 1.0, 1.0, 1.0, 1.0]
 	if pa != null:

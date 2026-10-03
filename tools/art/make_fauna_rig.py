@@ -65,23 +65,176 @@ def L(name, *lines, **kw):
 # far / near: sheet a|b, box on it, s (leg px -> body px), legs back to front (the order they are drawn in), drop (body bits to throw away),
 #             wings, hips {leg name: (x, y) in body-sheet px}; per leg optional rot (deg, forced), fit=False (keep scale 1 and no turn)
 # ground: y of the ground line in body-sheet px; game: game length (px at scale 1, worker ant ~40)
+def P(*pts):
+    """Seed points, one line each (a point in every drawn segment of a leg or body bit)."""
+    return [[q] for q in pts]
+
+
+def LP(name, pts, pivot, **kw):
+    d = {"name": name, "lines": P(*pts), "pivot": pivot}
+    d.update(kw)
+    return d
+
+
 SPEC = {
-    # ---- the queen: light furry legs (b, the near side) and the same legs darker (b, far side; the a-sheet furry sets are a different style)
+    # ---- the queen: the light furry legs of sheet b (near) and the same legs darker (sheet b too: the far side; it shows two whole legs and
+    #      the claw of a third behind them)
     "queen": {
         "game": 90, "len_px": 360, "ground": 372,
         "body": {"box": (0, 60, 720, 380)},
-        "near": {"sheet": "b", "box": (35, 140, 455, 335), "s": "auto",
+        "near": {"sheet": "b", "box": (35, 140, 455, 335),
                  "legs": [L("hind", [(232, 212), (183, 168), (150, 215), (110, 280), (55, 325)]),
                           L("mid", [(268, 196), (240, 230), (215, 258), (195, 290), (175, 322)]),
                           L("front", [(330, 192), (350, 165), (372, 152), (392, 200), (405, 250), (420, 325)])],
                  "drop": [L("thorax", [(285, 172), (305, 195)])],
                  "hips": {"hind": (370, 255), "mid": (425, 262), "front": (480, 262)}},
-        "far": {"sheet": "b", "box": (470, 160, 840, 325), "s": "auto",
+        "far": {"sheet": "b", "box": (470, 160, 840, 325),
                 "legs": [L("hind", [(655, 238), (630, 205), (605, 180), (570, 215), (530, 250), (492, 280)]),
                          L("mid", [(785, 222), (795, 250), (812, 290)]),
                          L("front", [(683, 228), (700, 200), (718, 180), (745, 220), (765, 255), (788, 300)])],
                 "drop": [L("thorax", [(668, 212), (672, 225)])],
                 "hips": {"hind": (385, 245), "mid": (440, 250), "front": (492, 250)}},
+    },
+    # ---- stag beetle: the second (cleaner, one piece) body; the near legs come with a whole beetle (thrown away) and the stumps of the far
+    #      legs behind them (thrown away); there is no dark far set, so the far side is the near legs, darker
+    "stagbeetle": {
+        "game": 90, "len_px": 380, "ground": 378,
+        "body": {"box": (1200, 90, 1672, 350)},
+        "near": {"sheet": "b", "box": (836, 64, 1288, 348), "inset": 9,
+                 "legs": [LP("hind", [(932, 261), (906, 295), (888, 311)], (955, 233)),
+                          LP("mid", [(1045, 226), (1022, 263), (1004, 295), (986, 314)], (1040, 229)),
+                          LP("front", [(1127, 248), (1159, 276), (1189, 306)], (1106, 229))],
+                 "drop": [L("beetle", [(900, 215), (951, 191), (1010, 190), (1050, 180)], [(1080, 190), (1119, 190), (1159, 199), (1200, 120)],
+                            [(1160, 100), (1230, 110), (1255, 160)], [(1150, 215), (1200, 230), (1260, 200)], [(1101, 206), (1086, 210)],
+                            [(978, 226)]),
+                          LP("stumps", [(977, 252), (958, 260), (1004, 253), (1056, 248), (1071, 241), (1088, 252)], None)],
+                 "hips": {"hind": 1372, "mid": 1450, "front": 1528}},
+        "far": {"copy": "near", "darken": 0.7, "inset": 17,
+                "hips": {"hind": 1392, "mid": 1470, "front": 1545}},
+    },
+    # ---- centipede: cream legs; the red ovals over the near legs and the row of segments over the far legs are body (thrown away)
+    "centipede": {
+        "game": 120, "len_px": 420, "ground": 619,
+        "body": {"box": (15, 440, 405, 610)},
+        "near": {"sheet": "b", "box": (1280, 176, 1648, 340), "inset": 7, "leg": {"fit_scale": (0.6, 1.4), "max_rot": 12},
+                 "legs": [LP("n1", [(1322, 265)], (1323, 257)), LP("n2", [(1360, 268)], (1362, 259)), LP("n3", [(1399, 269)], (1402, 256)),
+                          LP("n4", [(1437, 261)], (1440, 250)), LP("n5", [(1474, 272)], (1475, 262)), LP("n6", [(1510, 261)], (1510, 249)),
+                          LP("n7", [(1563, 265)], (1563, 258)), LP("n8", [(1614, 254)], (1613, 246))],
+                 "drop": [LP("ovals", [(1338, 238), (1371, 238), (1406, 232), (1441, 220), (1472, 237), (1503, 217), (1550, 228), (1573, 221),
+                                       (1594, 225)], None)],
+                 "hips": {"n1": 52, "n2": 88, "n3": 124, "n4": 160, "n5": 196, "n6": 232, "n7": 268, "n8": 302}},
+        "far": {"sheet": "a", "box": (852, 288, 1088, 430), "inset": 13, "leg": {"fit_scale": (0.6, 1.4), "max_rot": 12},
+                "legs": [LP("f1", [(884, 361), (871, 374)], (892, 353)), LP("f2", [(917, 352), (911, 365), (901, 382)], (917, 350)),
+                         LP("f3", [(938, 371), (935, 388)], (945, 355)), LP("f4", [(967, 372), (965, 390)], (969, 360)),
+                         LP("f5", [(992, 374), (989, 388)], (993, 361)), LP("f6", [(1020, 366), (1020, 376), (1018, 393)], (1020, 362)),
+                         LP("f7", [(1051, 362), (1051, 375), (1051, 392)], (1051, 359))],
+                "drop": [LP("segments", [(894, 342), (916, 331), (944, 327), (969, 332), (994, 335), (1019, 343), (1048, 343), (929, 357)], None)],
+                "hips": {"f1": 68, "f2": 107, "f3": 146, "f4": 185, "f5": 224, "f6": 263, "f7": 298}},
+    },
+    # ---- scorpion: the walking legs and the big claw (a leg that does not reach the ground: it keeps its size and is not turned)
+    "scorpion": {
+        "game": 110, "len_px": 320, "ground": 648,
+        "body": {"box": (420, 375, 735, 615)},
+        "near": {"sheet": "b", "box": (52, 440, 432, 652), "inset": 10,
+                 "legs": [LP("rear", [(192, 487), (153, 468), (123, 494), (98, 524), (78, 587), (242, 526)], (250, 530)),
+                          LP("mid", [(205, 542), (198, 574), (210, 603)], (232, 520)),
+                          LP("claw", [(270, 527), (294, 496), (328, 518), (269, 564), (287, 571), (301, 554), (337, 573)], (262, 548), fit=False, scale=1.35, rot=-8)],
+                 "hips": {"rear": 570, "mid": 628, "claw": (688, 578)}},
+        "far": {"sheet": "a", "box": (1100, 272, 1356, 436), "inset": 16,
+                "legs": [LP("rear", [(1222, 308), (1191, 298), (1163, 319), (1140, 351), (1120, 380)], (1228, 322)),
+                         LP("mid", [(1196, 326), (1173, 357)], (1220, 334)),
+                         LP("front", [(1233, 330), (1245, 342), (1239, 376)], (1236, 327)),
+                         LP("claw", [(1251, 325), (1262, 319), (1284, 320), (1303, 325), (1298, 354), (1316, 390)], (1249, 327), fit=False, scale=1.25, rot=-8)],
+                "hips": {"rear": 548, "mid": 596, "front": 645, "claw": (698, 570)}},
+    },
+    # ---- moth: furry legs; both sets carry the flight wings (kept, to flap) and fur of the body (thrown away)
+    "moth": {
+        "game": 60, "len_px": 300, "ground": 628,
+        "body": {"box": (745, 455, 1158, 615)},
+        "near": {"sheet": "b", "box": (440, 412, 856, 656), "inset": 9,
+                 "legs": [LP("hind", [(547, 551), (518, 581)], (612, 525)),
+                          LP("mid", [(702, 554)], (697, 518)),
+                          LP("front", [(796, 547), (827, 578), (811, 588), (795, 593)], (772, 518))],
+                 "drop": [LP("body", [(746, 524), (606, 571), (587, 600), (632, 535), (656, 539), (647, 559), (672, 569), (675, 527),
+                                      (689, 513), (723, 536)], None)],
+                 "wings": [LP("wing", [(526, 440), (551, 467), (627, 479), (680, 484), (700, 487)], (708, 488), attach=(1000, 500), flap=0.7, s=0.95)],
+                 "hips": {"hind": 965, "mid": 1010, "front": 1052}},
+        "far": {"sheet": "a", "box": (1376, 260, 1664, 448), "inset": 15,
+                "legs": [LP("hind", [(1438, 376), (1423, 398)], (1462, 346)),
+                         LP("mid", [(1526, 346), (1541, 381), (1552, 410)], (1528, 344)),
+                         LP("front", [(1594, 373), (1619, 406)], (1582, 346))],
+                "drop": [LP("body", [(1613, 329), (1424, 343), (1498, 355), (1552, 344), (1475, 363), (1514, 383), (1498, 375)], None)],
+                "wings": [LP("wing", [(1437, 282), (1443, 304), (1483, 328), (1540, 312), (1568, 316)], (1580, 318), attach=(1012, 492), flap=0.7, s=1.15)],
+                "hips": {"hind": 980, "mid": 1025, "front": 1062}},
+    },
+    # ---- hornet: yellow-black legs; both sets carry the pale wings (kept, to flap), the near set also a striped abdomen (thrown away)
+    "hornet": {
+        "game": 70, "len_px": 300, "ground": 896,
+        "body": {"box": (20, 720, 405, 885)},
+        "near": {"sheet": "b", "box": (1252, 384, 1640, 664), "inset": 8,
+                 "legs": [LP("hind", [(1509, 539), (1496, 517), (1478, 565), (1468, 592)], (1517, 548)),
+                          LP("mid", [(1540, 530), (1569, 499), (1555, 552), (1550, 578)], (1530, 548)),
+                          LP("front", [(1582, 526), (1597, 547), (1603, 579), (1606, 598)], (1574, 508))],
+                 "drop": [LP("body", [(1421, 540), (1390, 600), (1440, 520), (1457, 498), (1477, 521), (1528, 544), (1520, 552)], None)],
+                 "wings": [LP("wing", [(1322, 423), (1365, 468), (1450, 470), (1500, 478), (1524, 482)], (1530, 482), attach=(205, 752), flap=0.9, s=0.78)],
+                 "hips": {"hind": 178, "mid": 218, "front": 258}},
+        "far": {"sheet": "a", "box": (388, 508, 648, 764), "inset": 14,
+                "legs": [LP("hind", [(449, 667), (437, 688)], (474, 642)),
+                         LP("mid", [(510, 674), (506, 698)], (520, 642)),
+                         LP("front", [(598, 632), (601, 656), (603, 689), (609, 709)], (597, 620))],
+                "drop": [LP("body", [(569, 641), (561, 676), (562, 706), (550, 631), (527, 636), (585, 640), (501, 645), (488, 652),
+                                     (474, 666)], None)],
+                "wings": [LP("wing", [(455, 546), (478, 587), (560, 585), (600, 588)], (615, 590), attach=(215, 748), flap=0.9, s=1.05)],
+                "hips": {"hind": 192, "mid": 232, "front": 268}},
+    },
+    # ---- the red ants: both leg sets carry the gaster, the waist and a bit of thorax (thrown away)
+    "redant_small": {
+        "game": 36, "len_px": 230, "ground": 892,
+        "body": {"box": (410, 735, 712, 875)},
+        "near": {"sheet": "b", "box": (92, 728, 404, 896), "inset": 7,
+                 "legs": [LP("hind", [(173, 827), (159, 848), (137, 870)], (192, 800)),
+                          LP("mid", [(274, 822), (282, 846), (297, 868)], (268, 797)),
+                          LP("front", [(303, 777), (346, 779), (372, 811)], (296, 792))],
+                 "drop": [LP("body", [(154, 807), (120, 840), (200, 770), (235, 802), (264, 778), (284, 776)], None)],
+                 "hips": {"hind": 535, "mid": 562, "front": 592}},
+        "far": {"sheet": "a", "box": (696, 624, 908, 768), "inset": 12,
+                "legs": [LP("hind", [(781, 690), (758, 707), (749, 725)], (788, 673)),
+                         LP("mid", [(815, 700), (823, 719)], (812, 681)),
+                         LP("front", [(831, 667), (855, 672), (868, 701)], (829, 688))],
+                "drop": [LP("body", [(736, 685), (720, 700), (760, 660), (789, 680), (806, 660)], None)],
+                "hips": {"hind": 545, "mid": 572, "front": 600}},
+    },
+    "redant_soldier": {
+        "game": 48, "len_px": 260, "ground": 893,
+        "body": {"box": (740, 710, 1125, 880)},
+        "near": {"sheet": "b", "box": (472, 708, 876, 896), "inset": 8,
+                 "legs": [LP("hind", [(685, 770), (678, 799), (631, 802), (610, 833), (578, 867)], (703, 795)),
+                          LP("mid", [(713, 816), (724, 841)], (707, 790)),
+                          LP("front", [(737, 763), (763, 772), (800, 766), (834, 803)], (716, 790))],
+                 "drop": [LP("body", [(551, 796), (520, 820), (600, 760), (617, 782)], None)],
+                 "hips": {"hind": 878, "mid": 912, "front": 948}},
+        "far": {"sheet": "a", "box": (932, 600, 1228, 768), "inset": 13,
+                "legs": [LP("hind", [(1044, 668), (1036, 684), (1013, 694), (1000, 717)], (1058, 686)),
+                         LP("mid", [(1112, 677), (1151, 697), (1169, 719)], (1100, 688)),
+                         LP("front", [(1129, 644), (1171, 663), (1182, 693)], (1108, 683))],
+                "drop": [LP("body", [(985, 663), (960, 690), (1010, 640), (1083, 647), (1064, 672), (1094, 674), (1081, 680)], None)],
+                "hips": {"hind": 890, "mid": 924, "front": 958}},
+    },
+    "redant_major": {
+        "game": 80, "len_px": 340, "ground": 900,
+        "body": {"box": (1150, 645, 1670, 890)},
+        "near": {"sheet": "b", "box": (936, 676, 1432, 908), "inset": 10,
+                 "legs": [LP("hind", [(1123, 806), (1099, 838), (1063, 876)], (1222, 768)),
+                          LP("mid", [(1244, 748), (1246, 800), (1262, 834), (1290, 872)], (1236, 742)),
+                          LP("front", [(1294, 750), (1355, 769), (1386, 815)], (1262, 782))],
+                 "drop": [LP("body", [(1050, 773), (1000, 820), (1100, 730), (1161, 785), (1255, 763), (1269, 735)], None)],
+                 "hips": {"hind": 1385, "mid": 1422, "front": 1458}},
+        "far": {"sheet": "a", "box": (1248, 552, 1648, 768), "inset": 17,
+                "legs": [LP("hind", [(1416, 633), (1401, 612), (1375, 657), (1355, 682)], (1440, 655)),
+                         LP("mid", [(1465, 647), (1477, 620), (1494, 671), (1505, 707)], (1460, 662)),
+                         LP("front", [(1518, 645), (1567, 659), (1587, 684)], (1502, 658))],
+                "drop": [LP("body", [(1334, 616), (1290, 650), (1370, 600), (1442, 635)], None)],
+                "hips": {"hind": 1398, "mid": 1434, "front": 1470}},
     },
 }
 
@@ -122,8 +275,10 @@ def crop_items(im, box, min_px=60):
     m = cc.dilate(cc.mask_from(lab, c.size, keep), 2)
     c.putalpha(ImageChops.multiply(a, m))
     bb = cc.bbox_of(c)
-    out = c.crop(bb)
-    return out, (bx[0] + bb[0], bx[1] + bb[1])
+    pad = 10                                   # room for the extra outline (thicken does not grow the canvas)
+    out = Image.new("RGBA", (bb[2] - bb[0] + 2 * pad, bb[3] - bb[1] + 2 * pad), (0, 0, 0, 0))
+    out.paste(c.crop(bb), (pad, pad))
+    return out, (bx[0] + bb[0] - pad, bx[1] + bb[1] - pad)
 
 
 def resize(im, k):
@@ -160,6 +315,27 @@ def affine(img, pivot, scale, deg):
     return out, (-minx, -miny)
 
 
+def snap_inside(img, pv, inset=2.0, thr=160):
+    """A hinge must lie on the piece: a pivot that fell outside it (a hand-placed point) moves to the nearest solid pixel, then `inset` px further in."""
+    a = img.getchannel("A")
+    w, h = img.size
+    px = a.load()
+    x0, y0 = int(round(pv[0])), int(round(pv[1]))
+    if 0 <= x0 < w and 0 <= y0 < h and px[x0, y0] >= thr:
+        return pv
+    best = None
+    for y in range(h):
+        for x in range(w):
+            if px[x, y] >= thr:
+                d2 = (x - pv[0]) ** 2 + (y - pv[1]) ** 2
+                if best is None or d2 < best[0]:
+                    best = (d2, x, y)
+    if best is None:
+        return pv
+    d = math.sqrt(best[0]) or 1.0
+    return (best[1] + (best[1] - pv[0]) / d * inset, best[2] + (best[2] - pv[1]) / d * inset)
+
+
 def foot_of(img, thr=128):
     """Lowest point of a piece: (x, y) = middle of the opaque pixels of its bottom 3 rows, bottom edge."""
     a = img.getchannel("A").point(lambda v: 255 if v >= thr else 0)
@@ -175,6 +351,9 @@ def foot_of(img, thr=128):
 def fit_leg(img, pivot, hip, ground, spec):
     """Stretch (FIT_SCALE) and turn (FIT_ROT) a leg about its pivot so that, hung on `hip`, its foot stands on `ground`."""
     if spec.get("fit") is False:
+        if spec.get("rot"):
+            out, pv = affine(img, pivot, 1.0, float(spec["rot"]))
+            return out, pv, 1.0, float(spec["rot"])
         return img, pivot, 1.0, 0.0
     need = ground - hip[1]
     fx, fy = foot_of(img)
@@ -236,13 +415,24 @@ def cut_set(name, side, st, k, debug=None):
     parts = []
     for kind in ("legs", "drop", "wings"):
         for p in st.get(kind, []):
-            parts.append((kind, p))
+            if kind == "drop":
+                # every seed of a body bit is a bit of its own: the partition keeps only one connected piece per part, and the bits of body
+                # between the legs are separate islands
+                for i, line in enumerate(p["lines"]):
+                    parts.append((kind, {"name": "%s%d" % (p["name"], i), "lines": [line]}))
+            else:
+                parts.append((kind, p))
 
     def tr(pt):
         return ((pt[0] - org[0]) * ks, (pt[1] - org[1]) * ks)
     seeds = [{"name": p["name"], "lines": [[tr(q) for q in line] for line in p["lines"]]} for kind, p in parts]
     lab, ink = cc.partition(im, seeds, 1.0)
     a = im.getchannel("A")
+    # the rim a leg keeps is taken from its neighbouring legs' outline only, never from a body bit that is thrown away (that outline
+    # would show as a dark smudge where the leg lies over the body)
+    drop_ids = set(i for i, (kind, p) in enumerate(parts) if kind == "drop")
+    not_drop = lab.point(lambda v: 0 if v in drop_ids else 255)
+    ink_ok = ImageChops.multiply(ink, not_drop)
     legs, wings = [], []
     for li, (kind, p) in enumerate(parts):
         if kind == "drop":
@@ -251,21 +441,28 @@ def cut_set(name, side, st, k, debug=None):
         if m.getbbox() is None:
             print("  !! %s %s %s got no pixels" % (name, side, p["name"]))
             continue
-        mask = cc.grow_in(m, ink, p.get("rim", RIM))
+        mask = cc.grow_in(m, ink_ok, p.get("rim", RIM))
         piece = im.copy()
         piece.putalpha(ImageChops.multiply(a, mask))
         piece = cc.drop_specks(piece, 60, 0.04)
         bb = cc.bbox_of(piece)
         crop_p = piece.crop(bb)
         pv = tr(p.get("pivot", p["lines"][0][0]))
-        d = {"name": p["name"], "img": crop_p, "pivot": (pv[0] - bb[0], pv[1] - bb[1]), "spec": p, "at": (bb[0], bb[1])}
+        pv = (pv[0] - bb[0], pv[1] - bb[1])
+        # a piece with a size of its own: a wing ("s": leg-sheet px -> body-sheet px) or a claw ("scale": times the set's size)
+        mult = (p["s"] / st["s"]) if "s" in p else p.get("scale", 1.0)
+        if abs(mult - 1.0) > 1e-3:
+            crop_p, pv = affine(crop_p, pv, mult, 0.0)
+        pv = snap_inside(crop_p, pv)
+        d = {"name": p["name"], "img": crop_p, "pivot": pv, "spec": dict(st.get("leg", {}), **p), "at": (bb[0], bb[1])}
         (wings if kind == "wings" else legs).append(d)
     if debug:
-        debug_set(name, side, im, lab, parts, seeds, debug)
+        pivots = [tr(p["pivot"]) if p.get("pivot") else tr(p["lines"][0][0]) for kind, p in parts]
+        debug_set(name, side, im, lab, parts, seeds, debug, pivots)
     return legs, wings
 
 
-def debug_set(name, side, im, lab, parts, seeds, ddir):
+def debug_set(name, side, im, lab, parts, seeds, ddir, pivots):
     import colorsys
     w, h = im.size
     bg = Image.new("RGBA", im.size, (150, 165, 150, 255))
@@ -297,10 +494,29 @@ def debug_set(name, side, im, lab, parts, seeds, ddir):
                 d.line(pts, fill=cols[i] + (255,), width=2)
             for q in pts:
                 d.ellipse([q[0] - 2, q[1] - 2, q[0] + 2, q[1] + 2], fill=(255, 255, 255, 255))
-        x, y = sd["lines"][0][0]
+        x, y = pivots[i]
         d.ellipse([x * z - 5, y * z - 5, x * z + 5, y * z + 5], outline=(255, 255, 0, 255), width=2)
         d.text((x * z + 6, y * z - 12), sd["name"], fill=(255, 255, 255, 255))
     bg.convert("RGB").save(os.path.join(ddir, "set_%s_%s.png" % (name, side)))
+
+
+def underside(img, x, thr=128):
+    """Lowest opaque pixel of column x of a picture (None when the column is empty)."""
+    a = img.getchannel("A")
+    x = int(round(min(max(x, 0), img.size[0] - 1)))
+    col = a.crop((x, 0, x + 1, img.size[1])).load()
+    for y in range(img.size[1] - 1, -1, -1):
+        if col[0, y] >= thr:
+            return y
+    return None
+
+
+def darken(img, f):
+    r, g, b, a = img.split()
+    rgb = Image.merge("RGB", (r, g, b)).point(lambda v: int(v * f))
+    out = rgb.convert("RGBA")
+    out.putalpha(a)
+    return out
 
 
 def build_one(name, sp, debug=None):
@@ -313,31 +529,49 @@ def build_one(name, sp, debug=None):
     def B(pt):            # body-sheet px -> working px (body picture's own frame)
         return ((pt[0] - borg[0]) * k, (pt[1] - borg[1]) * k)
     ground = B((0, sp["ground"]))[1]
+
+    def hip_of(st, legname):
+        """A hip in working px: (x, y) given in body-sheet px, or only x: then on the body's underside, `inset` body-sheet px up."""
+        h = st["hips"][legname]
+        if isinstance(h, (int, float)):
+            hx = B((h, 0))[0]
+            u = underside(body, hx)
+            return (hx, (u if u is not None else ground) - st.get("inset", 10) * k)
+        return B(h)
     placed = {"far": [], "near": []}
     wings_out = []
-    for side in ("far", "near"):
+    cut_cache = {}
+    for side in ("near", "far"):
         st = sp.get(side)
         if not st:
             continue
-        if st.get("s", "auto") == "auto":
-            # the set scale that lets the legs reach the ground from their hips without stretching (median over the legs)
-            probe = dict(st, s=1.0)
-            legs, wings = cut_set(name, side, probe, k, None)
-            ratios = []
-            for lg in legs:
-                hip = B(st["hips"][lg["name"]])
-                fx, fy = foot_of(lg["img"])
-                ext = fy - lg["pivot"][1]
-                if ext > 2:
-                    ratios.append((ground - hip[1]) / ext)
-            ratios.sort()
-            sv = ratios[len(ratios) // 2] if ratios else 1.0
-            sv = min(2.0, max(0.35, sv * st.get("s_bias", 1.0)))
-            print("  %s %s: set scale %.3f (per leg %s)" % (name, side, sv, ", ".join("%.2f" % r for r in ratios)))
-            st = dict(st, s=sv)
-        legs, wings = cut_set(name, side, st, k, debug)
+        if st.get("copy"):
+            # no drawing of this side: the other side's legs, darker, on this side's hips
+            legs = [dict(lg, img=darken(lg["img"], st.get("darken", 0.72))) for lg in cut_cache[st["copy"]][0]]
+            legs = [dict(lg, spec=dict(lg["spec"], **st.get("per_leg", {}).get(lg["name"], {}))) for lg in legs]
+            wings = []
+        else:
+            if st.get("s", "auto") == "auto":
+                # the set scale that lets the legs reach the ground from their hips without stretching (median over the legs)
+                legs, wings = cut_set(name, side, dict(st, s=1.0), k, None)
+                ratios = []
+                for lg in legs:
+                    if lg["spec"].get("fit") is False:
+                        continue
+                    hip = hip_of(st, lg["name"])
+                    fx, fy = foot_of(lg["img"])
+                    ext = fy - lg["pivot"][1]
+                    if ext > 2:
+                        ratios.append((ground - hip[1]) / ext)
+                ratios.sort()
+                sv = ratios[len(ratios) // 2] if ratios else 1.0
+                sv = min(2.0, max(0.3, sv * st.get("s_bias", 1.0)))
+                print("  %s %s: set scale %.3f (per leg %s)" % (name, side, sv, ", ".join("%.2f" % r for r in ratios)))
+                st = dict(st, s=sv)
+            legs, wings = cut_set(name, side, st, k, debug)
+            cut_cache[side] = (legs, wings)
         for lg in legs:
-            hip = B(st["hips"][lg["name"]])
+            hip = hip_of(st, lg["name"])
             img, pv, a, deg = fit_leg(lg["img"], lg["pivot"], hip, ground, lg["spec"])
             placed[side].append({"name": lg["name"], "img": img, "x": hip[0] - pv[0], "y": hip[1] - pv[1], "pivot": hip,
                                  "fit": (round(a, 3), deg)})
@@ -348,6 +582,10 @@ def build_one(name, sp, debug=None):
                 img, pv = affine(img, pv, wg["spec"].get("scale", 1.0), wg["spec"].get("rot", 0.0))
             wings_out.append({"layer": side, "name": wg["name"], "img": img, "x": att[0] - pv[0], "y": att[1] - pv[1], "pivot": att,
                               "flap": wg["spec"].get("flap", 0.6)})
+    # the legs of a side are listed (and drawn) in the order of the spec
+    for side in placed:
+        names = [lg["name"] for lg in (sp[side].get("legs") or sp[sp[side]["copy"]]["legs"])] if sp.get(side) else []
+        placed[side].sort(key=lambda p: names.index(p["name"]) if p["name"] in names else 99)
     # the canvas: everything shifted so the union starts at MARGIN
     boxes = [(0, 0, body.size[0], body.size[1])]
     for side in placed:

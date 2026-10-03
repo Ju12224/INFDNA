@@ -31,6 +31,7 @@ var ground
 var perf             # perf.gd (optional): shadow and animation detail
 var day              # day_cycle.gd (optional): shadows fade with the sun (the colour of the light is light_view.gd)
 var cam
+var meadow           # meadow_depth.gd (optional): draws its grass rows between the units and says which are hidden in the grass
 var show_castes := true
 var selected = null
 var sel_ids := {}    # ids of the ants in the player's box selection: each stands in a white ring (ants under an order show a coloured one)
@@ -245,6 +246,8 @@ func _draw() -> void:
 			_foes.append(sim.enemy_pos(e3))
 	_draw_shadows(items)
 	for it in items:
+		if meadow != null and meadow.pass_item(self, it):
+			continue
 		if it[1] == 0:
 			_draw_ant(it[2])
 		elif it[1] == 2:

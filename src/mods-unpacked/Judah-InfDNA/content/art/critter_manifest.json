@@ -145,6 +145,7 @@
    }
   ],
   "wave": true,
+  "wave_strip": 12,
   "body": {
    "file": "critters/caterpillar_body.png",
    "x": 4,
@@ -162,7 +163,7 @@
  },
  "snail": {
   "canvas": [
-   462,
+   463,
    345
   ],
   "order": [
@@ -174,11 +175,11 @@
    {
     "layer": "far",
     "file": "critters/snail_far_0.png",
-    "x": 376,
-    "y": 149,
+    "x": 377,
+    "y": 155,
     "pivot": [
-     386.5,
-     219.1
+     387.5,
+     225.1
     ],
     "phase": 1
    },
@@ -186,15 +187,16 @@
     "layer": "near",
     "file": "critters/snail_near_0.png",
     "x": 339,
-    "y": 92,
+    "y": 95,
     "pivot": [
      367.4,
-     222.0
+     225.0
     ],
     "phase": 0
    }
   ],
   "wave": true,
+  "wave_strip": 12,
   "body": {
    "file": "critters/snail_body.png",
    "x": 4,
@@ -204,21 +206,21 @@
    {
     "file": "critters/snail_shell.png",
     "x": 4,
-    "y": 7,
+    "y": 4,
     "pivot": [
      4,
-     7
+     4
     ],
     "open": 0.0
    }
   ],
   "feet": [
-   231.0,
+   231.5,
    341.0
   ],
-  "width": 454.0,
+  "width": 455.0,
   "height": 337.0,
-  "scale": 0.12115,
+  "scale": 0.12088,
   "game_len": 55.0,
   "facing": "right"
  },
@@ -237,7 +239,7 @@
     "layer": "far",
     "file": "critters/bee_far_0.png",
     "x": 84,
-    "y": 188,
+    "y": 192,
     "pivot": [
      128.5,
      200.2
@@ -247,8 +249,8 @@
    {
     "layer": "far",
     "file": "critters/bee_far_1.png",
-    "x": 136,
-    "y": 190,
+    "x": 138,
+    "y": 192,
     "pivot": [
      145.5,
      202.9
@@ -259,7 +261,7 @@
     "layer": "near",
     "file": "critters/bee_near_0.png",
     "x": 94,
-    "y": 190,
+    "y": 198,
     "pivot": [
      138.8,
      205.7
@@ -269,8 +271,8 @@
    {
     "layer": "near",
     "file": "critters/bee_near_1.png",
-    "x": 145,
-    "y": 196,
+    "x": 146,
+    "y": 201,
     "pivot": [
      155.2,
      208.2
@@ -441,7 +443,7 @@
    {
     "layer": "far",
     "file": "critters/dragonfly_far_1.png",
-    "x": 524,
+    "x": 525,
     "y": 195,
     "pivot": [
      533.6,
@@ -453,7 +455,7 @@
     "layer": "near",
     "file": "critters/dragonfly_near_0.png",
     "x": 449,
-    "y": 196,
+    "y": 198,
     "pivot": [
      503.3,
      208.9
@@ -463,8 +465,8 @@
    {
     "layer": "near",
     "file": "critters/dragonfly_near_1.png",
-    "x": 507,
-    "y": 195,
+    "x": 508,
+    "y": 198,
     "pivot": [
      519.6,
      215.5
@@ -496,7 +498,7 @@
     "layer": "far",
     "file": "critters/dragonfly_wing_far_hind.png",
     "x": 182,
-    "y": 121,
+    "y": 106,
     "pivot": [
      472.5,
      146.3

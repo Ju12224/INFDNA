@@ -154,8 +154,10 @@ func _emerge_k(e) -> float:
 func _draw_emerging(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade: float, alpha: float, h: float, em: float, moving: bool, mouth: float) -> void:
 	var q = 1.0 - pow(1.0 - em, 2.2)
 	var pc = WorldView.pit_point(sim.grid, sim.void_x)
+	var rx = WorldView.PIT_RX
+	var ry = rx * WorldView.PIT_FLAT
 	var on = smoothstep(0.55, 1.0, em)                         # held over the middle of the pit until it is nearly out
-	var f2 = Vector2(lerp(pc.x, feet.x, on), lerp(pc.y, feet.y, on) + (1.0 - q) * h * 0.46)
+	var f2 = Vector2(lerp(pc.x, feet.x, on), lerp(pc.y + ry * 0.3, feet.y, on) + (1.0 - q) * h * 0.42)
 	var sc = depth_scale * float(e.def.get("art_scale", 1.0)) * lerp(0.7, 1.0, q)
 	var lit = smoothstep(0.05, 0.85, em)
 	var tint = Color(lerp(0.3, 1.0, lit), lerp(0.2, 1.0, lit), lerp(0.42, 1.0, lit)) * shade
@@ -166,23 +168,14 @@ func _draw_emerging(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade:
 		CreatureArt.draw("voidmaw", ci, f2, sc, shade * lerp(0.35, 1.0, lit), alpha, _t, e.facing, e.id, moving, e.flash > 0.0, 0.0, mouth)
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	var fade = 1.0 - smoothstep(0.55, 1.0, em)
-	var rx = WorldView.PIT_RX
-	var ry = rx * WorldView.PIT_FLAT
 	# violet light from the pit on its underside
 	if _glow == null:
 		_glow = load(WorldView.GLOW_TEX) if ResourceLoader.exists(WorldView.GLOW_TEX) else false
 	if _glow:
 		var lw = Vector2(h * 1.7, h * 0.9)
 		ci.draw_texture_rect(_glow, Rect2(pc + Vector2(0, -h * 0.12) - lw * 0.5, lw), false, Color(vv.r, vv.g, vv.b, 0.4 * fade * alpha))
-	# the front rim of the pit, in front of its sunk body: earth and turf heaped along the near edge
-	for j in 11:
-		var ang = PI * (0.06 + 0.88 * (j + 0.5) / 11.0)
-		var hj = fmod(abs(sin(j * 12.9898 + 3.0) * 43758.5453), 1.0)
-		var p = pc + Vector2(cos(ang) * rx * (1.02 + 0.1 * hj), sin(ang) * ry * (1.02 + 0.1 * hj))
-		var s = (12.0 + 10.0 * hj) * (0.5 + 0.5 * fade)
-		ci.draw_circle(p + Vector2(0, 2.0), s, Color(0.12, 0.08, 0.06, 0.7 * alpha))
-		ci.draw_circle(p, s, Color(0.42, 0.29, 0.19, alpha) if j % 3 != 1 else Color(0.33, 0.48, 0.2, alpha))
-		ci.draw_circle(p + Vector2(-s * 0.25, -s * 0.3), s * 0.45, Color(0.55, 0.4, 0.27, alpha) if j % 3 != 1 else Color(0.45, 0.62, 0.28, alpha))
+	# the near rim of the pit, in front of its sunk body (the same one the pit has: nothing changes when this one goes)
+	WorldView.draw_pit_lip(ci, pc, rx, alpha)
 	# dust billowing up round it (the thickest at the start), and clods thrown out of the pit
 	if gt != null:
 		for j in 10:
@@ -190,9 +183,9 @@ func _draw_emerging(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade:
 			var ph = fmod(_t * (0.35 + 0.25 * hj) + hj, 1.0)
 			var bx = (float(j) / 9.0 - 0.5) * rx * 1.9
 			var dp = pc + Vector2(bx + sin(_t + j) * 8.0, ry * 0.7 - ph * (40.0 + 90.0 * hj))
-			var ds = (60.0 + 70.0 * hj) * (0.6 + 0.6 * ph)
-			var dc = Color(0.62, 0.52, 0.45).linear_interpolate(Color(0.55, 0.42, 0.7), 0.3 * hj)
-			dc.a = sin(PI * ph) * 0.75 * fade * alpha
+			var ds = (80.0 + 90.0 * hj) * (0.6 + 0.6 * ph)
+			var dc = Color(0.74, 0.64, 0.56).linear_interpolate(Color(0.62, 0.5, 0.78), 0.3 * hj)
+			dc.a = sin(PI * ph) * fade * alpha
 			ci.draw_texture_rect(_dust[j % _dust.size()] if _dust[j % _dust.size()] != null else gt, Rect2(dp - Vector2(ds, ds) * 0.5, Vector2(ds, ds)), false, dc)
 	for j in 7:
 		var hj = fmod(abs(sin(j * 3.77 + 5.0) * 43758.5453), 1.0)

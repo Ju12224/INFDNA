@@ -168,7 +168,7 @@ func _draw_band() -> void:
 # when the void is sealed. All of it is drawn on the top face under every unit, only while it is there and in view.
 const CRACK_N = 11
 const PIT_LANE = 0.5          # the pit is centred on this lane of the top face...
-const PIT_RX = 132.0          # ...this wide (px, half), and flattened by the view onto the top face
+const PIT_RX = 160.0          # ...this wide (px, half), and flattened by the view onto the top face
 const PIT_FLAT = 0.36
 const VOID_VIOLET = Color(0.72, 0.42, 1.0)
 var _cracks := []             # built once: [{"pts": [Vector2(cells from the entrance, lane)], "br": [...], "thr", "w"}]
@@ -222,7 +222,7 @@ func _make_cracks() -> void:
 		var br := []
 		for k in 5:
 			br.append(Vector2(bp.x + dir * k * 1.6, clamp(bp.y + bl * k + (_hash(i * 17.0 + k) - 0.5) * 0.03, 0.03, 0.99)))
-		_cracks.append({"pts": pts, "br": br, "bk": float(bk) / n, "thr": 0.55 + i * 0.66, "w": 2.0 + 2.4 * _hash(i * 7.7 + 5.0)})
+		_cracks.append({"pts": pts, "br": br, "bk": float(bk) / n, "thr": 0.55 + i * 0.66, "w": 2.6 + 2.8 * _hash(i * 7.7 + 5.0)})
 
 
 func _draw_cracks(ci: CanvasItem) -> void:
@@ -239,7 +239,7 @@ func _draw_cracks(ci: CanvasItem) -> void:
 		if age <= 0.0:
 			continue
 		var grow = clamp(age / 1.6, 0.0, 1.0)                    # it runs out to its full length over a tremor or two...
-		var w = float(c["w"]) * clamp(0.3 + 0.24 * age, 0.3, 1.5)  # ...and gapes wider with every one after
+		var w = float(c["w"]) * clamp(0.45 + 0.22 * age, 0.45, 1.6)  # ...and gapes wider with every one after
 		_crack_line(ci, c["pts"], grow, w, ex, glow)
 		if grow > c["bk"] + 0.1:
 			_crack_line(ci, c["br"], clamp((grow - c["bk"]) * 2.0, 0.0, 1.0), w * 0.55, ex, 0.0)
@@ -257,8 +257,8 @@ func _crack_line(ci: CanvasItem, pts: Array, grow: float, w: float, ex: float, g
 		var p: Vector2 = pts[k]
 		var col = int(round(ex + p.x))
 		sp.append(Vector2((ex + p.x + 0.5) * C, GroundView.lane_y(ground.smooth_px(col), p.y)))
-	var dark = Color(0.11, 0.07, 0.05, 0.85)
-	var lip = Color(0.86, 0.72, 0.5, 0.35)
+	var dark = Color(0.09, 0.055, 0.04, 0.9)
+	var lip = Color(0.9, 0.78, 0.55, 0.45)
 	var prev_a := Vector2.ZERO
 	var prev_b := Vector2.ZERO
 	for k in m + 1:
@@ -310,6 +310,7 @@ func _draw_pit(ci: CanvasItem) -> void:
 	if gt != null:
 		var dw = Vector2(rx * 1.5, rx * 1.5 * PIT_FLAT * 1.3)
 		ci.draw_texture_rect(gt, Rect2(c + Vector2(0, rx * PIT_FLAT * 0.2) - dw * 0.5, dw), false, Color(0.62, 0.3, 0.95, (0.45 + 0.3 * pulse) * k))
+	draw_pit_lip(ci, c, rx, k)
 	# clods of turf and earth thrown up round the edge
 	for j in 16:
 		var ang = TAU * (j + 0.5 * _hash(j * 2.3 + 1.0)) / 16.0
@@ -330,6 +331,40 @@ func _draw_pit(ci: CanvasItem) -> void:
 			var gs = Vector2(16.0, 16.0) * (1.0 + h1)
 			ci.draw_texture_rect(gt, Rect2(p2 - gs * 0.5, gs), false, Color(vv.r, vv.g, vv.b, a * 0.7))
 		ci.draw_circle(p2, (1.4 + 2.0 * h2) * (1.0 - 0.4 * ph), Color(0.85, 0.66, 1.0, a))
+
+
+# The near rim of the pit: earth heaved up along its front edge (a crescent under the hole), lit along the top, torn turf at its foot.
+# enemy_view draws it once more over a Void Maw still climbing out, so its sunk body stays behind it.
+static func draw_pit_lip(ci: CanvasItem, c: Vector2, rx: float, a: float) -> void:
+	var ry = rx * PIT_FLAT
+	var n = 22
+	var inner := PoolVector2Array()
+	var outer := PoolVector2Array()
+	for i in n + 1:
+		var ang = PI * float(i) / n
+		var sn = sin(ang)
+		inner.append(c + Vector2(cos(ang) * rx * 1.02, sn * ry * 1.02))
+		outer.append(c + Vector2(cos(ang) * rx * 1.15, sn * (ry * 1.04 + rx * 0.2) + (_hash(i * 3.1 + 0.5) - 0.5) * 7.0 * sn))
+	var poly := PoolVector2Array()
+	poly.append_array(inner)
+	for i in range(n, -1, -1):
+		poly.append(outer[i])
+	ci.draw_colored_polygon(poly, Color(0.41, 0.28, 0.18, a))
+	var mid := PoolVector2Array()
+	for i in n + 1:
+		mid.append(inner[i].linear_interpolate(outer[i], 0.55))
+	var low := PoolVector2Array()
+	low.append_array(mid)
+	for i in range(n, -1, -1):
+		low.append(outer[i])
+	ci.draw_colored_polygon(low, Color(0.3, 0.2, 0.13, a))
+	ci.draw_polyline(inner, Color(0.66, 0.5, 0.33, a), 3.0, true)
+	ci.draw_polyline(outer, Color(0.14, 0.09, 0.06, 0.8 * a), 2.0, true)
+	for i in range(1, n, 2):
+		var p = outer[i]
+		var hh = 7.0 + 6.0 * _hash(i * 5.3)
+		ci.draw_line(p + Vector2(-2, 1), p + Vector2(-5, -hh), Color(0.33, 0.48, 0.2, a), 2.0)
+		ci.draw_line(p + Vector2(2, 1), p + Vector2(4, -hh - 3.0), Color(0.42, 0.58, 0.26, a), 2.0)
 
 
 func _draw_snow() -> void:
@@ -890,9 +925,9 @@ func _draw_pile(ci: CanvasItem, pile: Dictionary) -> void:
 
 
 # A shot-down bird lying on its back, drawn from the same pieces as the live one (predator_view.draw_dead; it lands in exactly this pose). It rots
-# away as pile["rot"] runs 1 -> 0 (a couple of minutes, faster as the foragers carry it off): it shrinks and goes grey-green and a little see-through,
-# loses its pieces one by one (feet first, the body last), its edges break into dark specks that rise and fade, and a faint mist hangs over it.
-# At rot 0 nothing at all is drawn.
+# away as pile["rot"] runs 1 -> 0 (a couple of minutes, faster as the foragers carry it off): it slumps toward the ground and shrinks, goes
+# grey-green and see-through, loses the parts that stick up first (feet, far wing, near wing) and the body on the grass last, so nothing is
+# ever left hanging in the air; its edges break into dark specks that rise and fade, and a faint mist hangs over it. At rot 0 nothing is drawn.
 func _draw_carcass(ci: CanvasItem, pile: Dictionary, base: Vector2) -> void:
 	var rot = clamp(float(pile.get("rot", pile["amount"] / max(1.0, pile["max"]))), 0.0, 1.0)
 	if rot < 0.004:
@@ -901,8 +936,11 @@ func _draw_carcass(ci: CanvasItem, pile: Dictionary, base: Vector2) -> void:
 	var ps = GroundView.persp(0.5)
 	var sd = float(pile["x"]) * 3.7
 	var face = int(pile.get("face", 1))
-	var k = 0.6 + 0.4 * rot                                   # it shrinks as it goes
+	var spin = float(pile.get("spin", 0.0))
+	var k = 0.72 + 0.28 * rot                                 # it shrinks as it goes...
 	var sc = PredatorView.bird_scale(ps) * k
+	var flat = lerp(0.42, 1.0, smoothstep(0.0, 1.0, rot))     # ...and slumps, flattening onto the ground and spreading a little
+	var slump = Transform2D(Vector2(1.0 + 0.12 * (1.0 - flat), 0.0), Vector2(0.0, flat), base) * Transform2D(Vector2(1, 0), Vector2(0, 1), -base)
 	var alpha = 0.4 + 0.6 * pow(rot, 0.6)                     # 1 only while fresh
 	var fin = smoothstep(0.0, 0.1, rot)                       # the specks and mist go with the last of it
 	# the shadow, and a few of its feathers on the grass round it
@@ -912,15 +950,15 @@ func _draw_carcass(ci: CanvasItem, pile: Dictionary, base: Vector2) -> void:
 		if fa > 0.0:
 			PredatorView.draw_feather(ci, base + Vector2((_hash(sd + i * 1.9) - 0.5) * 330.0 * ps * k, 3.0 + _hash(sd + i * 4.3) * 7.0 * ps), (_hash(sd + i * 7.7) - 0.5) * 1.2 + (0.0 if i % 2 == 0 else PI), (15.0 + 8.0 * _hash(sd + i * 2.2)) * ps, i % 3 == 0, fa)
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	# the bird: its pieces drop away in turn as it rots
+	# the bird: what sticks up drops away first (far foot, near foot, far wing, near wing), the head and breast on the grass last
 	var tint = Color.white.linear_interpolate(Color(0.62, 0.72, 0.58), clamp(e * 0.9, 0.0, 0.8))
-	var pa = [smoothstep(0.52, 0.66, rot), smoothstep(0.28, 0.46, rot), smoothstep(0.0, 0.22, rot), smoothstep(0.18, 0.36, rot), smoothstep(0.44, 0.58, rot)]
-	var piv = PredatorView.carcass_pivot(base, sc, float(pile.get("spin", 0.0)))     # lying on the ground, a touch sunk into the grass
-	var ang = PredatorView.dead_angle(face, float(pile.get("spin", 0.0)))
-	if not PredatorView.draw_dead(ci, piv, sc, face, ang, 1.0, 0.0, 0.0, alpha, tint, pa):
+	var pa = [smoothstep(0.55, 0.75, rot), smoothstep(0.35, 0.6, rot), smoothstep(0.1, 0.35, rot), smoothstep(0.0, 0.16, rot), smoothstep(0.45, 0.65, rot)]
+	var piv = PredatorView.carcass_pivot(base, sc, spin)     # lying on the ground, a touch sunk into the grass
+	var ang = PredatorView.dead_angle(face, spin)
+	if not PredatorView.draw_dead(ci, piv, sc, face, ang, 1.0, 0.0, 0.0, alpha, tint, pa, 0.0, slump):
 		ci.draw_circle(base + Vector2(0, -14.0 * ps), 22.0 * ps * k, Color(0.3, 0.26, 0.24, alpha))
 	# crumbling: dark specks break off its outline, rise a little and fade; each slot has its own rhythm and a fresh spot every cycle
-	var tilt = float(pile.get("spin", 0.0)) * 0.15 * face                  # the pose is turned a little differently on each carcass
+	var tilt = spin * 0.15 * face                                          # the pose is turned a little differently on each carcass
 	var edges = PredatorView.DEAD_EDGE
 	var on = clamp(e * 2.2, 0.0, 1.0)
 	var N = 26
@@ -935,7 +973,8 @@ func _draw_carcass(ci: CanvasItem, pile: Dictionary, base: Vector2) -> void:
 		var tau = u - cyc
 		var cs = sd + i * 7.1 + cyc * 13.3
 		var ep: Vector2 = edges[int(_hash(cs) * edges.size()) % edges.size()] + Vector2(_hash(cs + 1.7) - 0.5, _hash(cs + 3.1) - 0.5) * 16.0
-		var sp = piv + Vector2(ep.x * face, ep.y).rotated(tilt) * sc
+		ep = ep.linear_interpolate(ep * Vector2(0.55, 0.45) + Vector2(-60.0, 50.0), 1.0 - smoothstep(0.25, 0.45, rot))     # wings gone: only the heap crumbles
+		var sp = slump.xform(piv + Vector2(ep.x * face, ep.y).rotated(tilt) * sc)
 		sp.y = min(sp.y, base.y - 2.0 * ps)
 		sp += Vector2(sin(tau * 4.0 + h2 * 6.0) * 10.0 * ps + tau * 16.0 * ps, -tau * (40.0 + 70.0 * h3) * ps)
 		var sa = pow(sin(PI * tau), 0.6) * 0.95 * fin
@@ -943,7 +982,7 @@ func _draw_carcass(ci: CanvasItem, pile: Dictionary, base: Vector2) -> void:
 		var spc = Color(0.13, 0.12, 0.16, sa) if h1 < 0.72 else Color(0.36, 0.4, 0.28, sa * 0.85)
 		ci.draw_circle(sp, sr, spc)
 	# a faint grey-green mist rising off it
-	var mid = piv + Vector2(face * 55.0 * sc, 10.0 * sc)
+	var mid = slump.xform(piv + Vector2(face * 30.0 * sc, 20.0 * sc))
 	var gt = _tex.get(GLOW_TEX)
 	var ma = clamp(e * 3.0, 0.0, 1.0) * fin
 	if gt != null and ma > 0.0:
@@ -951,5 +990,5 @@ func _draw_carcass(ci: CanvasItem, pile: Dictionary, base: Vector2) -> void:
 			var tm = fposmod(_t * 0.11 + j / 3.0 + sd * 0.1, 1.0)
 			var mp = mid + Vector2(sin(tm * 5.0 + j * 2.0) * 18.0 * ps, -(6.0 + tm * 80.0) * ps)
 			var mr = (50.0 + 70.0 * tm) * ps * k
-			ci.draw_texture_rect(gt, Rect2(mp - Vector2(mr, mr), Vector2(mr, mr) * 2.0), false, Color(0.4, 0.5, 0.38, sin(PI * tm) * 0.3 * ma))
+			ci.draw_texture_rect(gt, Rect2(mp - Vector2(mr, mr), Vector2(mr, mr) * 2.0), false, Color(0.4, 0.5, 0.38, sin(PI * tm) * 0.34 * ma))
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

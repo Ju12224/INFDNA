@@ -65,7 +65,7 @@ PAD = 4             # transparent border round the assembled critter in the canv
 CRITTERS = {
     "caterpillar": {
         "sheet": "critter_caterpillar.png", "canvas_w": 560, "length": 70.0, "outline": 2,
-        "order": ["far", "body", "near"], "wave": True,
+        "order": ["far", "body", "near"], "wave": True, "wave_strip": 12,
         "body": (700, 400),
         # the drawing lifts the tail: turn the body this many degrees (counter-clockwise on screen) about this point, so the six segments stand on
         # one line
@@ -79,23 +79,25 @@ CRITTERS = {
     },
     "snail": {
         "sheet": "critter_snail.png", "canvas_w": 440, "length": 55.0, "outline": 2,
-        "order": ["far", "near", "body"], "wave": True,
+        "order": ["far", "near", "body"], "wave": True, "wave_strip": 12,
         "body": (400, 500),
         # the shell, cut from the body by colour (the brown), with its outline: it stays rigid while the foot ripples
-        "shell": {"box": (0, 190, 730, 830)},
+        "shell": {"shell": [[(80, 500), (200, 330), (380, 250), (560, 330), (660, 520)], [(150, 650), (300, 770), (480, 770), (520, 720), (640, 640)],
+                            [(230, 560), (330, 470), (430, 560), (330, 680)], [(670, 630)]],
+                  "foot": [[(60, 840), (250, 860), (450, 870), (650, 860), (780, 800)], [(700, 720), (800, 680), (870, 720)], [(900, 750)]]},
         # each eye-stalk picture is a head with two stalks: the stalks are cut from it and the head is dropped (the body has its own)
         "cuts": {
-            "near": {"island": (1070, 600), "keep": ["front"], "cut_y": 662,
+            "near": {"island": (1070, 600), "keep": ["front"], "cap_w": 5, "cut_y": 690,
                      "seeds": [{"name": "front", "pivot": (995, 644), "lines": [[(995, 640), (1000, 580), (1018, 500), (1045, 430)]]},
                                {"name": "back", "pivot": (1040, 640), "lines": [[(1040, 630), (1060, 600), (1110, 560), (1165, 505)]]},
                                {"name": "head", "lines": [[(990, 690), (1060, 720), (1120, 760)], [(1000, 770), (1040, 790)]]}]},
-            "far": {"island": (1330, 600), "keep": ["back"], "cut_y": 662,
+            "far": {"island": (1330, 600), "keep": ["back"], "cap_w": 5, "cut_y": 690,
                     "seeds": [{"name": "front", "pivot": (1252, 644), "lines": [[(1252, 640), (1258, 580), (1290, 500), (1325, 430)]]},
                               {"name": "back", "pivot": (1298, 640), "lines": [[(1298, 630), (1320, 600), (1370, 560), (1410, 535)]]},
                               {"name": "head", "lines": [[(1250, 690), (1310, 720), (1370, 760)], [(1260, 770), (1300, 790)]]}]},
         },
         # where the base of each stalk goes on the body's head (behind its top outline)
-        "place": {"near": {"front": (795, 666)}, "far": {"back": (836, 660)}},
+        "place": {"near": {"front": (795, 672)}, "far": {"back": (838, 672)}},
     },
     "bee": {
         "sheet": "critter_bee.png", "canvas_w": 256, "length": 32.0, "outline": 2,
@@ -103,13 +105,17 @@ CRITTERS = {
         "body": (300, 650),
         "cuts": {
             "near": {"island": (850, 450),
-                     "seeds": [{"name": "wing", "pivot": (1022, 556), "lines": [[(1018, 556), (900, 450), (740, 310)], [(1000, 552), (850, 482), (670, 420)]]},
-                               {"name": "leg_a", "pivot": (822, 586), "lines": [[(822, 584), (815, 620), (790, 700), (760, 770), (737, 832)]]},
-                               {"name": "leg_b", "pivot": (866, 590), "lines": [[(866, 590), (900, 630), (935, 660), (915, 730), (882, 792)]]}]},
+                     "ink_cost": 10.0, "cap_w": 3,
+                     "seeds": [{"name": "wing", "pivot": (1022, 556),
+                                "lines": [[(1018, 556), (900, 450), (740, 310)], [(1000, 552), (850, 482), (670, 420)], [(1000, 554), (900, 550), (800, 552)]]},
+                               {"name": "leg_a", "pivot": (822, 586), "lines": [[(822, 602), (815, 625), (790, 700), (760, 770), (737, 832)]]},
+                               {"name": "leg_b", "pivot": (866, 590), "lines": [[(870, 604), (900, 630), (935, 660), (915, 730), (882, 792)]]}]},
             "far": {"island": (1250, 450),
-                    "seeds": [{"name": "wing", "pivot": (1400, 560), "lines": [[(1395, 558), (1280, 450), (1120, 320)], [(1380, 556), (1250, 500), (1080, 452)]]},
-                              {"name": "leg_a", "pivot": (1210, 582), "lines": [[(1210, 580), (1200, 620), (1170, 690), (1140, 770), (1122, 842)]]},
-                              {"name": "leg_b", "pivot": (1250, 592), "lines": [[(1250, 592), (1290, 635), (1330, 652), (1310, 720), (1272, 788)]]}]},
+                    "ink_cost": 10.0, "cap_w": 3,
+                    "seeds": [{"name": "wing", "pivot": (1400, 560),
+                               "lines": [[(1395, 558), (1280, 450), (1120, 320)], [(1380, 556), (1250, 500), (1080, 452)], [(1380, 556), (1290, 548), (1190, 540)]]},
+                              {"name": "leg_a", "pivot": (1210, 582), "lines": [[(1208, 598), (1200, 620), (1170, 690), (1140, 770), (1122, 842)]]},
+                              {"name": "leg_b", "pivot": (1250, 592), "lines": [[(1252, 604), (1290, 635), (1330, 652), (1310, 720), (1272, 788)]]}]},
         },
         # wings: the root on the top of the thorax; legs: their tops tucked under the thorax (the far side a little higher and further back)
         "place": {"near": {"wing": (372, 492), "leg_a": (318, 704), "leg_b": (362, 710)},
@@ -131,13 +137,16 @@ CRITTERS = {
         "body": (700, 200),
         "cuts": {
             "near": {"island": (700, 450),
-                     "seeds": [{"name": "fore", "pivot": (978, 512), "lines": [[(975, 510), (800, 470), (600, 440), (420, 370)]]},
-                               {"name": "hind", "pivot": (950, 546), "lines": [[(945, 546), (800, 580), (620, 580), (470, 565)]]},
+                     "ink_cost": 12.0, "cap_w": 3,
+                     # the hind wing lies over the fore wing at the root: the seeds run along the hind wing's pale leading edge and the fore wing's
+                     # last row of cells, either side of the thick line between them
+                     "seeds": [{"name": "fore", "pivot": (978, 512), "lines": [[(975, 510), (800, 470), (600, 440), (420, 370)], [(900, 540), (810, 530), (710, 520), (610, 500)]]},
+                               {"name": "hind", "pivot": (950, 546), "lines": [[(945, 546), (800, 580), (620, 580), (470, 565)], [(905, 562), (810, 556), (710, 546), (610, 531)]]},
                                {"name": "leg_a", "pivot": (972, 552), "lines": [[(975, 548), (962, 568), (930, 620), (905, 690), (915, 770)]]},
                                {"name": "leg_b", "pivot": (995, 562), "lines": [[(995, 560), (1005, 600), (1015, 650), (1050, 710), (1095, 785)]]}]},
-            "far": {"island": (700, 850),
+            "far": {"island": (700, 850), "ink_cost": 12.0, "cap_w": 3,
                     "seeds": [{"name": "fore", "pivot": (930, 878), "lines": [[(925, 878), (800, 845), (600, 785), (400, 725)]]},
-                              {"name": "hind", "pivot": (918, 892), "lines": [[(915, 895), (780, 910), (620, 910), (510, 905)]]},
+                              {"name": "hind", "pivot": (918, 892), "lines": [[(915, 895), (780, 910), (620, 910), (510, 905)], [(610, 886), (680, 890), (760, 897)]]},
                               {"name": "leg_a", "pivot": (966, 860), "lines": [[(966, 860), (945, 895), (915, 940), (920, 1000), (920, 1050)]]},
                               {"name": "leg_b", "pivot": (986, 864), "lines": [[(986, 864), (1010, 895), (1045, 935), (1085, 990), (1100, 1050)]]}]},
         },
@@ -279,6 +288,54 @@ def translucent_wing(img):
 
 
 # ------------------------------------------------------------------------------------------------------------------------------- cutting
+def split(pic, legs, ink_cost=5.0, rim=3):
+    """creature_cuts.cut_legs with a chosen price for crossing an outline: the seeded split of one picture into its parts, each keeping a thin
+    rim of its neighbours' outline so its own outline stays closed when it moves. Seed lines are in the picture's own pixels."""
+    lab, ink = CC.partition(pic, legs, 1.0, ink_cost=ink_cost)
+    a = pic.getchannel("A")
+    out = []
+    for li, leg in enumerate(legs):
+        m = lab.point(lambda v, li=li: 255 if v == li else 0)
+        if m.getbbox() is None:
+            continue
+        piece = pic.copy()
+        piece.putalpha(ImageChops.multiply(a, CC.grow_in(m, ink, rim)))
+        piece = CC.drop_specks(piece, 40, 0.03)
+        bb = CC.bbox_of(piece)
+        if bb is None:
+            continue
+        out.append({"img": piece.crop(bb), "x": bb[0], "y": bb[1], "pivot": leg.get("pivot", leg["lines"][0][0]), "name": leg.get("name", str(li)),
+                    "mask": m})
+    return out
+
+
+def cap_edge(pic, own, gone, ink, w):
+    """The picture's pixels of `own` (bool mask) with an outline (colour `ink`) along the border with the masks in `gone`: own pixels within
+    w px of them are painted ink, and their pixels within 2 px of own are taken in as ink too. Returns (image, x, y) cropped."""
+    arr = np.array(pic)
+    a = arr[..., 3]
+    g = np.zeros_like(own)
+    for m in gone:
+        g |= m
+    d_g = ndi.distance_transform_edt(~g)
+    d_o = ndi.distance_transform_edt(~own)
+    cap = (own & (d_g <= w)) | (g & (d_o <= 2))
+    cap = ndi.gaussian_filter(cap.astype(float), 0.8) > 0.5
+    keep = own | cap
+    # thin slivers of the neighbour's outline that the split left on this part (spikes a few px wide) are opened away
+    disk = np.hypot(*np.mgrid[-3:4, -3:4]) <= 3.2
+    solid = ndi.binary_opening(keep & (a >= 128), structure=disk)
+    keep = keep & ndi.binary_dilation(solid, iterations=1)
+    cap &= keep
+    out = arr.copy()
+    out[~keep, 3] = 0
+    out[cap & (a > 0), :3] = ink
+    out[cap & (a > 0), 3] = np.maximum(a[cap & (a > 0)], 230)
+    im = Image.fromarray(out, "RGBA")
+    bb = CC.bbox_of(im)
+    return im.crop(bb), bb[0], bb[1]
+
+
 def cut_set(wk, spec, debug=None, tag=""):
     """Split one drawn set (a wing+leg set, an eye-stalk pair) along its seed lines. Returns {name: piece} in working px."""
     iid = island_at(wk.lab, spec["island"])
@@ -298,12 +355,18 @@ def cut_set(wk, spec, debug=None, tag=""):
         pic_cut.putalpha(ImageChops.multiply(pic.getchannel("A"), m))
     else:
         pic_cut = pic
-    pieces = CC.cut_legs(pic, legs, 1.0, rim=3)
+    pieces = split(pic, legs, spec.get("ink_cost", 5.0))
     out = {}
+    masks = {p["name"]: np.array(p["mask"]) > 0 for p in pieces}
     for p in pieces:
         if spec.get("keep") and p["name"] not in spec["keep"]:
             continue
         img = p["img"]
+        if spec.get("cap_w"):
+            # instead of a rim of the neighbours' outline (loose spikes once the neighbour moves away or is dropped), the edge where every other
+            # part of the set touched this one is closed with an outline of its own, about as thick as the drawn one
+            others = [m for n, m in masks.items() if n != p["name"]]
+            img, p["x"], p["y"] = cap_edge(pic, masks[p["name"]], others, wk.ink, spec["cap_w"])
         if pic_cut is not pic:
             # apply the cut line to this piece
             full = Image.new("RGBA", pic.size, (0, 0, 0, 0))
@@ -333,53 +396,68 @@ def cut_set(wk, spec, debug=None, tag=""):
 
 
 def cut_shell(wk, body, spec):
-    """Split the snail's body into the rigid shell (brown, with its outline) and the soft foot under it. The foot keeps a copy of the shell's
-    lower part so nothing opens up between them when the foot ripples (the shell is drawn over it)."""
+    """Split the snail's body into the rigid shell and the soft foot, with the seeded split (seed lines in spec["shell"] / spec["foot"]):
+    the border falls on the outline between them and the shell keeps that whole outline. The shell is drawn over the rippling foot. Under the
+    shell's lower edge the foot gets a band of its own colour (FILL px tall), so a foot that sinks a little shows more foot under the shell, never
+    a hole; the rest of the shell is cut out of the foot picture, so a foot that rises shows no second shell edge round the rigid one."""
     img = body["img"]
-    arr = np.array(img).astype(np.int32)
-    r, g, b, a = arr[..., 0], arr[..., 1], arr[..., 2], arr[..., 3]
-    x0, y0, x1, y1 = spec["box"]
-    p0 = wk.w((x0, y0))
-    p1 = wk.w((x1, y1))
-    bx0, by0 = int(p0[0] - body["x"]), int(p0[1] - body["y"])
-    bx1, by1 = int(p1[0] - body["x"]), int(p1[1] - body["y"])
-    inbox = np.zeros(a.shape, bool)
-    inbox[max(0, by0):by1, max(0, bx0):bx1] = True
-    # brown: clearly warmer than it is grey (the foot is cream to grey-beige: low saturation)
-    sat = arr[..., :3].max(axis=2) - arr[..., :3].min(axis=2)
-    brown = (a > 200) & (r - b > 45) & (sat > 55) & inbox
-    lab, n = ndi.label(brown)
-    if n:
-        sizes = ndi.sum(brown, lab, range(1, n + 1))
-        brown = np.isin(lab, [i + 1 for i, s in enumerate(sizes) if s >= 30])
-    brown = ndi.binary_closing(brown, iterations=3) | brown
-    brown = ndi.binary_fill_holes(brown)
-    # with its outline: the dark pixels within reach of the brown (the outline is about 2*r + the drawn line wide)
-    ink = (a > 8) & (arr[..., :3].max(axis=2) < 80)
-    reach = max(3, int(round(16 * wk.k)) + wk.r + 1)
-    grown = brown.copy()
-    for _ in range(reach):
-        grown = grown | (ndi.binary_dilation(grown) & ink)
-    # and the soft edge pixels round that
-    grown = grown | (ndi.binary_dilation(grown, iterations=2) & (a > 0) & (a < 200))
-    shell_m = ndi.binary_fill_holes(grown) & (a > 0)
-    sm = Image.fromarray((shell_m * 255).astype(np.uint8), "L").filter(ImageFilter.GaussianBlur(0.6))
+
+    def loc(p):
+        q = wk.w(p)
+        return (q[0] - body["x"], q[1] - body["y"])
+    legs = [{"name": "shell", "lines": [[loc(p) for p in line] for line in spec["shell"]]},
+            {"name": "foot", "lines": [[loc(p) for p in line] for line in spec["foot"]]}]
+    lab, ink = CC.partition(img, legs, 1.0, ink_cost=spec.get("ink_cost", 8.0))
+    sm = CC.grow_in(lab.point(lambda v: 255 if v == 0 else 0), ink, spec.get("rim", 4))
+    sm = CC.smooth_mask(sm, 1.0)
+    arr = np.array(img)
+    a = arr[..., 3]
+    S = (np.array(sm) > 0) & (a > 0)
+    # the shell's soft edge (the antialiased pixels just outside the solid mask) goes with the shell, or a rising foot would show it as a ghost rim
+    S_all = S | (ndi.binary_dilation(S, iterations=3) & (a > 0) & (a < 250))
+    F = (a > 0) & ~S_all
     shell = img.copy()
-    shell.putalpha(ImageChops.multiply(img.getchannel("A"), sm))
-    # the foot: the body without the shell's outer band against the background (a ripple must not show a second shell edge there),
-    # but with the shell's lower part kept, so a foot that sinks a little still shows shell-coloured pixels under the shell, never a hole
-    dist_bg = ndi.distance_transform_edt(a > 0)
-    hide = shell_m & (dist_bg < 14)
-    # never hide the strip just above the foot (where shell meets foot, not background)
-    foot_only = (a > 0) & ~shell_m
-    near_foot = ndi.binary_dilation(foot_only, iterations=12)
-    hide = hide & ~near_foot
-    fa = np.where(hide, 0, a).astype(np.uint8)
-    foot = img.copy()
-    foot.putalpha(Image.fromarray(fa, "L"))
+    shell.putalpha(Image.fromarray(np.where(S_all, a, 0).astype(np.uint8), "L"))
+    fill = spec.get("fill", 16)
+    rise = spec.get("rise", 12)          # the most the foot rises in rig_art's ripple (11 canvas px), plus one
+    foot = arr.copy()
+    foot[S_all, 3] = 0
+    # in every column: the shell's lowest edge with foot right under it, how much shell is above that edge, and the colour of the foot a little
+    # way under it (smoothed along the body, so the band reads as more foot in the shell's shadow, not as streaks)
+    h, w = S.shape
+    edge = np.full(w, -1)
+    depth = np.zeros(w, int)
+    col = np.zeros((w, 3))
+    for x in range(w):
+        ys = np.nonzero(S[:-3, x] & ~S[1:-2, x] & (F[1:-2, x] | F[2:-1, x] | F[3:, x]))[0]
+        if not len(ys):
+            continue
+        y = ys.max()
+        run = 0
+        while y - run >= 0 and S[y - run, x]:
+            run += 1
+        rows = [r for r in range(y + 6, min(h, y + 16)) if F[r, x] and a[r, x] >= 250]
+        if not rows:
+            continue
+        edge[x], depth[x] = y, run
+        col[x] = arr[rows, x, :3].mean(axis=0)
+    ok = edge >= 0
+    if ok.any():
+        wsum = ndi.gaussian_filter1d(ok.astype(float), 5.0)
+        for c in range(3):
+            col[:, c] = np.where(ok, ndi.gaussian_filter1d(col[:, c] * ok, 5.0) / np.maximum(wsum, 1e-6), 0)
+        for x in np.nonzero(ok)[0]:
+            # a band no taller than the shell above it can hide when the foot rises
+            hb = int(min(fill, depth[x] - rise))
+            if hb <= 0:
+                continue
+            y = edge[x]
+            foot[y - hb + 1:y + 1, x, :3] = col[x].astype(np.uint8)
+            foot[y - hb + 1:y + 1, x, 3] = 255
+    fp = {"img": Image.fromarray(foot, "RGBA"), "x": body["x"], "y": body["y"]}
     sbb = CC.bbox_of(shell)
     sp = {"img": shell.crop(sbb), "x": body["x"] + sbb[0], "y": body["y"] + sbb[1]}
-    return {"img": foot, "x": body["x"], "y": body["y"]}, sp
+    return fp, sp
 
 
 # ------------------------------------------------------------------------------------------------------------------------------- one critter
@@ -498,6 +576,9 @@ def build(name, spec, out_dir, debug=None):
         return rel + "/" + fn
 
     entry = {"canvas": canvas, "order": spec["order"], "parts": [], "wave": bool(spec.get("wave", False))}
+    if spec.get("wave_strip"):
+        # narrower strips for the rippling body than the Void Maw's 34 px: on a small canvas the ripple is steeper and wide strips show steps
+        entry["wave_strip"] = spec["wave_strip"]
     # phases: neighbouring legs of a side step in opposite phase, the far side opposite to the near side (as creature_cuts does)
     for layer in ("far", "near"):
         mine = [it for it in parts if it[0] == layer]
@@ -544,7 +625,7 @@ def _put(frame, img, pos, pivot, ang):
     frame.alpha_composite(layer)
 
 
-def rig_frame(e, t, moving, force=None, margin=40):
+def rig_frame(e, t, moving, force=None, margin=None):
     """One frame of the critter as rig_art.gd draws it (same formulas), at canvas size. force = +1 / -1 puts every leg and wing at its swing."""
     imgs = {}
 
@@ -553,6 +634,8 @@ def rig_frame(e, t, moving, force=None, margin=40):
             imgs[fn] = Image.open(os.path.join(ART, fn)).convert("RGBA")
         return imgs[fn]
     W, H = e["canvas"]
+    if margin is None:
+        margin = int(0.3 * max(W, H)) if "wings" in e else 40      # room for a wing beaten up past the canvas
     frame = Image.new("RGBA", (W + 2 * margin, H + 2 * margin), (0, 0, 0, 0))
     o = (margin, margin)
     gait = 6.0 if moving else 1.6
@@ -569,7 +652,7 @@ def rig_frame(e, t, moving, force=None, margin=40):
             bt = tex(b["file"])
             bx, by = b["x"] + o[0], b["y"] + o[1] + bob
             if e.get("wave") and force is None:
-                sw_ = 34
+                sw_ = int(e.get("wave_strip", 34))
                 x = 0
                 while x < bt.size[0]:
                     u = x / float(bt.size[0])
@@ -629,13 +712,14 @@ def contact(man, path):
         d.text((10, y0 + 50), "%.0f px in game" % e["game_len"], fill=(200, 200, 200, 255), font=font)
         # the critter at its game size next to a 40 px bar (a worker ant)
         fr, ft = rig_frame(e, 0.0, False)
-        g = e["scale"] * 2.0
+        g = e["scale"] * 1.4
         small = fr.resize((max(1, int(fr.size[0] * g)), max(1, int(fr.size[1] * g))), Image.LANCZOS)
         bg = Image.new("RGBA", (130, 90), (156, 207, 85, 255))
         bg.alpha_composite(small, (int(65 - ft[0] * g), int(75 - ft[1] * g)))
-        ImageDraw.Draw(bg).line([(10, 85), (90, 85)], fill=(0, 0, 0, 255), width=2)
+        ImageDraw.Draw(bg).line([(37, 85), (37 + 56, 85)], fill=(0, 0, 0, 255), width=2)
         sheet.alpha_composite(bg, (10, y0 + 80))
-        d.text((10, y0 + 172), "x2 zoom; bar = ant", fill=(200, 200, 200, 255), font=font)
+        d.text((10, y0 + 172), "game size x1.4", fill=(200, 200, 200, 255), font=font)
+        d.text((10, y0 + 190), "bar: 40 px ant", fill=(200, 200, 200, 255), font=font)
         for ci, (lbl, t, moving, force) in enumerate(cols):
             fr, ft = rig_frame(e, t, moving, force)
             s = min((cell_w - 20) / float(fr.size[0]), (cell_h - 20) / float(fr.size[1]), 1.0)

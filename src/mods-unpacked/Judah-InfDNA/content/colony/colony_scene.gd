@@ -29,6 +29,7 @@ const ContextMenu = preload("res://mods-unpacked/Judah-InfDNA/content/colony/con
 const UgView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ug_view.gd")
 const DayCycle = preload("res://mods-unpacked/Judah-InfDNA/content/colony/day_cycle.gd")
 const WatchCam = preload("res://mods-unpacked/Judah-InfDNA/content/colony/watch_cam.gd")
+const MeadowDepth = preload("res://mods-unpacked/Judah-InfDNA/content/colony/meadow_depth.gd")
 const SELECT_SCENE = "res://mods-unpacked/Judah-InfDNA/content/colony/queen_select.tscn"
 const TITLE_SCENE = "res://ui/menus/title_screen/title_screen.tscn"
 const MAX_STEP = 0.05
@@ -138,6 +139,10 @@ func _ready() -> void:
 	fx_under.connect("draw", enemy_view, "_draw_under")
 	add_child(enemy_view)
 	ant_view.enemy_view = enemy_view
+	var meadow = MeadowDepth.new()     # thick grass in depth rows: the zoom picks the lane in focus, symbols mark what it hides (key 6)
+	meadow.scene = self
+	add_child(meadow)
+	ant_view.meadow = meadow
 
 	cam = CameraRig.new()
 	add_child(cam)
@@ -360,8 +365,8 @@ func _step_void_tint(delta: float) -> void:
 func _draw_void_tint() -> void:
 	var s = _void_tint.rect_size
 	var a = _void_a * (0.85 + 0.15 * sin(OS.get_ticks_msec() * 0.0009))
-	_void_tint.draw_rect(Rect2(Vector2.ZERO, s), Color(0.4, 0.16, 0.6, 0.07 * a))
-	var edge = Color(0.3, 0.08, 0.45, 0.2 * a)
+	_void_tint.draw_rect(Rect2(Vector2.ZERO, s), Color(0.4, 0.16, 0.6, 0.045 * a))
+	var edge = Color(0.3, 0.08, 0.45, 0.17 * a)
 	var clear = Color(0.3, 0.08, 0.45, 0.0)
 	var d = min(s.x, s.y) * 0.3
 	_void_tint.draw_polygon(PoolVector2Array([Vector2(0, 0), Vector2(s.x, 0), Vector2(s.x, d), Vector2(0, d)]), PoolColorArray([edge, edge, clear, clear]))

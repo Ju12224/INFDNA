@@ -1,7 +1,8 @@
 extends Reference
 # A creature built from the owner's drawn pieces (art_manifest.json): a body, two sets of legs (a darker far set behind, a lighter near set in front),
 # a jaw or fangs that hinge, and a pulsing glow. Each piece is drawn where the manifest says and swung about its hinge, so one set of pictures walks, bites
-# and breathes without any frame-by-frame art. Used by the spider and the Void Maw.
+# and breathes without any frame-by-frame art. Used by the spider and the Void Maw (and the critters of critter_manifest.json: a "wings" list beats
+# wings about their root, an optional "wave_strip" narrows the strips of a "wave" body).
 #   draw(ci, name, feet, scale, facing, t, moving, mouth, tint, flash)   ->  false when the art is not there (the caller draws the procedural creature)
 # `mouth` 0..1 is how open the jaw is; `feet` is the world point it stands on; `scale` multiplies the manifest's game size.
 
@@ -43,6 +44,11 @@ static func draw(ci: CanvasItem, name: String, feet: Vector2, scale: float, faci
 		mod = Color(min(1.0, tint.r + 0.35), tint.g * 0.55, tint.b * 0.55, tint.a)
 	var gait = 6.0 if moving else 1.6
 	var amp = 0.13 if moving else 0.025
+	# a flyer (an entry with "wings": [{file, x, y, pivot, layer, flap, speed, phase}]): its legs hang and sway slowly with the body, its wings beat
+	var fly = e.has("wings")
+	if fly:
+		gait = 2.2
+		amp = 0.1
 	var bob = sin(t * gait * 2.0) * (3.0 if moving else 1.2)
 	var ci_t = ci
 	for layer in e["order"]:
@@ -67,9 +73,21 @@ static func draw(ci: CanvasItem, name: String, feet: Vector2, scale: float, faci
 					ph = -float(p["pivot"][0]) / cw * TAU * 1.5 + (0.0 if layer == "near" else PI)
 				var sw = sin(t * gait + ph)
 				var lift = max(0.0, cos(t * gait + ph)) * (9.0 if moving else 0.0) * (0.6 if wave else 1.0)
+				if fly:
+					lift = -bob
 				var pos = Vector2(float(p["x"]), float(p["y"])) - fv + Vector2(0, -lift)
-				var pv = Vector2(float(p["pivot"][0]), float(p["pivot"][1])) - fv
+				var pv = Vector2(float(p["pivot"][0]), float(p["pivot"][1])) - fv + (Vector2(0, -lift) if fly else Vector2.ZERO)
 				_put(ci, base, tx, pos, pv, sw * amp * (0.7 if wave else 1.0), mod)
+			if fly:
+				for w in e["wings"]:
+					if str(w.get("layer", "near")) != layer:
+						continue
+					var wt = lib.tex(str(w["file"]))
+					if wt == null:
+						continue
+					var wa = sin(t * float(w.get("speed", 40.0)) + float(w.get("phase", 0.0))) * float(w.get("flap", 0.4))
+					var wo = Vector2(0, bob)
+					_put(ci, base, wt, Vector2(float(w["x"]), float(w["y"])) - fv + wo, Vector2(float(w["pivot"][0]), float(w["pivot"][1])) - fv + wo, wa, mod)
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	return true
 
@@ -84,7 +102,7 @@ static func _body(ci: CanvasItem, lib, e: Dictionary, base: Transform2D, fv: Vec
 	if bool(e.get("wave", false)):
 		# a rippling crawl: the body is drawn in strips that rise and fall in a wave running from the tail to the head, quiet at the head
 		var sz = btex.get_size()
-		var sw = 34.0
+		var sw = float(e.get("wave_strip", 34.0))
 		ci.draw_set_transform_matrix(base)
 		var x = 0.0
 		while x < sz.x:

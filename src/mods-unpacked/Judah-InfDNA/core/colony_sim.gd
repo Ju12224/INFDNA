@@ -1078,6 +1078,11 @@ func _step_bird(dt: float) -> void:
 			else:
 				_bird_timer = 30.0
 		return
+	if not bird.has("hp"):
+		bird["hp"] = BIRD_HP + 0.5 * ants.size()      # a bird made by older code or a test has no hit points yet
+		bird["hp0"] = bird["hp"]
+	if not bird.has("hit"):
+		bird["hit"] = 0.0
 	bird["t"] -= dt
 	bird["cd"] = max(0.0, bird["cd"] - dt)
 	bird["dive"] = max(0.0, bird["dive"] - dt * 1.4)
@@ -1835,6 +1840,13 @@ func _forage(a) -> void:
 			nearest = p
 	for e in enemies:
 		if e.cls == "prey" and abs(e.x - a.x) <= sense * 0.6 and (nearest == null or abs(e.x - a.x) < nd):
+			if e.def.has("critter"):
+				# the meadow's critters: only some foragers hunt (one in three, or any that knows no pile yet, or one it nearly
+				# steps on), so the colony does not drop its food runs to chase snails; butterflies only for winged ants
+				if e.def.get("fly", false) and a.ph["wings"] <= 0:
+					continue
+				if not (a.id % 3 == 0 or a.site == NO_SITE or abs(e.x - a.x) <= sense * 0.2):
+					continue
 			nearest = {"x": e.x}
 			nd = abs(e.x - a.x)
 	var lim = 99

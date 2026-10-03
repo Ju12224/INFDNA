@@ -1,17 +1,19 @@
 """The tree half of the art pipeline (called by make_art.py: make_trees / make_oaks / recolor / mist).
 
-What it does with a tree sprite cut from the owner's pictures:
-  - works at the picture's own size (no shrinking), so a zoomed-in tree is as sharp as the drawing itself;
-  - thins the thick dark outline and keeps what it took away in a separate `ink` layer. The game draws that layer over the tree when the
-    camera is far or normal (the owner's outline, as drawn) and fades it out as the camera zooms in (a finer line close up);
-  - paints the close-up layers: `shade` (soft light and shadow, a dome of light on every leaf clump, a rounded trunk, the crown's shadow
-    on the bark, darkness where the trunk meets the ground; low resolution, it is smooth) and `detail` (twice the resolution: bark grooves
-    and cracks, moss, sunlit and shaded leaf tufts along the clump rims). The game fades them in as the camera zooms in;
-  - recolours the leaves for the other seasons, makes the hazy far copies, and writes compact PNGs.
+What it does with a tree sprite cut from the owner's pictures (kept at the picture's own size, no shrinking):
+  - splits the outline from the colour. The base picture (and every seasonal recolour of it) has its drawn lines painted out with the colours
+    next to them; the lines come back as two ink layers: `ink`, the owner's outline exactly as drawn (for the normal and far views), and
+    `ink_close`, the same lines thinner and crisp at twice the resolution (for close views, where the drawn line would be a fat blurry band).
+    The game fades `ink` out over `ink_close` as the camera zooms in, so the line keeps a sensible width on screen at every zoom;
+  - paints the close-up layers: `shade` (half resolution, soft: a dome of light on every leaf clump, rounded bark, the crown's shadow on the trunk,
+    darkness where the trunk meets the ground) and `detail` (twice the resolution: bark furrows that follow the grain, cracks, moss on the shaded
+    foot, a few sunlit and shaded leaves on the clump rims). The game fades them in as the camera zooms in;
+  - writes `sil`, the tree's silhouette in white (the game lays it over far trees in the haze colour: depth fog), the sway grid (how much of the
+    picture is canopy, per grid point: the game moves the clumps of a canopy separately), the canopy box and leaf colours (for falling leaves);
+  - recolours the leaves for the other seasons, makes the hazy far copies, and writes compact PNGs (one-colour layers as grey+alpha).
 
 Needs Pillow, numpy and scipy; imagequant and pyoxipng are used for smaller files when they are installed (pip install imagequant pyoxipng).
 """
-import colorsys
 import io
 import math
 import os
@@ -22,6 +24,8 @@ from scipy import ndimage as ndi
 
 LIGHT = np.array([0.62, -0.58, 0.53], np.float32)          # where the sun is: upper right, toward the viewer (image y points down)
 LIGHT /= np.linalg.norm(LIGHT)
+CLOSE = 2                                                    # resolution of the close-up line and detail layers, x the picture
+SWAY_N = 8                                                   # the sway grid has (SWAY_N + 1) x (SWAY_N + 1) points over the picture
 
 
 # ------------------------------------------------------------------ small helpers
@@ -39,14 +43,39 @@ def from_arrays(rgb, alpha):
     return Image.fromarray(np.dstack([np.clip(rgb, 0, 255), np.clip(alpha, 0, 1) * 255.0]).round().astype(np.uint8), "RGBA")
 
 
+def bleed(rgb, alpha, thresh=0.02):
+    """The colour of every (nearly) clear pixel set to that of the nearest visible one, so filtering and mipmaps never pull black into the edges."""
+    clear = alpha <= thresh
+    if not clear.any() or clear.all():
+        return rgb
+    idx = ndi.distance_transform_edt(clear, return_distances=False, return_indices=True)
+    return rgb[idx[0], idx[1]]
+
+
+def la_image(lum, alpha):
+    """A grey+alpha picture (one colour with coverage): half the memory of RGBA in the game, and a small file."""
+    l = np.broadcast_to(np.asarray(lum, np.float32), alpha.shape)
+    return Image.fromarray(np.dstack([np.clip(l, 0, 255), np.clip(alpha, 0, 1) * 255.0]).round().astype(np.uint8), "LA")
+
+
+def resize_f(arr, size, resample=Image.BICUBIC):
+    """Resize a float array (H x W) to size (w, h)."""
+    return np.asarray(Image.fromarray(arr.astype(np.float32), "F").resize(size, resample))
+
+
+def disk(r):
+    y, x = np.mgrid[-r:r + 1, -r:r + 1]
+    return (x * x + y * y) <= r * r + 0.5
+
+
 def save_png(im, path, colors=256, quant=True):
-    """A compact PNG: palette-reduced with libimagequant (the art is flat enough that it cannot be told apart), then squeezed by oxipng;
-    both are optional, without them the picture is saved as it is."""
+    """A compact PNG: palette-reduced with libimagequant (the flat colour art cannot be told apart), then squeezed by oxipng; both are optional,
+    without them the picture is saved as it is. Soft overlays and grey+alpha layers are saved unquantized (quant=False)."""
     data = None
-    if quant:
+    if quant and im.mode == "RGBA":
         try:
             import imagequant
-            q = imagequant.quantize_pil_image(im.convert("RGBA"), dithering_level=0.0, max_colors=colors)
+            q = imagequant.quantize_pil_image(im, dithering_level=0.0, max_colors=colors)
             b = io.BytesIO()
             q.save(b, "PNG", optimize=True)
             data = b.getvalue()
@@ -58,7 +87,8 @@ def save_png(im, path, colors=256, quant=True):
         data = b.getvalue()
     try:
         import oxipng
-        data = oxipng.optimize_from_memory(data, level=4)
+        # a grey+alpha picture stays one (oxipng would make it a palette, which the game loads as full RGBA: twice the memory)
+        data = oxipng.optimize_from_memory(data, level=2, color_type_reduction=im.mode != "LA")
     except Exception:
         pass
     with open(path, "wb") as f:
@@ -103,13 +133,14 @@ def green_center(im):
     return float(h[m].mean()) if m.any() else 0.37
 
 
-def recolor(im, hue_to, sat_k, val_k, val_add=0.0):
+def recolor(im, hue_to, sat_k, val_k, val_add=0.0, center=None):
     """Move the green of the leaves to another colour (the trunk, brown and grey, stays): the autumn and spring versions of a tree. The change is blended in by how
     green a pixel is, so the dark edge where leaves meet shadow shifts smoothly and leaves no speckle."""
     rgb, a = to_arrays(im)
     c = rgb / 255.0
     h, s, v = _rgb_to_hsv(c)
-    center = green_center(im)
+    if center is None:
+        center = green_center(im)
     hw = np.clip((h - 0.13) / 0.07, 0, 1) * np.clip((0.56 - h) / 0.08, 0, 1)
     sw = np.clip((s - 0.08) / 0.16, 0, 1)
     w = hw * sw * (a >= 8 / 255.0)
@@ -132,49 +163,92 @@ def mist(im, k=0.45, height=300):
 
 
 # ------------------------------------------------------------------ the outline
-def thin_outline(im, s_in=1.1, s_out=1.0, th_in=0.84, th_out=0.68):
-    """Returns (thin picture, ink layer, ink colour). The ink layer holds exactly what thinning took away (ink colour, alpha = how much), so the picture
-    with the ink layer over it is the original again."""
+def split_lines(im, kind):
+    """Take the drawn lines out of a picture. Returns a dict:
+         base       the picture with its lines painted out by the colours beside them (same size, same silhouette),
+         ink        coverage of the lines as drawn (H x W, 0..1): base + ink in the ink colour = the drawing,
+         ink_close  coverage of the same lines, thinner, at CLOSE x the resolution, crisp,
+         rgb        the ink colour.
+    A "line" is ink thin enough to be a stroke; ink areas too thick to be one (deep shadow, knot holes) stay in the base. On the plain oaks every
+    stroke is a line; on the textured drawings of the first sheet only the outline round the silhouette is, their inner strokes are their texture."""
     rgb, A = to_arrays(im)
+    H, W = A.shape
+    # the sheets have hairline see-through slits inside some lines (where two parts of the drawing meet): close them, so no line has a gap
+    A = np.maximum(A, ndi.grey_closing(A, footprint=disk(2)))
     lum = 0.299 * rgb[..., 0] + 0.587 * rgb[..., 1] + 0.114 * rgb[..., 2]
     m = (lum < 14) & (A > 0.95)
-    ink = rgb[m].mean(0) if m.any() else np.array([7, 16, 21.0], np.float32)
+    ink = rgb[m].mean(0) if m.any() else np.array([7, 5, 10.0], np.float32)
     d = np.sqrt(((rgb - ink) ** 2).sum(-1))
-    K = 1.0 - smooth(d, 12.0, 38.0)                         # how much of the pixel is outline ink
-    K = np.where(A < 0.02, 1.0, K)                          # outside the picture counts as ink, so the silhouette is only thinned from inside
-    Kb = ndi.gaussian_filter(K, s_in)
-    K2 = np.minimum(smooth(Kb, th_in - 0.2, th_in + 0.12), K)
-    A2 = np.minimum(smooth(ndi.gaussian_filter(A, s_out), th_out - 0.25, th_out + 0.1), A)
-    # where thick ink went, the colours are taken from the nearest picture pixel that is not ink (thin dark lines stay as drawn)
-    thick = smooth(ndi.maximum_filter(Kb, size=7), 0.75, 0.92)
-    gone = smooth(K - K2, 0.0, 0.2) * thick
-    W = (1.0 - smooth(K, 0.04, 0.2)) * A
-    idx = ndi.distance_transform_edt(W < 0.6, return_distances=False, return_indices=True)
-    F = rgb[idx[0], idx[1]]
-    clean = rgb * (1 - gone[..., None]) + F * gone[..., None]
-    out = clean * (1 - K2[..., None]) + ink * K2[..., None]
-    out = np.where((K < 0.02)[..., None], rgb, out)
-    o = np.maximum(np.clip(K - K2, 0, 1) * A2, np.clip(A - A2, 0, 1))
-    thin = from_arrays(out, A2)
-    layer = from_arrays(np.broadcast_to(ink, rgb.shape), o)
-    return thin, layer, tuple(int(round(v)) for v in ink)
+    K = 1.0 - smooth(d, 12.0, 38.0)                          # how much of the pixel's colour is ink
+    inkb = (K > 0.5) & (A > 0.5)
+    blob = ndi.binary_opening(inkb, structure=disk(4 if kind == "oak" else 5))
+    blob = ndi.binary_dilation(blob, structure=disk(1)) & (K > 0.2)
+    lineb = inkb & ~blob
+    if kind != "oak":
+        dout = ndi.distance_transform_edt(A > 0.5)
+        lineb &= dout <= 8.0
+    near = ndi.binary_dilation(lineb, iterations=2) & ~blob
+    if kind != "oak":
+        near &= ndi.distance_transform_edt(A > 0.5) <= 10.0
+    Lr = np.where(near, K, 0.0)                               # the line's share of each pixel's colour
+    Lr = np.where(A < 0.5, np.where(near, 1.0, 0.0), Lr)      # the soft outer edge of the outline is all line
+    # paint the lines out: each line pixel takes the colour of the nearest clean pixel beside the line (a little way off, past the
+    # anti-aliased fringe), smoothed so the fill has no seams
+    clean = (A > 0.9) & (K < 0.2) & ~ndi.binary_dilation(near, iterations=1)
+    if clean.any():
+        idx = ndi.distance_transform_edt(~clean, return_distances=False, return_indices=True)
+        F = rgb[idx[0], idx[1]]
+        F = np.stack([ndi.gaussian_filter(F[..., c], 1.1) for c in range(3)], -1)
+    else:
+        F = rgb
+    wf = smooth(Lr, 0.03, 0.5)
+    base_rgb = rgb * (1 - wf[..., None]) + F * wf[..., None]
+    base_rgb = bleed(base_rgb, A)
+    ink_full = np.clip(Lr * A, 0, 1)
+
+    # the close-up line, at CLOSE x: the same strokes, each kept to a band round its own middle (the outline round the silhouette to its outer part)
+    S = CLOSE
+    W2, H2 = W * S, H * S
+    L2 = np.clip(resize_f(Lr, (W2, H2)), 0, 1)
+    A2 = np.clip(resize_f(A, (W2, H2)), 0, 1)
+    line2 = (L2 > 0.5) & (A2 > 0.5)
+    colour2 = (L2 <= 0.5) & (A2 > 0.5)
+    outside2 = A2 <= 0.5
+    d_col = ndi.distance_transform_edt(~colour2)              # how far into the line from the colour beside it
+    dl = np.where(line2, d_col, 0.0)
+    ridge = line2 & (dl >= ndi.maximum_filter(dl, size=3) - 0.5)
+    if ridge.any():
+        ridx = ndi.distance_transform_edt(~ridge, return_distances=False, return_indices=True)
+        hw = dl[ridx[0], ridx[1]]                              # the half width of the stroke this pixel belongs to (its middle's distance)
+    else:
+        hw = dl
+    d_out = ndi.distance_transform_edt(~outside2)
+    sil = d_out <= hw + 1.5                                    # the outline band round the silhouette: no colour beyond it, only the outside
+    full_w = np.where(sil, hw, 2.0 * hw)
+    target = np.clip(full_w * 0.4, 3.0 * S / 2.0, 3.4 * S)     # the close line: 40% of the drawn width, between 1.5 and 3.4 picture px
+    thr = np.where(sil, hw - target, hw - target * 0.5)
+    a2 = np.clip(d_col - thr + 0.5, 0.0, 1.0) * line2
+    a2 = np.where(sil, np.minimum(a2, smooth(A2, 0.3, 0.7)), a2)
+    a2 = np.clip(ndi.gaussian_filter(a2, 0.5), 0, 1) * (A2 > 0.02)
+    return {"base": from_arrays(base_rgb, A), "ink": ink_full, "ink_close": a2, "rgb": ink, "K": K, "line": Lr}
 
 
 # ------------------------------------------------------------------ analysing a picture
 class Parts:
-    """What is where in a tree picture: leaves (and moss), bark, rock, ink."""
+    """What is where in a tree picture: leaves (and moss), bark, rock, ink. `base` is the picture with its lines painted out, K the ink-ness of the original."""
 
-    def __init__(self, thin, ink):
-        self.rgb, self.A = to_arrays(thin)
+    def __init__(self, base, K, line):
+        self.rgb, self.A = to_arrays(base)
         self.h, self.w = self.A.shape
         c = self.rgb / 255.0
         hue, sat, val = _rgb_to_hsv(c)
-        d = np.sqrt(((self.rgb - np.asarray(ink, np.float32)) ** 2).sum(-1))
-        self.K = 1.0 - smooth(d, 12.0, 38.0)
+        self.K = K
+        self.line = line                                    # the drawn lines (painted out of the base): the clumps are still told apart by them
+        self.Kb = K * (1.0 - smooth(line, 0.05, 0.4))       # ink that stays in the base (blobs, and the inner strokes of the textured drawings)
         solid = self.A > 0.5
-        self.green = solid & (hue > 0.17) & (hue < 0.5) & (sat > 0.18) & (self.K < 0.5)
-        self.rock = solid & ~self.green & (sat < 0.075) & (val > 0.22) & (self.K < 0.5)
-        self.bark = solid & ~self.green & ~self.rock & (self.K < 0.5)
+        self.green = solid & (hue > 0.17) & (hue < 0.56) & (sat > 0.15) & (K < 0.5)      # the oaks are drawn in a dark teal
+        self.rock = solid & ~self.green & (sat < 0.075) & (val > 0.22) & (K < 0.5)
+        self.bark = solid & ~self.green & ~self.rock & (K < 0.5)
         self.solid = solid
         ys = np.nonzero(solid.any(1))[0]
         self.y0, self.y1 = int(ys[0]), int(ys[-1])
@@ -186,7 +260,7 @@ def _dome(parts, cap, reach):
     lab, n = ndi.label(mask)
     D = ndi.distance_transform_edt(mask)
     idx = np.arange(1, n + 1)
-    dmax = np.concatenate([[1.0], ndi.maximum(D, lab, idx)])
+    dmax = np.concatenate([[1.0], ndi.maximum(D, lab, idx)]) if n else np.array([1.0])
     dm = np.minimum(dmax[lab], cap)
     t = np.clip(D / np.maximum(dm, 1.0), 0, 1)
     hgt = np.sqrt(np.clip(1.0 - (1.0 - t) ** 2, 0, 1))
@@ -201,7 +275,7 @@ def _dome(parts, cap, reach):
 
 
 def _cylinder(parts, reach):
-    """Rounded bark: the light side of a trunk or limb brighter, the far side darker. Returns (dev, distance inside, tangent angle)."""
+    """Rounded bark: the light side of a trunk or limb brighter, the far side darker. Returns (dev, distance inside, grain angle)."""
     mask = parts.solid & ~parts.green               # knot holes and the outline count as wood, so the grain does not circle round them
     D = ndi.distance_transform_edt(mask)
     Ds = ndi.gaussian_filter(D, 2.0)
@@ -226,7 +300,7 @@ def _cylinder(parts, reach):
 
 
 def _over(acc_rgb, acc_a, col, a):
-    """acc (premultiplied) <- colour with alpha a over acc."""
+    """acc <- colour with alpha a over acc (straight colour kept as a running mix)."""
     col = np.asarray(col, np.float32)
     acc_rgb[:] = acc_rgb * (1 - a[..., None]) + col * a[..., None]
     acc_a[:] = acc_a + a * (1 - acc_a)
@@ -237,230 +311,231 @@ def _noise(rng, shape, sigma):
     return n / (n.std() + 1e-6)
 
 
-def _stroke_canvas(size, ss):
-    im = Image.new("L", (size[0] * ss, size[1] * ss), 0)
-    return im, ImageDraw.Draw(im)
-
-
-def _finish(im, ss, hi):
-    """Supersampled mask -> float array at the hi-res size."""
-    im = im.resize((im.size[0] // ss, im.size[1] // ss), Image.BOX) if ss > 1 else im
-    return np.asarray(im).astype(np.float32) / 255.0
+def _lic(theta, valid, noise, steps=18, h=1.4):
+    """Line integral convolution: the noise smeared along the grain (theta, an axis, either way along it), only through `valid` pixels: long fibres."""
+    H, W = noise.shape
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    cx, cy = np.cos(theta).astype(np.float32), np.sin(theta).astype(np.float32)
+    acc = noise.copy()
+    wsum = np.ones_like(noise)
+    for sgn in (1.0, -1.0):
+        px, py = xx.copy(), yy.copy()
+        dx, dy = cx * sgn, cy * sgn
+        alive = valid.copy()
+        for s in range(steps):
+            ix = np.clip(np.rint(px).astype(np.int32), 0, W - 1)
+            iy = np.clip(np.rint(py).astype(np.int32), 0, H - 1)
+            nx, ny = cx[iy, ix], cy[iy, ix]
+            flip = (nx * dx + ny * dy) < 0
+            dx = np.where(flip, -nx, nx)
+            dy = np.where(flip, -ny, ny)
+            px = px + dx * h
+            py = py + dy * h
+            ix = np.clip(np.rint(px).astype(np.int32), 0, W - 1)
+            iy = np.clip(np.rint(py).astype(np.int32), 0, H - 1)
+            alive &= valid[iy, ix]
+            w = (1.0 - s / float(steps)) * alive
+            acc += ndi.map_coordinates(noise, [py, px], order=1, mode="nearest") * w
+            wsum += w
+    return acc / wsum
 
 
 PRESETS = {
-    # how much of each close-up effect a kind of picture gets: dome = light on the leaf clumps, cyl = rounded bark, bark = grooves and cracks, moss, tufts = leaf
-    # tufts on the clump rims, canopy = the crown's shadow on the bark, base = dark where it meets the ground. The oaks are plain and want all of it; the others
-    # are already painted with their own bark and leaf texture, so they only get light, shadow and a few tufts.
-    "oak": dict(dome=1.0, cyl=1.0, bark=1.0, moss=0.7, tufts=1.0, canopy=1.0, base=1.0),
-    "moss": dict(dome=0.55, cyl=0.35, bark=0.0, moss=0.0, tufts=0.45, canopy=0.8, base=1.0),
-    "acacia": dict(dome=0.5, cyl=0.4, bark=0.0, moss=0.0, tufts=0.4, canopy=0.7, base=1.0),
-    "grove": dict(dome=0.5, cyl=0.4, bark=0.0, moss=0.0, tufts=0.4, canopy=0.7, base=1.0),
+    # how much of each close-up effect a kind of picture gets: dome = light on the leaf clumps, cyl = rounded bark, bark = furrows and cracks, moss, tufts = leaves
+    # on the clump rims, canopy = the crown's shadow on the bark, base = dark where it meets the ground. The oaks are plain and want all of it; the others
+    # are already painted with their own bark and leaf texture, so they only get light, shadow and a few leaves.
+    "oak": dict(dome=0.8, cyl=0.9, bark=1.0, moss=0.8, tufts=1.0, canopy=1.0, base=1.0),
+    "moss": dict(dome=0.5, cyl=0.35, bark=0.0, moss=0.0, tufts=0.35, canopy=0.7, base=1.0),
+    "acacia": dict(dome=0.45, cyl=0.4, bark=0.0, moss=0.0, tufts=0.3, canopy=0.6, base=1.0),
+    "grove": dict(dome=0.45, cyl=0.4, bark=0.0, moss=0.0, tufts=0.3, canopy=0.6, base=1.0),
     "spruce": dict(dome=0.0, cyl=0.3, bark=0.0, moss=0.0, tufts=0.0, canopy=0.0, base=1.0),
     "stump": dict(dome=0.0, cyl=0.35, bark=0.0, moss=0.0, tufts=0.0, canopy=0.0, base=1.0),
     "log": dict(dome=0.0, cyl=0.3, bark=0.0, moss=0.0, tufts=0.0, canopy=0.0, base=0.8),
 }
 
 
-def close_up_layers(thin, ink, kind, seed=1, ss=2, hi=2, lo=0.5):
-    """The two close-up layers of one tree picture. Returns (shade at `lo` x the picture, detail at `hi` x the picture, foot).
-    shade and detail are RGBA with the picture's own outline (and everything outside it) left clear."""
-    P = dict(PRESETS.get(kind, PRESETS["oak"]))
-    rng = np.random.RandomState(seed)
-    parts = Parts(thin, ink)
+def shade_layer(parts, P, lo=0.5):
+    """Soft light and shadow at `lo` x the picture: the form of the leaf clumps and the bark, the crown's shadow, the dark foot."""
     H, W = parts.h, parts.w
-    area_scale = (H * W) / (746.0 * 897.0)
     cap = 0.045 * H
     inside = parts.solid & (parts.K < 0.55)
-
-    # ---- low-resolution shade: the form of the leaves and the bark
     ar = np.zeros((H, W, 3), np.float32)
     aa = np.zeros((H, W), np.float32)
     dark = np.array([6, 14, 12], np.float32)
-    warm = np.array([255, 236, 168], np.float32)
     dev_d, Dleaf, lab = _dome(parts, cap, 1.0)
     dev_c, Dbark, theta = _cylinder(parts, 0.95)
-    # leaf clumps
     if P["dome"] > 0:
-        sh = np.clip(-dev_d * 0.62, 0, 0.5) * P["dome"]
-        li = np.clip(dev_d * 0.9 - 0.06, 0, 0.36) * P["dome"]
+        sh = np.clip(-dev_d * 0.5, 0, 0.42) * P["dome"]
+        li = np.clip(dev_d * 0.75 - 0.05, 0, 0.3) * P["dome"]
         _over(ar, aa, dark, sh * parts.green)
         _over(ar, aa, [214, 232, 150], li * parts.green)
-    # bark: rounded
     if P["cyl"] > 0:
         shb = np.clip(-dev_c * 0.75, 0, 0.5) * P["cyl"]
         lib = np.clip(dev_c * 0.9 - 0.05, 0, 0.3) * P["cyl"]
         bm = (parts.bark | parts.rock).astype(np.float32)
         _over(ar, aa, dark, shb * bm)
         _over(ar, aa, [236, 214, 170], lib * bm)
-    # the crown's shadow falls on the bark: down and to the left, soft
-    if P["canopy"] > 0:
-        crown = ndi.binary_dilation(parts.green | (parts.K > 0.5) & (ndi.distance_transform_edt(~parts.green) < 6), iterations=1)
-        ys, xs = np.nonzero(parts.green)
-        if len(ys):
-            sx, sy = -int(0.045 * H), int(0.06 * H)
-            moved = np.roll(np.roll(crown.astype(np.float32), sy, 0), sx, 1)
-            cast = ndi.gaussian_filter(moved, 0.02 * H)
-            near = np.exp(-ndi.distance_transform_edt(~parts.green) / (0.018 * H))
-            bm2 = (parts.bark | parts.rock).astype(np.float32)
-            _over(ar, aa, [4, 10, 10], np.clip(cast * 0.42 + near * 0.26, 0, 0.55) * bm2 * P["canopy"])
-    # the foot: dark where it meets the ground
+    if P["canopy"] > 0 and parts.green.any():
+        # the crown's shadow falls on the bark: down and to the left, soft
+        crown = ndi.binary_dilation(parts.green, iterations=2)
+        sx, sy = -int(0.045 * H), int(0.06 * H)
+        moved = np.roll(np.roll(crown.astype(np.float32), sy, 0), sx, 1)
+        cast = ndi.gaussian_filter(moved, 0.02 * H)
+        near = np.exp(-ndi.distance_transform_edt(~parts.green) / (0.018 * H))
+        bm2 = (parts.bark | parts.rock).astype(np.float32)
+        _over(ar, aa, [4, 10, 10], np.clip(cast * 0.42 + near * 0.26, 0, 0.55) * bm2 * P["canopy"])
     if P["base"] > 0:
+        # ambient occlusion at the foot: dark where it meets the ground, fading up the trunk
         yb = parts.y1
         row = np.arange(H, dtype=np.float32)[:, None]
         ground = smooth(row, yb - 0.11 * H, yb + 1.0) * 0.6 * P["base"]
         _over(ar, aa, [8, 6, 4], ground * inside)
-    # keep off the outline and outside the picture
-    keep = parts.solid.astype(np.float32) * (1.0 - smooth(parts.K, 0.2, 0.7))
+    # the lines were left out of the masks (they keep the clumps apart); fill their place from beside them, so nothing is missing where a thin close-up line runs
+    band = (parts.line > 0.05) & parts.solid
+    src = parts.solid & ~band
+    if band.any() and src.any():
+        idx = ndi.distance_transform_edt(~src, return_distances=False, return_indices=True)
+        aa = np.where(band, aa[idx[0], idx[1]], aa)
+        ar = np.where(band[..., None], ar[idx[0], idx[1]], ar)
+    keep = parts.solid.astype(np.float32) * (1.0 - smooth(parts.Kb, 0.6, 0.9))
     aa *= keep
-    shade_full = from_arrays(np.where(aa[..., None] > 1e-4, ar / np.maximum(aa, 1e-4)[..., None], 0), aa)
-    shade = shade_full.resize((max(2, int(W * lo)), max(2, int(H * lo))), Image.BILINEAR)
+    rgb = np.where(aa[..., None] > 1e-4, ar / np.maximum(aa, 1e-4)[..., None], 0)
+    rgb = bleed(rgb, aa, 1e-3)
+    img = from_arrays(rgb, aa)
+    return img.resize((max(2, int(W * lo)), max(2, int(H * lo))), Image.BILINEAR), Dleaf, Dbark, theta
 
-    # ---- high-resolution detail: grooves, cracks, moss, leaf tufts
-    HW, HH = W * hi, H * hi
-    S = ss
-    dk_im, dk = _stroke_canvas((HW, HH), S)
-    lt_im, lt = _stroke_canvas((HW, HH), S)
-    mo_im, mo = _stroke_canvas((HW, HH), S)
-    k = hi * S                                              # picture px -> drawing px
+
+def detail_layer(parts, P, Dleaf, Dbark, theta, rng, line_close):
+    """The fine detail at CLOSE x the picture: bark furrows along the grain with sunlit lips, short cross cracks, moss on the shaded foot, leaves on the clump
+    rims (lit ones upper right, shaded ones lower left). Drawn in light and dark only, so it suits every seasonal colour under it. None when there is nothing."""
+    if P["bark"] <= 0 and P["moss"] <= 0 and P["tufts"] <= 0:
+        return None
+    H, W = parts.h, parts.w
+    S = CLOSE
+    HW, HH = W * S, H * S
+    scale = H / 897.0 + 0.35
+    dark_a = np.zeros((HH, HW), np.float32)
+    light_a = np.zeros((HH, HW), np.float32)
+    moss_a = np.zeros((HH, HW), np.float32)
+    moss_l = np.zeros((HH, HW), np.float32)
+    up = lambda arr: np.clip(resize_f(arr.astype(np.float32), (HW, HH), Image.BILINEAR), 0, None)
+    yy = (np.arange(HH, dtype=np.float32) / S)[:, None]
+    yf = np.clip((yy - parts.y0) / max(1.0, parts.y1 - parts.y0), 0, 1)
 
     if P["bark"] > 0:
-        bark_m = parts.bark & (Dbark > 3)
-        pts_y, pts_x = np.nonzero(bark_m)
-        n_str = int(len(pts_y) / 800.0 * P["bark"])
-        sel = rng.choice(len(pts_y), size=min(n_str, len(pts_y)), replace=False) if len(pts_y) else []
-        for i in sel:
-            x, y = float(pts_x[i]), float(pts_y[i])
-            L = rng.uniform(40, 150) * (H / 897.0 + 0.4)
-            wd = rng.uniform(0.7, 1.7)
-            sgn = 1.0 if rng.rand() < 0.5 else -1.0
-            seg = []
-            px, py = x, y
-            dxp, dyp = 0.0, 0.0
-            ang_w = rng.uniform(-0.3, 0.3)
-            steps = int(L / 2.5)
-            for st in range(steps):
-                ix, iy = int(px), int(py)
-                if ix < 1 or iy < 1 or ix >= W - 1 or iy >= H - 1 or not bark_m[iy, ix]:
-                    break
-                th = theta[iy, ix]
-                dx, dy = math.cos(th), math.sin(th)
-                if dxp * dx + dyp * dy < 0:
-                    dx, dy = -dx, -dy
-                elif dxp == 0 and dyp == 0:
-                    dx, dy = dx * sgn, dy * sgn
-                ang_w += rng.normal(0, 0.022)
-                ang_w *= 0.97
-                ca, sa = math.cos(ang_w), math.sin(ang_w)
-                dx, dy = dx * ca - dy * sa, dx * sa + dy * ca
-                dxp, dyp = dx, dy
-                seg.append((px, py))
-                px += dx * 2.5
-                py += dy * 2.5
-            if len(seg) < 4:
-                continue
-            for j in range(len(seg) - 1):
-                u = j / max(1, len(seg) - 2)
-                wj = wd * (math.sin(math.pi * u) ** 0.6 + 0.15)
-                dk.line([(seg[j][0] * k, seg[j][1] * k), (seg[j + 1][0] * k, seg[j + 1][1] * k)], fill=int(255 * rng.uniform(0.5, 0.95)), width=max(1, int(round(wj * k))))
-                if rng.rand() < 0.9:
-                    off = wj * 1.1 + 0.6
-                    # the sunlit lip of the groove, on its right
-                    lt.line([(seg[j][0] * k + off * k, seg[j][1] * k), (seg[j + 1][0] * k + off * k, seg[j + 1][1] * k)], fill=int(255 * rng.uniform(0.25, 0.6)), width=max(1, int(round(wj * 0.6 * k))))
-        # short cross cracks
-        for i in rng.choice(len(pts_y), size=min(int(len(pts_y) / 900.0 * P["bark"]), len(pts_y)), replace=False) if len(pts_y) else []:
-            x, y = float(pts_x[i]), float(pts_y[i])
-            L = rng.uniform(8, 22)
-            th = theta[int(y), int(x)] + math.pi * 0.5 + rng.uniform(-0.3, 0.3)
-            x2, y2 = x + math.cos(th) * L, y + math.sin(th) * L
-            dk.line([(x * k, y * k), ((x + x2) / 2 * k, ((y + y2) / 2 + rng.uniform(-1.5, 1.5)) * k), (x2 * k, y2 * k)], fill=int(255 * rng.uniform(0.4, 0.8)), width=max(1, int(round(rng.uniform(0.7, 1.5) * k))))
+        bark_m = (parts.bark & (Dbark > 2.0)).astype(np.float32)
+        bm2 = up(ndi.gaussian_filter(bark_m, 0.8)) > 0.5
+        # the grain at CLOSE x (the axis doubled before resizing, so it never averages across the wrap)
+        c2, s2 = up(np.cos(2 * theta) + 2.0) - 2.0, up(np.sin(2 * theta) + 2.0) - 2.0
+        th2 = 0.5 * np.arctan2(s2, c2)
+        # furrows a few picture px apart, long along the grain (coarse noise smeared along it), and a faint fine grain between them
+        n0 = _noise(rng, (HH, HW), 1.0 * S)
+        fib = _lic(th2, bm2, n0, steps=26, h=1.6)
+        fib = fib / (fib[bm2].std() + 1e-6)
+        nf = _noise(rng, (HH, HW), 0.35 * S)
+        fine = _lic(th2, bm2, nf, steps=8, h=1.2)
+        fine = fine / (fine[bm2].std() + 1e-6)
+        lo_n = _noise(rng, (HH, HW), 14.0 * S)
+        plates = 0.55 + 0.45 * smooth(lo_n, -1.0, 1.0)            # furrows deeper in some places than others
+        furrow = smooth(-fib, 0.75, 1.75) * plates
+        ridge = smooth(fib, 1.0, 2.1) * plates
+        # the sunlit lip of a furrow (its left wall faces the sun on the right): the furrow moved a little to the left, where it is lighter
+        lip = np.clip(np.roll(smooth(-fib, 0.9, 1.75), -S, 1) - furrow, 0, 1)
+        keep_b = bm2.astype(np.float32)
+        dark_a += (furrow * 0.46 + smooth(-fine, 1.1, 2.2) * 0.1) * P["bark"] * keep_b
+        light_a += np.clip(ridge * 0.12 + lip * 0.22, 0, 0.3) * P["bark"] * keep_b
+        # short cross cracks, across the grain
+        crack_im = Image.new("L", (HW, HH), 0)
+        cd = ImageDraw.Draw(crack_im)
+        ys, xs = np.nonzero(parts.bark & (Dbark > 4.0))
+        if len(ys):
+            for i in rng.choice(len(ys), size=min(int(len(ys) / 1500.0 * P["bark"]), len(ys)), replace=False):
+                x, y = float(xs[i]), float(ys[i])
+                L = rng.uniform(6, 16) * scale
+                th = theta[int(y), int(x)] + math.pi * 0.5 + rng.uniform(-0.35, 0.35)
+                x2, y2 = x + math.cos(th) * L, y + math.sin(th) * L
+                mx, my = (x + x2) * 0.5 + rng.uniform(-1.2, 1.2), (y + y2) * 0.5 + rng.uniform(-1.2, 1.2)
+                cd.line([(x * S, y * S), (mx * S, my * S), (x2 * S, y2 * S)], fill=int(255 * rng.uniform(0.45, 0.85)), width=max(1, int(round(rng.uniform(0.8, 1.5) * S))))
+        cracks = ndi.gaussian_filter(np.asarray(crack_im).astype(np.float32) / 255.0, 0.6) * keep_b
+        dark_a = np.maximum(dark_a, cracks * 0.5)
 
-    if P["tufts"] > 0:
-        # leaf tufts: small pointed leaves along the rims of the clumps, sunlit on the upper right and shaded on the lower left, and a few inside
+    if P["moss"] > 0:
+        # moss: soft cushions low on the trunk and the root flares, more on the shaded left, a few creeping up the furrows; fine speckled texture
+        bark_all = ((parts.bark | parts.rock) & (Dbark > 2.5)).astype(np.float32)
+        bh = up(ndi.gaussian_filter(bark_all, 1.0))
+        xx = (np.arange(HW, dtype=np.float32) / S)[None, :]
+        cols = np.nonzero(parts.solid[max(0, parts.y1 - 12):parts.y1].any(0))[0]
+        cx0 = float(cols.mean()) if len(cols) else W * 0.5
+        left = smooth((cx0 - xx) / max(1.0, W * 0.25), -0.6, 1.0)
+        low = smooth(yf, 0.55, 0.98)
+        n1 = _noise(rng, (HH, HW), 13.0 * S)
+        n2 = _noise(rng, (HH, HW), 3.0 * S)
+        n3 = _noise(rng, (HH, HW), 0.7 * S)
+        field = n1 * 0.9 + n2 * 0.3 + low * 2.6 + left * 0.7 - 2.3
+        patch = smooth(field, 0.0, 0.9) * np.clip(bh, 0, 1) * P["moss"]
+        grain = smooth(n3, -0.8, 0.9)
+        moss_a = np.clip(patch * (0.5 + 0.16 * grain), 0, 0.6)
+        moss_l = np.clip(patch * smooth(n2 * 0.7 + n3 * 0.35 + 0.2, 0.3, 1.5) * 0.45, 0, 0.4)
+
+    if P["tufts"] > 0 and parts.green.any():
+        # a few leaves on the rims of the clumps: lit ones where the rim faces the sun, shaded ones on the other side; small and soft
+        lt_im = Image.new("L", (HW * 2, HH * 2), 0)
+        dk_im = Image.new("L", (HW * 2, HH * 2), 0)
+        lt, dk = ImageDraw.Draw(lt_im), ImageDraw.Draw(dk_im)
+        k = 2 * S
         D = Dleaf
-        rim = parts.green & (D > 2) & (D < 0.05 * H)
+        rim = parts.green & (D > 1.5) & (D < 0.035 * H)
         ry, rx = np.nonzero(rim)
-        n_t = int(len(ry) / 210.0 * P["tufts"])
+        gy, gx = np.gradient(ndi.gaussian_filter(D, 2.0))
+        n_t = int(len(ry) / 330.0 * P["tufts"])
         if len(ry):
-            gy, gx = np.gradient(ndi.gaussian_filter(D, 2.0))
             for i in rng.choice(len(ry), size=min(n_t, len(ry)), replace=False):
                 x, y = float(rx[i]), float(ry[i])
                 ox, oy = -gx[int(y), int(x)], -gy[int(y), int(x)]          # outward
                 gl = math.hypot(ox, oy)
                 if gl < 1e-4:
-                    ang = rng.uniform(0, 2 * math.pi)
-                else:
-                    ang = math.atan2(oy, ox) + rng.normal(0, 0.55)
-                lit = math.cos(ang) * LIGHT[0] + math.sin(ang) * LIGHT[1]
-                ln = rng.uniform(4.5, 9.5) * (H / 897.0 + 0.35)
-                wd = ln * rng.uniform(0.28, 0.4)
-                # a pointed leaf: two arcs
+                    continue
+                facing = (ox * LIGHT[0] + oy * LIGHT[1]) / gl               # +1 faces the sun
+                if -0.25 < facing < 0.2:
+                    continue
+                ang = math.atan2(oy, ox) + rng.normal(0, 0.6) + (0.5 if facing > 0 else -0.4)
+                ln = rng.uniform(3.2, 6.5) * scale
+                wd = ln * rng.uniform(0.3, 0.42)
                 ca, sa = math.cos(ang), math.sin(ang)
+                bx, by = x - ca * ln * 0.55, y - sa * ln * 0.55          # leaves point outward from inside the rim
                 poly = []
                 for u in np.linspace(0, 1, 7):
-                    wv = wd * math.sin(math.pi * u) ** 0.8 * (1 - 0.2 * u)
-                    poly.append((x + ca * ln * u - sa * wv, y + sa * ln * u + ca * wv))
+                    wv = wd * math.sin(math.pi * u) ** 0.8 * (1 - 0.25 * u)
+                    poly.append((bx + ca * ln * u - sa * wv, by + sa * ln * u + ca * wv))
                 for u in np.linspace(1, 0, 7):
-                    wv = wd * math.sin(math.pi * u) ** 0.8 * (1 - 0.2 * u)
-                    poly.append((x + ca * ln * u + sa * wv, y + sa * ln * u - ca * wv))
+                    wv = wd * math.sin(math.pi * u) ** 0.8 * (1 - 0.25 * u)
+                    poly.append((bx + ca * ln * u + sa * wv, by + sa * ln * u - ca * wv))
                 poly = [(px * k, py * k) for px, py in poly]
-                val = int(255 * rng.uniform(0.55, 1.0))
-                if lit > 0.12:
-                    lt.polygon(poly, fill=val)
-                elif lit < -0.3:
-                    dk.polygon(poly, fill=int(val * 0.7))
-        # a few bright flecks inside the clumps, like the drawn ones
-        iy, ix = np.nonzero(parts.green & (D > 0.035 * H))
-        if len(iy):
-            for i in rng.choice(len(iy), size=min(int(len(iy) / 4200.0 * P["tufts"]), len(iy)), replace=False):
-                x, y = float(ix[i]), float(iy[i])
-                ln = rng.uniform(4, 8)
-                ang = rng.uniform(0, math.pi)
-                dx, dy = math.cos(ang) * ln * 0.5, math.sin(ang) * ln * 0.5
-                lt.line([((x - dx) * k, (y - dy) * k), ((x + dx) * k, (y + dy) * k)], fill=int(255 * rng.uniform(0.35, 0.7)), width=max(1, int(round(rng.uniform(1.2, 2.2) * k))))
+                val = int(255 * rng.uniform(0.6, 1.0) * min(1.0, abs(facing) * 1.6 + 0.2))
+                (lt if facing > 0 else dk).polygon(poly, fill=val)
+        lt_a = np.asarray(lt_im.resize((HW, HH), Image.BOX)).astype(np.float32) / 255.0
+        dk_a = np.asarray(dk_im.resize((HW, HH), Image.BOX)).astype(np.float32) / 255.0
+        light_a = np.maximum(light_a, lt_a * 0.3 * P["tufts"])
+        dark_a = np.maximum(dark_a, dk_a * 0.3 * P["tufts"])
 
-    dark_a = ndi.gaussian_filter(_finish(dk_im, S, hi), 0.6) * 0.5
-    light_a = ndi.gaussian_filter(_finish(lt_im, S, hi), 0.6) * 0.34
-    moss_a = np.zeros((HH, HW), np.float32)
-    if P["moss"] > 0:
-        bark_all = (parts.bark | parts.rock) & (Dbark > 2.5)
-        bh = ndi.zoom(bark_all.astype(np.float32), hi, order=1)[:HH, :HW]
-        yy = (np.arange(HH, dtype=np.float32) / hi)[:, None]
-        xx = (np.arange(HW, dtype=np.float32) / hi)[None, :]
-        yf = np.clip((yy - parts.y0) / max(1.0, parts.y1 - parts.y0), 0, 1)
-        low = smooth(yf, 0.5, 0.97)
-        # the shaded left side of a trunk gets more
-        n1 = _noise(rng, (HH, HW), 8.0 * hi)
-        n2 = _noise(rng, (HH, HW), 1.8 * hi)
-        field = n1 * 0.8 + n2 * 0.16 + (low * 1.9 - 1.6) * 1.0
-        patch = smooth(field, 0.1, 1.0) * bh * P["moss"]
-        grain = smooth(n2 + 0.25, -0.4, 0.5)
-        moss_a = np.clip(patch * (0.45 + 0.25 * grain), 0, 0.55)
-        moss_lit = patch * smooth(_noise(rng, (HH, HW), 1.1 * hi) + n1 * 0.2, 0.7, 1.6) * 0.6
-    ink_keep = None
-    # mask by the picture: nothing on the outline or outside it
-    hm = np.asarray(thin.resize((HW, HH), Image.BICUBIC).getchannel("A")).astype(np.float32) / 255.0
-    Kh = ndi.zoom(1.0 - smooth(parts.K, 0.2, 0.7), hi, order=1)[:HH, :HW]
-    keep_h = np.clip(hm * 1.2 - 0.2, 0, 1) * Kh
+    # keep it on the picture and off the blobs of ink and the close-up line
+    hm = np.clip(up(parts.A) * 1.2 - 0.2, 0, 1)
+    Kh = up(1.0 - smooth(parts.Kb, 0.45, 0.8))
+    keep_h = np.clip(hm, 0, 1) * np.clip(Kh, 0, 1) * (1.0 - line_close)
     acc_rgb = np.zeros((HH, HW, 3), np.float32)
     acc_a = np.zeros((HH, HW), np.float32)
-    _over(acc_rgb, acc_a, [10, 8, 12], dark_a * keep_h)
+    _over(acc_rgb, acc_a, [14, 10, 12], np.clip(dark_a, 0, 0.6) * keep_h)
     if P["moss"] > 0:
-        # moss in two greens
-        mcol = np.array([64, 92, 46], np.float32)
-        _over(acc_rgb, acc_a, mcol, moss_a * keep_h)
-        _over(acc_rgb, acc_a, [98, 132, 66], np.clip(moss_lit, 0, 0.4) * keep_h)
-    _over(acc_rgb, acc_a, [236, 236, 176], light_a * keep_h)
-    detail = from_arrays(np.where(acc_a[..., None] > 1e-4, acc_rgb / np.maximum(acc_a, 1e-4)[..., None], 0), acc_a)
-
-    foot = foot_of(parts)
-    if P["bark"] <= 0 and P["moss"] <= 0 and P["tufts"] <= 0:
-        detail = None                       # nothing to add to the picture's own texture
-    return shade, detail, foot
+        _over(acc_rgb, acc_a, [62, 92, 44], moss_a * keep_h)
+        _over(acc_rgb, acc_a, [112, 148, 72], moss_l * keep_h)
+    _over(acc_rgb, acc_a, [240, 236, 196], np.clip(light_a, 0, 0.4) * keep_h)
+    rgb = np.where(acc_a[..., None] > 1e-4, acc_rgb / np.maximum(acc_a, 1e-4)[..., None], 0)
+    rgb = bleed(rgb, acc_a, 1e-3)
+    return from_arrays(rgb, acc_a)
 
 
 def foot_of(parts):
-    """Where the tree stands: left and right end of its lowest rows, as fractions of the picture's width, and how high the lowest row is."""
+    """Where the tree stands: left and right end of its lowest rows, as fractions of the picture's width."""
     rows = slice(max(0, parts.y1 - 10), parts.y1 - 1)
     cols = np.nonzero(parts.solid[rows].any(0))[0]
     if len(cols) == 0:
@@ -468,39 +543,97 @@ def foot_of(parts):
     return [round(float(cols[0]) / parts.w, 4), round(float(cols[-1] + 1) / parts.w, 4)]
 
 
+def sway_grid(parts, sways):
+    """How much each point of a (SWAY_N + 1)^2 grid over the picture moves with its leaf clump (0 the trunk and the foot, 1 the middle of the canopy)."""
+    H, W = parts.h, parts.w
+    n = SWAY_N
+    if not sways:
+        return None
+    leaf = parts.green.astype(np.float32)
+    if not parts.green.any():
+        leaf = parts.solid.astype(np.float32) * 0.6
+    blur = ndi.uniform_filter(leaf, size=(max(3, H // n), max(3, W // n)))
+    rows = []
+    for j in range(n + 1):
+        y = min(H - 1, int(round(j * (H - 1) / float(n))))
+        hk = float(smooth(np.float32(1.0 - y / float(H)), 0.22, 0.6))
+        row = []
+        for i in range(n + 1):
+            x = min(W - 1, int(round(i * (W - 1) / float(n))))
+            row.append(round(min(1.0, float(blur[y, x]) * 1.6) * hk, 2))
+        rows.append(row)
+    return rows
+
+
+def canopy_box(parts):
+    ys, xs = np.nonzero(parts.green)
+    if len(ys) < 50:
+        return None
+    return [round(float(np.percentile(xs, 4)) / parts.w, 3), round(float(np.percentile(ys, 4)) / parts.h, 3),
+            round(float(np.percentile(xs, 96)) / parts.w, 3), round(float(np.percentile(ys, 92)) / parts.h, 3)]
+
+
+def leaf_rgb(im):
+    rgb, a = to_arrays(im)
+    h, s, v = _rgb_to_hsv(rgb / 255.0)
+    m = (a > 0.9) & (s > 0.2) & (v > 0.15)
+    hm = m & (((h > 0.17) & (h < 0.5)) | (h < 0.16) | (h > 0.93))
+    sel = rgb[hm] if hm.sum() > 50 else rgb[m]
+    return [int(round(c)) for c in np.median(sel, 0)] if len(sel) else [90, 140, 60]
+
+
 # ------------------------------------------------------------------ one tree, all its files
 LOOKS = {"summer": (0.31, 1.05, 1.2, 0.03), "spring": (0.22, 1.0, 1.42, 0.06), "orange": (0.07, 1.25, 1.75, 0.1), "red": (0.0, 1.35, 1.55, 0.04), "gold": (0.13, 1.2, 1.85, 0.12)}
 MIST_HEIGHT = 300
 
 
-def build_tree(out_dir, nm, img, leafy, kind, seed):
-    """Everything the game draws for one tree picture (already cut and trimmed, at the picture's own size): the sprite in each leaf look with the thinned
-    outline, the ink layer that gives the outline back, the two close-up layers, the hazy far copies. Returns the manifest entry."""
-    thin, ink_layer, ink = thin_outline(img)
-    w, h = thin.size
+def build_tree(out_dir, nm, img, leafy, kind, seed, sways=True):
+    """Everything the game draws for one tree picture (already cut and trimmed, at the picture's own size): the base in each leaf look with its lines painted out,
+    the two ink layers, the close-up layers, the silhouette, the sway grid, the hazy far copies. Returns (manifest entry, {file: bytes})."""
+    split = split_lines(img, kind)
+    base = split["base"]
+    w, h = base.size
     entry = {"name": nm, "w": w, "h": h, "leafy": leafy, "looks": {}, "mist": {}}
     sizes = {}
 
-    def put(fn, im, colors=256):
-        sizes[fn] = save_png(im, os.path.join(out_dir, fn), colors)
+    def put(fn, im, colors=256, quant=True):
+        sizes[fn] = save_png(im, os.path.join(out_dir, fn), colors, quant)
         return fn
 
     # the far copies come from the picture as drawn (outline and all): they are small and hazy, and look as they always did
-    small_h = MIST_HEIGHT
-    small = img.resize((max(8, int(round(w * small_h / float(h)))), small_h), Image.LANCZOS)
+    small = img.resize((max(8, int(round(w * MIST_HEIGHT / float(h)))), MIST_HEIGHT), Image.LANCZOS)
+    center = green_center(img)
+    leaf_cols = {}
     if leafy:
         for lk, args in LOOKS.items():
-            entry["looks"][lk] = put("tree_%s_%s.png" % (nm, lk), recolor(thin, *args))
-            entry["mist"][lk] = put("mist_%s_%s.png" % (nm, lk), mist(recolor(small, *args), height=small_h), 128)
+            rc = recolor(base, *args, center=center)
+            entry["looks"][lk] = put("tree_%s_%s.png" % (nm, lk), rc)
+            leaf_cols[lk] = leaf_rgb(rc)
+            entry["mist"][lk] = put("mist_%s_%s.png" % (nm, lk), mist(recolor(small, *args, center=center), height=MIST_HEIGHT), 128)
         entry["file"] = entry["looks"]["summer"]
     else:
-        entry["file"] = entry["looks"]["summer"] = put("tree_%s.png" % nm, thin)
-        entry["mist"]["summer"] = put("mist_%s.png" % nm, mist(small, height=small_h), 128)
-    entry["ink"] = put("tree_%s_ink.png" % nm, ink_layer, 64)
-    shade, detail, foot = close_up_layers(thin, ink, kind, seed=seed)
-    entry["shade"] = put("tree_%s_shade.png" % nm, shade)
+        entry["file"] = entry["looks"]["summer"] = put("tree_%s.png" % nm, base)
+        leaf_cols["summer"] = leaf_rgb(base)
+        entry["mist"]["summer"] = put("mist_%s.png" % nm, mist(small, height=MIST_HEIGHT), 128)
+    ink_l = float(0.299 * split["rgb"][0] + 0.587 * split["rgb"][1] + 0.114 * split["rgb"][2])
+    entry["ink"] = put("tree_%s_ink.png" % nm, la_image(ink_l, split["ink"]), quant=False)
+    entry["ink_close"] = put("tree_%s_inkc.png" % nm, la_image(ink_l, split["ink_close"]), quant=False)
+    entry["sil"] = put("tree_%s_sil.png" % nm, la_image(255.0, to_arrays(base)[1]), quant=False)
+    P = dict(PRESETS.get(kind, PRESETS["oak"]))
+    rng = np.random.RandomState(seed)
+    parts = Parts(base, split["K"], split["line"])
+    shade, Dleaf, Dbark, theta = shade_layer(parts, P)
+    entry["shade"] = put("tree_%s_shade.png" % nm, shade, quant=False)
+    detail = detail_layer(parts, P, Dleaf, Dbark, theta, rng, split["ink_close"])
     if detail is not None:
-        entry["detail"] = put("tree_%s_detail.png" % nm, detail)
-    entry["foot"] = foot
-    entry["ink_rgb"] = list(ink)
+        entry["detail"] = put("tree_%s_detail.png" % nm, detail, quant=False)
+    entry["foot"] = foot_of(parts)
+    sg = sway_grid(parts, sways)
+    if sg is not None:
+        entry["sway"] = sg
+    cb = canopy_box(parts)
+    if cb is not None:
+        entry["canopy"] = cb
+    entry["leaf_rgb"] = leaf_cols
+    entry["ink_rgb"] = [int(round(v)) for v in split["rgb"]]
     return entry, sizes
