@@ -7,6 +7,7 @@ const KBtn = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ui_button.
 const Queens = preload("res://mods-unpacked/Judah-InfDNA/core/queens.gd")
 const RunLog = preload("res://mods-unpacked/Judah-InfDNA/core/run_log.gd")
 const Legacy = preload("res://mods-unpacked/Judah-InfDNA/core/legacy.gd")
+const Wild = preload("res://mods-unpacked/Judah-InfDNA/core/wild.gd")
 const Baker = preload("res://mods-unpacked/Judah-InfDNA/content/colony/sprite_baker.gd")
 const COLONY_SCENE = "res://mods-unpacked/Judah-InfDNA/content/colony/colony.tscn"
 const TITLE_SCENE = "res://ui/menus/title_screen/title_screen.tscn"
@@ -54,6 +55,9 @@ var _detail: PanelContainer
 var _heir_row: HBoxContainer
 var _heir_lbl: Label
 var _heir_btn: Button
+var _wild_row: HBoxContainer
+var _wild_lbl: Label
+var _wild_btn: Button
 
 
 func _ready() -> void:
@@ -185,6 +189,19 @@ func _ready() -> void:
 	_heir_btn.rect_min_size = Vector2(90, 44)
 	_heir_btn.connect("toggled", self, "_on_heir_toggled")
 	_refresh_heirloom()
+	# the Wild (wild.gd): the line of an earlier colony of yours that this colony's rival descends from; switch it off for plain red ants
+	_wild_row = HBoxContainer.new()
+	_wild_row.add_constant_override("separation", 10)
+	rv.add_child(_wild_row)
+	Kit.icon_rect(_wild_row, "skull", 30)
+	_wild_lbl = Kit.label(_wild_row, "", _f_s, Color("#ff9d8a"))
+	_wild_lbl.autowrap = true
+	_wild_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_wild_btn = _btn(_wild_row, "On", "")
+	_wild_btn.toggle_mode = true
+	_wild_btn.rect_min_size = Vector2(90, 44)
+	_wild_btn.connect("toggled", self, "_on_wild_toggled")
+	_refresh_wild()
 	var br = HBoxContainer.new()
 	br.add_constant_override("separation", 12)
 	rv.add_child(br)
@@ -216,6 +233,27 @@ func _refresh_heirloom() -> void:
 	_heir_lbl.text = "Heirloom (%s): %s" % [h.get("from", "a past colony"), str(h.get("label", "")).to_lower()]
 	_heir_btn.set_pressed_no_signal(Legacy.is_on())
 	_heir_btn.text = "On" if Legacy.is_on() else "Off"
+
+
+func _refresh_wild() -> void:
+	var ls = Wild.lines()
+	_wild_row.visible = not ls.empty()
+	if ls.empty():
+		return
+	var on = Wild.is_on()
+	_wild_btn.set_pressed_no_signal(on)
+	_wild_btn.text = "On" if on else "Off"
+	var k = Wild.active()
+	if on and not k.empty():
+		_wild_lbl.text = "The Wild remembers %d line%s. Your rival descends from the %s of colony #%d (raid %d, %d runs on)." % [
+			ls.size(), "" if ls.size() == 1 else "s", k.get("title", "Kin"), int(k.get("id", 0)), int(k.get("raids", 0)), int(k.get("runs", 0))]
+	else:
+		_wild_lbl.text = "The Wild is switched off: your rival will be plain red ants."
+
+
+func _on_wild_toggled(on: bool) -> void:
+	Wild.set_use(on)
+	_refresh_wild()
 
 
 func _on_heir_toggled(on: bool) -> void:

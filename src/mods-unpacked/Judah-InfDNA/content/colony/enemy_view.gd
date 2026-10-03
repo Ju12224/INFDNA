@@ -11,7 +11,10 @@ const P = "res://particles/sprites/particle_%d.png"
 const LIFE = {"puff": 1.0, "text": 1.2, "spark": 0.45, "heal": 1.3, "ring": 0.7, "hatch": 0.9, "burst": 0.8,
 	"wave": 0.6, "arc": 0.28, "beam": 0.22, "web": 1.4, "corpse": 0.9}
 
+const ANT_SCALE = 0.24      # the same drawing scale as ant_view.gd: a kin ant is as big as one of yours
+
 var sim
+var baker            # sprite_baker.gd (set by the scene): the rival's kin are drawn from their genome, like your own ants
 var perf             # perf.gd (optional): caps the effects drawn per frame
 var _dust := []
 var _stars := []
@@ -65,7 +68,9 @@ func draw_enemy(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade: flo
 	var mod = Color(1, 0.5, 0.5) if e.flash > 0.0 else Color.white
 	mod = Color(mod.r * shade, mod.g * shade, mod.b * shade, (0.75 if e.state == 2 else 1.0) * alpha)
 	var art = e.def.get("art", "")
-	if art != "":
+	if e.genome != null:
+		_draw_kin(ci, e, feet, depth_scale, shade, alpha, moving)
+	elif art != "":
 		var fly = e.def.get("fly", false)
 		var lift = 6.0 + 22.0 * air if fly else 0.0
 		CreatureArt.draw(art, ci, feet, depth_scale * float(e.def.get("art_scale", 1.0)), shade, alpha * (0.75 if e.state == 2 else 1.0), _t, e.facing, e.id, moving, e.flash > 0.0, lift)
@@ -103,6 +108,25 @@ func draw_enemy(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade: flo
 		var top = feet + Vector2(-w * 0.5, -h - 14.0)
 		ci.draw_rect(Rect2(top - Vector2(2, 2), Vector2(w + 4, 10)), INK)
 		ci.draw_rect(Rect2(top, Vector2(w * clamp(e.hp / e.max_hp, 0.0, 1.0), 6)), Color("#e8483b"))
+
+
+# The rival's descendants: the very body plan your old colony bred, baked like any ant and given a red cast so it is never mistaken for
+# one of yours. Until the sprite is baked (the first frame of a new body) the plain red ant stands in.
+func _draw_kin(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade: float, alpha: float, moving: bool) -> void:
+	var k = float(e.def.get("art_scale", 1.0))
+	var a = alpha * (0.75 if e.state == 2 else 1.0)
+	var frame = int(fposmod(_t * 2.6 + e.id * 0.37, 1.0) * baker.FRAMES) % baker.FRAMES if moving else 0
+	var tex = baker.get_texture(e.genome, 1.0, frame) if baker != null else null
+	if tex == null:
+		CreatureArt.draw("redant", ci, feet, depth_scale * k, shade, a, _t, e.facing, e.id, moving, e.flash > 0.0, 0.0)
+		return
+	var s = ANT_SCALE * depth_scale * k * 1.15
+	var bob = sin(_t * 12.0 + e.id) * 0.05 if moving else 0.0
+	var tint = Color(shade, shade * 0.72, shade * 0.68, a)
+	if e.flash > 0.0:
+		tint = Color(shade, shade * 0.45, shade * 0.45, a)
+	ci.draw_set_transform(feet, 0.0, Vector2(e.facing * s, s * (1.0 + bob)))
+	ci.draw_texture_rect(tex, Rect2(-baker.FEET, baker.SIZE), false, tint)
 
 
 # Only effects here; units are drawn depth-sorted by ant_view.gd.

@@ -1,4 +1,33 @@
-# InfDNA (Brotato mod) - v0.29.0
+# InfDNA (Brotato mod) - v0.30.0
+
+## v0.30.0 - the Wild: the colony you lost is the enemy you meet next
+**Why this direction.** Evolving ants and a shop between raids are not new: SuperColony (Steam) already has an ant colony, DNA to collect and roguelite runs, and Ants in
+Space! mutates space ants. What I could not find anywhere is a game where **your own past runs become the world**. So that is where InfDNA goes from here: every strain you
+breed well is a future enemy, and every colony you lose leaves something behind.
+- **A fallen colony escapes into the Wild.** When a colony falls, the most evolved strain it ended with (its champion and the plans it had most of, scored by how strong the body
+  is and how many visible changes lie behind it; the founders' own plan only as a last resort) is written into `user://infdna_wild.json` with a species name ("Thorned Harriers"),
+  the queen it came from, and how far it got. The collapse screen tells you. The Wild keeps six lines; the weakest is forgotten.
+- **Your next rival is its child.** The strongest line in the Wild is the rival nest of your next colony: your old ants, same body, same organs, same colours (the flag on the mound
+  is their colour), drawn from the same baked sprites as yours with a red cast so you never mix them up. While you were away they evolved: three or more steps (more for a line that
+  has already survived runs, and for a colony that went far), each step the strongest of three mutants. They take one more step before every raid of theirs. Their toast says whose
+  descendants they are.
+- **They fight with their bodies.** Their health and bite follow the body they evolved (x0.85 to x1.35), their speed too (x0.85 to x1.25), and a well-plated line shrugs off up to a
+  quarter of an ant's bites. And their soldiers and majors **use the organs the line evolved, against you**: an electric organ throws bolts into one to three ants, a sonic organ sends
+  a shockwave over everything close, a tongue lashes out and back, a regrowth organ heals them. (Your own ants only get these at the third tier of an organ; the Kin get a weaker
+  version from the first, stronger with every tier.)
+- **Break them (Strike, Y) and take their best trait back:** the next 12 eggs are bred from your champion strain with the Kin's most remarkable trait grafted on, and when the run ends
+  that line is extinct for good. **Leave them alone** and that line goes on evolving in the Wild, a run older each time (it is your next rival again whenever it is still the strongest line there).
+- Queen select shows the line your next rival descends from, with a switch (Wild: Off gives plain red ants, as before). The first colony ever, and any colony with the Wild off, meets the
+  plain red ants of v0.29. The headless balance probes never touch the file.
+- Code: `core/wild.gd` (file, genome to and from JSON, species names, kin stats), `core/rival.gd` (kin genome, evolution, `kin_def`, `abilities`, reclaim),
+  `colony_sim._kin_abilities`, `enemy_view._draw_kin`, `rival_view`, collapse screen and queen select.
+**Measured** (the balanced bot, the same 8 seeds, 30 sim-minutes; it knows nothing of the Wild): against plain red ants all 8 colonies live (71-183 ants at minute 30). Against the
+descendants of a real colony's most evolved strain (a stinger, six legs) also all 8 (101-208 ants), so an ordinary descendant is not harder than the red ants. The worst case I could
+build, an ancestor with four organs at tier 2 and a fusion: the first version, where every soldier used its organs, wiped out all 8 colonies (8-61 ants left) because each soldier's
+shockwave hit every ant near it; now only the rare majors use them and a shockwave hits six ants, and 7 of 8 live (77-172 ants; one starved after a bad first winter). Probes are noisy,
+so read these as rough counts.
+**Not verified:** nobody has played this in Brotato; the Wild file has only been written and read by the headless tests, and I cannot tell whether meeting your own ants is a thrill
+or a chore. If it is a chore, the first things to turn are `Rival.EVOLVE_BIAS`, the stat bands in `Wild.kin_mods`, and the number of starting steps in `Rival.setup`.
 
 ## v0.29.0 - a year of seasons, a rival nest, an anteater, heirlooms, living gardens, sound, and a graphics pass
 Compile-checked; `src/tests-v023/layers_smoke.gd` passes (it now also covers items, seasons, heirlooms, the anteater, the rival and the

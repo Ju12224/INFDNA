@@ -4,6 +4,20 @@ Direction from the owner (v0.27): *the game is boring just watching*. The player
 to decide and to do, with consequences, not a fish tank. Items 1, 2 and 4 below are meant to become that role together, not stay
 separate features. Item 5 is wanted. Item 6 must look super realistic and use real Brotato art.
 
+## The direction (v0.30): the Wild, history as the world
+Researched in v0.30: evolving ants + a roguelite shop is already SuperColony's ground (it even has DNA harvested from defeated foes), so gene theft is not the hook.
+Not found anywhere: **your own past runs becoming the world**. Everything from here should serve one line: *every colony you lose is the enemy you meet next.*
+Done: a fallen colony's most evolved strain escapes into the Wild (`core/wild.gd`); the strongest line is the next run's rival (evolved while you were away, drawn as your
+old ants, fighting with your old organs); breaking it takes its best trait back and ends the line; leaving it makes it one run stronger.
+Next, roughly in order of how much they would sell the idea:
+- **Field Guide:** a screen (queen select + collapse) listing every line in the Wild: baked sprite, species name, plan, which run it came from, how it fell, how many runs it has
+  evolved on; and a family tree. The Wild is invisible until it can be browsed.
+- **Counter-evolution inside a run:** the rival picks its mutants against what actually beats it (your dominant strain's damage type, your traps, your organs).
+- **Wild creatures:** unbroken lines that wander the meadow as fauna (an ecosystem made of your past) and fight the rival and the anteater too.
+- **Spare or destroy:** after a break you may spare a line: it becomes a tributary (food each run, or allies in the next).
+- **Prisoners and crosses:** take kin ants alive and cross their body plan into yours in the Lab.
+- **Named queens and dynasties:** the Wild remembers who beat whom; share a line as a code so a friend meets your descendants.
+
 ## The directing role (items 1, 2, 4 together)
 Status: v0.29 has the Will meter, six commands (Rally, Harvest, Recall, Surge, Breed, Strike), the caste order, two predators (a bird, an
 anteater), a rival colony that raids you and can be broken, and eleven Lab items that feed the commands (Queen's Whisper, Deep Reserve,

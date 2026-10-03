@@ -177,3 +177,14 @@ the ledger every 5-10 sim-seconds around it.
 Measured after these fixes (same 8 seeds): 30 min 8 of 8 alive (71-183 ants); 42 min five healthy, one overrun at minute 33 (raid 23), one lost its queen at minute 41, one at 23 ants;
 zero starvation deaths in any run, and the first winter is a non-event for the bot (160-205 ants at its end, larders from 7 to 1314 food). If playtests find winters toothless,
 raise `Seasons.severity` or cap the larder; if they find them brutal, soften the upkeep bump (`Seasons.upkeep_k`).
+
+### v0.30 notes (the Wild)
+- The unique direction is persistence with consequences: the colony you lose becomes the enemy you meet. `core/wild.gd` is the whole persistence layer (JSON file, genome
+  to and from dict, species names, kin stat bands, `pick_ancestor`); `Rival` owns the kin genome (`evolve`, `kin_def`, `abilities`, `_reclaim`); the sim only spawns raiders from
+  `kin_def` and runs `_kin_abilities`. `Sim.new(seed, queen, heirloom, kin)` takes the line as data, so the probes stay deterministic and never touch the file.
+- Lesson: a colony's "champion" (the strain with the most ants at some moment) is usually just the founders' own plan, so it says nothing about what the colony became;
+  the ancestor is picked by body strength and number of visible changes instead.
+- Kin stat bands are deliberately narrow (x0.85-1.35, armor up to 0.25): the kin must be a sharper enemy, not an impossible one. Balance is only measured with the balanced bot
+  (README v0.30.0); whether meeting your own ants is fun is the open question.
+- Kin organ abilities (`_kin_abilities`) are a mirror of the player's: arc, pulse, lash, regen from tier 1 (the player's own come at tier 3). Silk, shell and the part forms are not
+  mirrored yet.

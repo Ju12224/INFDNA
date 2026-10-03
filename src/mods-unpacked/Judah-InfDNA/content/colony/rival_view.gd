@@ -11,6 +11,7 @@ var sim
 var cam
 var ground
 var perf
+var baker            # sprite_baker.gd (set by the scene): a kin rival's own ants are drawn from its genome
 var _t := 0.0
 
 
@@ -88,7 +89,7 @@ func _draw() -> void:
 		draw_line(pole, pt, Color("#c9b79a"), 2.4, true)
 		var wv = sin(_t * 3.2) * 3.0 * ps
 		draw_colored_polygon(PoolVector2Array([pt + Vector2(0, -2.0), pt + Vector2(62.0 * ps, 10.0 * ps + wv), pt + Vector2(56.0 * ps, 18.0 * ps - wv * 0.5), pt + Vector2(0, 34.0 * ps)]), INK)
-		draw_colored_polygon(PoolVector2Array([pt + Vector2(1.0, 0.0), pt + Vector2(56.0 * ps, 10.0 * ps + wv), pt + Vector2(50.0 * ps, 18.0 * ps - wv * 0.5), pt + Vector2(1.0, 30.0 * ps)]), Color("#b32424"))
+		draw_colored_polygon(PoolVector2Array([pt + Vector2(1.0, 0.0), pt + Vector2(56.0 * ps, 10.0 * ps + wv), pt + Vector2(50.0 * ps, 18.0 * ps - wv * 0.5), pt + Vector2(1.0, 30.0 * ps)]), r.flag_color())
 	else:
 		draw_line(pole, pole + Vector2(0, -14.0 * ps), INK, 5.0, true)
 		draw_line(pole, pole + Vector2(0, -14.0 * ps), Color("#8a7a64"), 2.4, true)
@@ -104,7 +105,15 @@ func _draw() -> void:
 		var ap = GroundView.persp(al)
 		var ay = GroundView.lane_y(ground.smooth_px(int(ax / C)), al)
 		var face = 1 if cos(ph) >= 0.0 else -1
-		CreatureArt.draw("redant", self, Vector2(ax, ay), 0.5 * ap, 1.0, 1.0, _t + k, face, k, true, false, 0.0)
+		var tex = null
+		if r.genome != null and baker != null:
+			tex = baker.get_texture(r.genome, 1.0, int(fposmod(_t * 2.4 + k * 0.37, 1.0) * baker.FRAMES) % baker.FRAMES)
+		if tex != null:
+			draw_set_transform(Vector2(ax, ay), 0.0, Vector2(face * 0.24 * ap * 1.05, 0.24 * ap * 1.05))
+			draw_texture_rect(tex, Rect2(-baker.FEET, baker.SIZE), false, Color(1.0, 0.74, 0.7, 1.0))
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		else:
+			CreatureArt.draw("redant", self, Vector2(ax, ay), 0.5 * ap, 1.0, 1.0, _t + k, face, k, true, false, 0.0)
 	# during a strike: the mound's health once the guards are down
 	if sim.strike_t > 0.0 and r.guards_out and alive:
 		var bw = 150.0

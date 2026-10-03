@@ -152,6 +152,8 @@ class Raider:
 	var stun_t := 0.0      # snared: cannot move or bite
 	var tongue_cd := 2.0   # anteater: seconds to its next lick
 	var guard_x := 0       # a rival's guard: the column of the mound it defends (0 = an ordinary raider)
+	var genome = null      # a rival's kin ant: the body plan it is drawn from (and whose numbers it fights with)
+	var abil_t := {}       # kin soldiers: seconds to each of their line's organ abilities
 
 
 var grid
@@ -368,9 +370,13 @@ var _ph_cache := {}              # genome uid -> phenotype
 var heirloom := {}
 var champion = null
 var _champ_n := 0
+# The Wild (wild.gd): the line of an earlier colony that this colony's rival descends from ({} = the plain red ants), and whether
+# this colony's own fall has been written into the Wild yet (the collapse screen does that once).
+var kin := {}
+var wild_saved := false
 
 
-func _init(seed_value: int = 0, queen_id: String = "well_rounded", heirloom_in: Dictionary = {}) -> void:
+func _init(seed_value: int = 0, queen_id: String = "well_rounded", heirloom_in: Dictionary = {}, kin_in: Dictionary = {}) -> void:
 	if seed_value == 0:
 		rng.randomize()
 		seed_base = int(rng.seed & 0x7fffffff)
@@ -389,6 +395,7 @@ func _init(seed_value: int = 0, queen_id: String = "well_rounded", heirloom_in: 
 	Queens.apply_body(queen_genome, queen_def["body"])
 	for k in queen_def["traits"].keys():
 		founder.traits[k] = clamp(founder.traits[k] + queen_def["traits"][k], 0.02, 1.0)
+	kin = kin_in
 	rival = Rival.new()
 	rival.setup(self)
 	heirloom = heirloom_in
@@ -2344,6 +2351,7 @@ func _launch_raid() -> void:
 	_raid_rival = rival.alive() and raid_n >= 3 and raid_n % 3 == 0
 	if _raid_rival:
 		budget *= 0.8 + rival.power / 80.0
+		rival.evolve(self)         # kin only: another step of evolution between its raids
 	# a strong colony draws a bigger raid, and the later raids keep climbing, so a healthy colony is tested rather than coasting
 	budget *= clamp(ants.size() / RAID_SIZE_REF, 0.85, 1.7) * (1.0 + RAID_LATE * max(0, raid_n - 6))
 	var pool = EnemyDefs.SMALL.duplicate()
@@ -2397,6 +2405,8 @@ func _launch_raid() -> void:
 	banner = "Raid %d  -  %d raiders from the %s" % [raid_n, kinds.size(), "west" if side < 0 else "east"]
 	if _raid_rival:
 		banner = "Raid %d  -  the %s attack from the %s!  (%d raiders)" % [raid_n, rival.name, "west" if side < 0 else "east", kinds.size()]
+		if rival.is_kin():
+			banner = "Raid %d  -  your own descendants, the %s, attack from the %s!  (%d)" % [raid_n, rival.name, "west" if side < 0 else "east", kinds.size()]
 	if borers > 0:
 		banner += "  -  %d BORING toward the queen!" % borers
 	_sfx("boss" if kinds.has("butcher") else "raid")
@@ -2431,8 +2441,11 @@ const BORER_PER_ANTS = 60.0
 
 
 func _spawn_enemy(kind: String, side: int, from_x: int = 0, guard_at: int = 0) -> void:
-	var d = EnemyDefs.DEFS[kind]
+	var is_kin = rival.is_kin() and Rival.KIN_KINDS.has(kind)
+	var d = rival.kin_def(kind) if is_kin else EnemyDefs.DEFS[kind]
 	var e = Raider.new()
+	if is_kin:
+		e.genome = rival.genome
 	e.id = _next_enemy_id
 	_next_enemy_id += 1
 	e.kind = kind
@@ -2478,6 +2491,8 @@ func enemy_pos(e) -> Vector2:
 func _step_enemy(e, dt: float) -> void:
 	if e.kind == "anteater":
 		_anteater_tongue(e, dt)
+	if e.genome != null and e.state != 2 and not e.def.get("abil", {}).empty():
+		_kin_abilities(e, dt)
 	if e.cls != "burrower":
 		_footing_fix(e, dt)
 	e.flash = max(0.0, e.flash - dt)
@@ -2512,6 +2527,54 @@ func _step_enemy(e, dt: float) -> void:
 			e.t = min(over / dist, 1.6)
 		else:
 			break
+
+
+# A kin major uses the organs its line evolved: bolts, shockwaves, a lashing tongue, regrowth. The ants it hits take a gentler version of the raid's bite scale.
+func _kin_abilities(e, dt: float) -> void:
+	var ab = e.def["abil"]
+	if e.stun_t > 0.0:
+		return
+	if ab.has("regen") and e.hp < e.max_hp:
+		e.hp = min(e.max_hp, e.hp + e.max_hp * float(ab["regen"]["rate"]) * dt)
+	var sc = 1.0 + 0.04 * (raid_n - 1)
+	for k in ["arc", "pulse", "lash"]:
+		if not ab.has(k):
+			continue
+		var a = ab[k]
+		if not e.abil_t.has(k):
+			e.abil_t[k] = float(a["cd"]) * rng.randf_range(0.4, 1.0)
+		var t = float(e.abil_t[k]) - dt
+		if t > 0.0:
+			e.abil_t[k] = t
+			continue
+		var near := []
+		for u in ants:
+			if u.z == e.z and abs(u.x - e.x) <= int(a["r"]) and abs(u.y - e.y) <= 4:
+				near.append(u)
+		if near.empty():
+			e.abil_t[k] = 0.5
+			continue
+		e.abil_t[k] = float(a["cd"]) * rng.randf_range(0.85, 1.15)
+		var from = enemy_pos(e) + Vector2(e.facing * 20.0, -40.0)
+		var hits := 0
+		var fallen := []
+		while hits < int(a["n"]) and not near.empty():
+			var u2 = near[rng.randi_range(0, near.size() - 1)]
+			near.erase(u2)
+			hits += 1
+			u2.hp -= float(a["dmg"]) * sc * (1.0 - u2.ph["armor_red"] * (1.0 - fate.raider_pierce))
+			u2.hurt = 0.12
+			if u2.hp <= 0.0:
+				fallen.append(u2)
+			if k == "arc":
+				fx.append({"kind": "arc", "pos": from, "to": ant_pos(u2), "t": 0.0, "color": Color("#8ab8ff")})
+			elif k == "lash":
+				fx.append({"kind": "beam", "pos": from, "to": ant_pos(u2), "t": 0.0, "color": Color("#e8728f")})
+		if k == "pulse":
+			fx.append({"kind": "wave", "pos": enemy_pos(e) + Vector2(0, -20.0), "t": 0.0, "r": float(a["r"]) * grid.CELL, "color": Color("#ffe08a")})
+		for u3 in fallen:
+			if ants.has(u3):
+				_ant_falls(u3)
 
 
 func _enemy_arrive(e) -> void:
@@ -2734,7 +2797,7 @@ func _combat(dt: float) -> void:
 					hit *= 1.0 + _r_fury
 				if _r_steal > 0.0:
 					a.hp = min(a.ph["hp"], a.hp + hit * _r_steal)
-				dmg_in += hit
+				dmg_in += hit * (1.0 - float(e.def.get("armor", 0.0)))     # evolved kin shrug off a share of every bite
 				a.fitness += hit * 0.08
 				a.f_fight += hit * 0.08
 				a.lane = lerp(a.lane, clamp(e.lane + (a.id % 3 - 1) * 0.12, 0.0, 1.0), clamp(dt * 6.0, 0.0, 1.0))   # fighters line up with their raider quickly

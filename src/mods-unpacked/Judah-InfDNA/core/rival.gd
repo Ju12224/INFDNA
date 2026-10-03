@@ -8,8 +8,18 @@ extends Reference
 # it) and you carry off its stores.
 #
 # Pure data plus a step; the sim owns the ants and the raiders, the view (rival_view.gd) draws the mound.
+#
+# The Descendants (wild.gd): when an earlier colony of yours fell, its champion strain went into the Wild, and the strongest such line
+# IS this rival: `genome` is that body plan evolved a few more steps, its raiders and guards are drawn as your old ants and get their
+# stats from its body (kin_def), and it keeps evolving between its raids. Beat it and you take its best trait back (_reclaim).
 
+const Wild = preload("res://mods-unpacked/Judah-InfDNA/core/wild.gd")
+const Legacy = preload("res://mods-unpacked/Judah-InfDNA/core/legacy.gd")
+const EnemyDefs = preload("res://mods-unpacked/Judah-InfDNA/core/enemy_defs.gd")
 const NAMES = ["Red Pharaohs", "Black Raiders", "Fire Legion", "Thorn Clan", "Stone Marchers"]
+const KIN_KINDS = ["redant", "redsoldier", "redmajor"]
+const EVOLVE_BIAS = {"armor": 0.8, "spike": 0.6, "claw": 0.6, "size": 0.5, "leg": 0.4, "organ": 1.0}
+const RECLAIM_EGGS = 12
 const STRIKE_LEN = 55.0
 const PEACE = 300.0
 
@@ -27,6 +37,11 @@ var conquered := 0
 var raids := 0                # raids it has sent
 var hit_t := 0.0              # the view flashes the mound while it is being hit
 var guards_total := 0         # how many guards came out (for the view's bar)
+var kin := {}                 # the Wild line this rival descends from ({} = the plain red ants)
+var genome = null             # its body plan, evolved (kin only)
+var evolved := 0              # evolution steps taken
+var _mods := {}
+var _defs := {}
 
 
 func setup(sim) -> void:
@@ -35,6 +50,94 @@ func setup(sim) -> void:
 	var ex = int(sim.grid.entrance.x)
 	x = int(clamp(ex + side * rr.randi_range(82, 112), sim.grid.arena_l + 16, sim.grid.arena_r - 16))
 	name = NAMES[rr.randi_range(0, NAMES.size() - 1)]
+	kin = sim.kin
+	if not kin.empty() and kin.has("genome"):
+		genome = Wild.genome_from_dict(kin["genome"])
+		genome.uid = Wild.KIN_UID
+		name = str(kin.get("title", name))
+		_mods = Wild.kin_mods(genome)
+		# while you were away it kept evolving: a few steps, more for a line that has survived runs and for a colony that went far
+		var steps = 3 + 2 * int(kin.get("runs", 0)) + int(float(kin.get("raids", 0)) / 6.0)
+		for i in int(clamp(steps, 3, 14)):
+			evolve(sim)
+
+
+func is_kin() -> bool:
+	return genome != null
+
+
+# One step of evolution: of three mutants of the current body the strongest lives. The same rule runs between its raids.
+func evolve(sim) -> void:
+	if genome == null:
+		return
+	var rr = sim.sub_rng("kin", evolved + 1)
+	var best = null
+	var bp := -1.0
+	for i in 3:
+		var c = genome.mutated(rr, EVOLVE_BIAS)
+		var p = Wild.power(c)
+		if p > bp:
+			bp = p
+			best = c
+	evolved += 1
+	best.uid = Wild.KIN_UID + evolved
+	genome = best
+	_mods = Wild.kin_mods(genome)
+	_defs.clear()
+
+
+# The raider definition for one of the rival's castes: the red ant's numbers bent by the body the line has evolved.
+func kin_def(kind: String) -> Dictionary:
+	if not _defs.has(kind):
+		var d = EnemyDefs.DEFS[kind].duplicate()
+		d["hp"] = float(d["hp"]) * float(_mods["hp_k"])
+		d["dmg"] = float(d["dmg"]) * float(_mods["dmg_k"])
+		d["speed"] = float(d["speed"]) * float(_mods["speed_k"])
+		d["armor"] = float(_mods["armor"])
+		d["art"] = ""
+		d["kin"] = true
+		d["abil"] = abilities() if d["cls"] == "elite" else {}      # only the rare majors carry the line's organs into a fight (a first test with every soldier doing it wiped the colony out)
+		_defs[kind] = d
+	return _defs[kind]
+
+
+# What the kin's majors do with the organs their line has evolved: your own abilities, turned on you. Each organ line from tier 1 up gives
+# the matching one, stronger with every tier (your own ants only get theirs at tier 3). {name: {cd, dmg, r, n}}
+func abilities() -> Dictionary:
+	var out := {}
+	if genome == null:
+		return out
+	var t = genome.organ("electric")
+	if t >= 1:
+		out["arc"] = {"cd": 5.5 - 0.5 * t, "dmg": 5.0 + 3.5 * t, "r": 6, "n": min(t, 2)}     # an electric bolt into one or two ants
+	t = genome.organ("sonic")
+	if t >= 1:
+		out["pulse"] = {"cd": 8.0 - 0.7 * t, "dmg": 2.5 + 1.5 * t, "r": 3 + t, "n": 6}    # a shockwave over the six nearest
+	t = genome.organ("tongue")
+	if t >= 1:
+		out["lash"] = {"cd": 5.5 - 0.5 * t, "dmg": 4.0 + 3.5 * t, "r": 6 + t, "n": 1}      # a tongue that snaps out and back
+	t = genome.organ("regen")
+	if t >= 1:
+		out["regen"] = {"rate": 0.004 * t}                                                   # a share of its health back every second
+	return out
+
+
+func ability_text() -> String:
+	var names := []
+	var a = abilities()
+	if a.has("arc"):
+		names.append("electric arcs")
+	if a.has("pulse"):
+		names.append("sonic pulses")
+	if a.has("lash"):
+		names.append("a lashing tongue")
+	if a.has("regen"):
+		names.append("regrowing flesh")
+	return PoolStringArray(names).join(", ")
+
+
+func flag_color() -> Color:
+	return genome.color.lightened(0.15) if genome != null else Color("#b32424")
 
 
 func alive() -> bool:
@@ -68,7 +171,12 @@ func step(sim, dt: float) -> void:
 				var d = abs(x - int(sim.grid.entrance.x))
 				sim.banner = "Foragers found a rival nest: the %s, %d cells %s." % [name, d, where(sim)]
 				sim.banner_t = 5.0
-				sim.toasts.append({"text": "The %s live %d cells %s of the nest. They will raid you; Strike (Y) when you are ready to break them." % [name, d, where(sim)], "t": 10.0})
+				if genome != null:
+					sim.toasts.append({"text": "The %s, %d cells %s: the descendants of your own colony #%d. They kept evolving without you." % [name, d, where(sim), int(kin.get("id", 0))], "t": 12.0})
+					if ability_text() != "":
+						sim.toasts.append({"text": "Their majors have evolved %s: your own organs, turned on you." % ability_text(), "t": 12.0})
+				else:
+					sim.toasts.append({"text": "The %s live %d cells %s of the nest. They will raid you; Strike (Y) when you are ready to break them." % [name, d, where(sim)], "t": 10.0})
 				sim._sfx("boss")
 				break
 	if sim.strike_t > 0.0:
@@ -136,7 +244,26 @@ func _conquer(sim) -> void:
 	sim.banner = "The %s are broken!" % name
 	sim.banner_t = 5.0
 	sim.toasts.append({"text": "You stormed the %s: +%d food%s. No raids from them for %d minutes." % [name, int(loot), extra, int(PEACE / 60.0)], "t": 10.0})
+	if genome != null:
+		_reclaim(sim)
 	sim.fx.append({"kind": "ring", "pos": sim.grid.center(x, sim.grid.surf_y(x) - 4), "t": 0.0, "color": Color("#ffd86b")})
 	sim.fx.append({"kind": "text", "pos": sim.grid.center(x, sim.grid.surf_y(x) - 9), "t": 0.0, "text": "CONQUERED", "color": Color("#ffd86b")})
 	sim.shake = max(sim.shake, 0.6)
 	sim._sfx("repelled")
+
+
+# The kin's best trait comes home: the next eggs are bred from your champion strain with it grafted on (the mutagen mechanism).
+func _reclaim(sim) -> void:
+	var base = sim.champion if sim.champion != null else sim.founder_genome
+	var cands = Legacy.candidates(genome, base, "the " + name)
+	var h = cands[0]
+	if str(h.get("kind", "")) == "mods":
+		sim.toasts.append({"text": "Their bodies held nothing your ants lack, but the stores are yours.", "t": 7.0})
+		return
+	var hybrid = base.copy()
+	Legacy.apply(h, hybrid)
+	hybrid._set_link(base.node(), "", "reclaimed from the " + name + ": " + str(h["label"]).to_lower())
+	sim.register_genome(hybrid, sim.max_gen)
+	sim.blessed = hybrid
+	sim.blessed_left = RECLAIM_EGGS
+	sim.toasts.append({"text": "You took it back: %s. The next %d eggs carry it." % [str(h["label"]).to_lower(), RECLAIM_EGGS], "t": 10.0})

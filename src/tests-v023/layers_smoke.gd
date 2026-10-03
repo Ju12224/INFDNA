@@ -325,6 +325,88 @@ func _idle(_delta):
 			if s.layer_state[k] != saved[k]:
 				same = false
 		_check(not s.watch_mode and same and s.hud._bar_panel.visible == bar_was, "leaving watch mode restores the layers and HUD")
+	elif frames == 131:
+		# the Wild (wild.gd): a fallen colony's champion becomes the next rival: evolved, drawn as your old ants, and worth taking back
+		var Wd = load("res://mods-unpacked/Judah-InfDNA/core/wild.gd")
+		var Gn = load("res://mods-unpacked/Judah-InfDNA/core/genome.gd")
+		var SimC = load("res://mods-unpacked/Judah-InfDNA/core/colony_sim.gd")
+		var d0 = Directory.new()
+		if d0.file_exists(Wd.PATH):
+			d0.copy(Wd.PATH, Wd.PATH + ".bak")
+		Wd.clear()
+		var wr = RandomNumberGenerator.new()
+		wr.seed = 5
+		var cg = Gn.make_ant()
+		for i in 40:
+			cg = cg.mutated(wr, {"armor": 1.0, "organ": 1.5, "morph": 1.0})
+		var cg_back = Wd.genome_from_dict(JSON.parse(JSON.print(Wd.genome_to_dict(cg))).result)
+		_check(cg_back.describe() == cg.describe(), "a champion survives the trip through the Wild's file format")
+		sim.champion = cg
+		sim.wild_saved = false
+		s.hud._write_wild(sim)
+		_check(Wd.lines().size() == 1 and s.hud._wild_label.text != "", "the collapse screen writes the fall into the Wild")
+		s.hud._write_wild(sim)
+		_check(Wd.lines().size() == 1, "...only once")
+		var kin_rec = Wd.active()
+		_check(not kin_rec.empty() and Wd.active().get("title", "") == Wd.species_name(cg), "the Wild's strongest line is the next rival's ancestor")
+		var ksim = SimC.new(7, "well_rounded", {}, kin_rec)
+		_check(ksim.rival.is_kin() and ksim.rival.name == kin_rec["title"] and ksim.rival.evolved >= 3, "the rival descends from it and has evolved (%d steps)" % ksim.rival.evolved)
+		var kd = ksim.rival.kin_def("redsoldier")
+		_check(kd["kin"] and kd["hp"] > 100.0 and kd["armor"] >= 0.0 and kd["armor"] <= 0.25, "its soldiers fight with their evolved body (hp %.0f, armor %.2f)" % [kd["hp"], kd["armor"]])
+		ksim._spawn_enemy("redant", 1)
+		_check(ksim.enemies.back().genome != null and ksim.enemies.back().def.get("kin", false), "its raiders carry the genome they are drawn from")
+		# the organs the line evolved become the soldiers' abilities (and the small ants do not carry them)
+		ksim.rival.genome.organs["electric"] = 2
+		ksim.rival.genome.organs["regen"] = 1
+		ksim.rival._defs.clear()
+		_check(ksim.rival.kin_def("redant")["abil"].empty() and ksim.rival.kin_def("redsoldier")["abil"].empty() and ksim.rival.kin_def("redmajor")["abil"].has("arc") and ksim.rival.kin_def("redmajor")["abil"].has("regen"), "only its majors carry the line's organs as abilities")
+		ksim._spawn_enemy("redmajor", 1)
+		var ke = ksim.enemies.back()
+		ke.x = int(ksim.grid.entrance.x) + 5
+		ke.y = ksim.grid.surf_y(ke.x) - 1
+		var hp0 := 0.0
+		for u in ksim.ants:
+			u.x = ke.x + 1
+			u.tx = u.x
+			u.y = ke.y
+			u.ty = u.y
+			u.z = ke.z
+			hp0 += u.hp
+		ke.abil_t["arc"] = 0.0
+		ke.hp = ke.max_hp * 0.5
+		var kfx = ksim.fx.size()
+		ksim._kin_abilities(ke, 0.1)
+		var hp1 := 0.0
+		for u in ksim.ants:
+			hp1 += u.hp
+		_check(hp1 < hp0 and ksim.fx.size() > kfx and ke.hp > ke.max_hp * 0.5, "a kin soldier's arc burns the ants beside it, and its flesh regrows")
+		var plain = SimC.new(7, "well_rounded")
+		plain._spawn_enemy("redant", 1)
+		_check(not plain.rival.is_kin() and plain.enemies.back().genome == null, "without a Wild line the rival is the plain red ants")
+		ksim.rival._conquer(ksim)
+		_check(ksim.blessed != null and ksim.blessed_left > 0, "breaking them takes their best trait back as a batch of eggs")
+		ksim.collapsed = true
+		ksim.champion = ksim.founder_genome
+		ksim.rival.conquered = 1
+		var kmsgs = Wd.finish_run(ksim, "Next")
+		_check(Wd.lines().size() == 1 and Wd.lines()[0]["id"] != kin_rec["id"] and kmsgs.size() == 2, "a broken line ends; the new fall becomes the next line")
+		# a kin raider in the live scene, so the next frames draw one (an error would show above)
+		sim.rival.genome = cg
+		sim.rival.genome.uid = Wd.KIN_UID
+		sim.rival._mods = Wd.kin_mods(cg)
+		sim._spawn_enemy("redmajor", 1)
+		var live = sim.enemies.back()
+		live.x = int(sim.grid.entrance.x) + 6
+		live.tx = live.x
+		live.y = sim.grid.surf_y(live.x) - 1
+		live.ty = live.y
+		s.cam.position = sim.grid.center(live.x, live.y)
+		Wd.set_use(false)
+		_check(Wd.active().empty(), "switching the Wild off starts plain")
+		Wd.clear()
+		if d0.file_exists(Wd.PATH + ".bak"):
+			d0.copy(Wd.PATH + ".bak", Wd.PATH)
+			d0.remove(Wd.PATH + ".bak")
 	elif frames == 140:
 		print("RESULT %d failed" % fails)
 		quit(1 if fails > 0 else 0)

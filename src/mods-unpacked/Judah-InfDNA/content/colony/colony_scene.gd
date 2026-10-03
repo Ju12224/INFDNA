@@ -22,6 +22,7 @@ const SeasonView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/seas
 const RivalView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/rival_view.gd")
 const Ambience = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ambience.gd")
 const Legacy = preload("res://mods-unpacked/Judah-InfDNA/core/legacy.gd")
+const Wild = preload("res://mods-unpacked/Judah-InfDNA/core/wild.gd")
 const DayCycle = preload("res://mods-unpacked/Judah-InfDNA/content/colony/day_cycle.gd")
 const WatchCam = preload("res://mods-unpacked/Judah-InfDNA/content/colony/watch_cam.gd")
 const SELECT_SCENE = "res://mods-unpacked/Judah-InfDNA/content/colony/queen_select.tscn"
@@ -65,7 +66,9 @@ var layer_state := {"trails": true, "castes": true, "fights": true, "tasks": fal
 func _ready() -> void:
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	var qid = Engine.get_meta("infdna_queen") if Engine.has_meta("infdna_queen") else "well_rounded"
-	sim = Sim.new(0, qid, Legacy.active())
+	sim = Sim.new(0, qid, Legacy.active(), Wild.active())
+	if sim.kin.empty() and Wild.is_on():
+		sim.toasts.append({"text": "Whatever you breed well will be waiting for you next time: the Wild remembers fallen colonies.", "t": 12.0})
 	perf = Perf.new()
 	perf.scene = self
 	day = DayCycle.new()
@@ -87,6 +90,7 @@ func _ready() -> void:
 	rival_view.sim = sim
 	rival_view.ground = world_view.ground
 	rival_view.perf = perf
+	rival_view.baker = baker
 	add_child(rival_view)
 	_overlay = Node2D.new()     # food, trails, eggs, queen: above the dirt
 	_overlay.connect("draw", self, "_draw_overlay")
@@ -102,6 +106,7 @@ func _ready() -> void:
 	enemy_view = EnemyView.new()
 	enemy_view.sim = sim
 	enemy_view.perf = perf
+	enemy_view.baker = baker
 	add_child(enemy_view)
 	ant_view.enemy_view = enemy_view
 
@@ -232,6 +237,8 @@ func _process(delta: float) -> void:
 			alive[a.genome.uid] = true
 		for e in sim.eggs:
 			alive[e["genome"].uid] = true
+		if sim.rival.genome != null:
+			alive[sim.rival.genome.uid] = true      # the rival kin's body plan (its sprite is baked like an ant's)
 		# keep ancestor thumbnails for the lineage panel
 		if hud.is_evolution_open():
 			for e in sim.top_genomes(3):

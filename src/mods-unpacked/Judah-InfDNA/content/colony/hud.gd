@@ -12,6 +12,7 @@ const LayersView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/laye
 const Sim = preload("res://mods-unpacked/Judah-InfDNA/core/colony_sim.gd")
 const RunLog = preload("res://mods-unpacked/Judah-InfDNA/core/run_log.gd")
 const Legacy = preload("res://mods-unpacked/Judah-InfDNA/core/legacy.gd")
+const Wild = preload("res://mods-unpacked/Judah-InfDNA/core/wild.gd")
 
 # task order in the sim: NURSE, FORAGE, DIG, HOME, DEFEND (shared with the Tasks layer so the legend matches)
 const TASK_COLORS = LayersView.TASK_COLORS
@@ -96,6 +97,7 @@ var _collapse_root: Control
 var _legacy_box: VBoxContainer
 var _legacy_row: VBoxContainer
 var _legacy_label: Label
+var _wild_label: Label
 var _collapse_label: Label
 var _collapse_stats: Label
 var _collapse_best: Label
@@ -846,6 +848,10 @@ func _build_collapse() -> void:
 	_legacy_label = Kit.label(_legacy_box, "", _f_s)
 	_legacy_label.align = Label.ALIGN_CENTER
 	_legacy_label.modulate = Color(1, 1, 1, 0.8)
+	_wild_label = Kit.label(v, "", _f_s, Color("#ff9d8a"))
+	_wild_label.align = Label.ALIGN_CENTER
+	_wild_label.autowrap = true
+	_wild_label.rect_min_size = Vector2(900, 0)
 	var ch = HBoxContainer.new()
 	ch.alignment = BoxContainer.ALIGN_CENTER
 	ch.add_constant_override("separation", 14)
@@ -940,6 +946,16 @@ func _show_run_summary(sim) -> void:
 		var b = rec["best"]
 		_collapse_best.text = "Best with this queen: %s  ·  %d raids" % [RunLog.clock(float(b["time"])), int(b["raids"])]
 	_offer_heirlooms(sim)
+	_write_wild(sim)
+
+
+# The colony's fall goes into the Wild (wild.gd) once: its champion strain escapes, and the line it met is ended or evolves on.
+func _write_wild(sim) -> void:
+	_wild_label.text = ""
+	if sim.wild_saved:
+		return
+	sim.wild_saved = true
+	_wild_label.text = "\n".join(Wild.finish_run(sim, str(sim.queen_def["name"])))
 
 
 # The champion strain's best traits, one of which the next queen's founders can be born with.
