@@ -145,8 +145,8 @@ func _stop_col(i: int) -> Color:
 		c = c.linear_interpolate(Color(0.86, 0.91, 0.96), 0.35 * win * (1.0 - day.night))      # a pale, cold winter sky
 	elif day.autumn > 0.01:
 		c = c.linear_interpolate(Color(0.93, 0.84, 0.72), 0.2 * day.autumn * (1.0 - day.night))
-	if day.rain > 0.01:
-		c = c.linear_interpolate(Color(0.55, 0.6, 0.66).linear_interpolate(Color(0.12, 0.15, 0.22), day.night), 0.6 * day.rain)     # overcast
+	if day.cloud > 0.01:
+		c = c.linear_interpolate(Color(0.55, 0.6, 0.66).linear_interpolate(Color(0.12, 0.15, 0.22), day.night), 0.6 * day.cloud)     # overcast
 	# light_view.gd multiplies everything on screen by the light colour afterwards: pre-divide so the sky lands on its palette
 	var t = day.tint
 	return Color(min(c.r / max(t.r, 0.2), 1.0), min(c.g / max(t.g, 0.2), 1.0), min(c.b / max(t.b, 0.2), 1.0), 1.0)
@@ -332,7 +332,58 @@ func _build(i: int, ci: int):
 			_leafy(mk, i, x0, 30.0, 58.0, 100.0, col)
 		"hedge":
 			_hedge(mk, i, x0, col)
+	if kind == "forest" or kind == "hedge" or kind == "pines":
+		_meadow(mk, i, x0, col, hz)
 	return mk.build()
+
+
+# The ground under the trees and the hedge, which used to be one flat colour: strips of lighter and darker turf along the slope, scattered
+# tufts and small bushes, a few flowers, and in winter drifts and straw. All of it hazed by distance like the layer it belongs to.
+func _meadow(mk, i: int, x0: float, col: Color, hz: float) -> void:
+	var L = LAYERS[i]
+	var f: float = L["f"]
+	var winter = day.snow if day != null else 0.0
+	var autumn = day.autumn if day != null else 0.0
+	var depth = 150.0 if L["kind"] != "pines" else 60.0
+	var lit = col.lightened(0.1).linear_interpolate(HAZE, hz * 0.3)
+	var dark = col.darkened(0.14).linear_interpolate(HAZE, hz * 0.2)
+	# long soft strips following the ground
+	for r in 4:
+		var pr := PoolVector2Array()
+		var wr := PoolRealArray()
+		var off = (0.2 + 0.2 * r) * depth
+		for k in 21:
+			var x = x0 + k * (CW / 20.0)
+			pr.append(Vector2(x, _ridge_y(i, x) + off + sin(x * 0.011 + r * 2.1) * 6.0))
+			wr.append(5.0 + 9.0 * (0.5 + 0.5 * sin(x * 0.007 + r * 1.3 + i)))
+		var sc = lit if r % 2 == 0 else dark
+		mk.ribbon(pr, wr, Color(sc.r, sc.g, sc.b, 0.32))
+	var n = 46
+	var scale = 0.55 + f
+	for k in n:
+		var x = x0 + _hh(x0 + k, 91.0 + i) * CW
+		var y = _ridge_y(i, x) + 14.0 + _hh(x0 + k, 92.0 + i) * (depth - 14.0)
+		var r = _hh(x0 + k, 93.0 + i)
+		var h1 = _hh(x0 + k, 94.0 + i)
+		if winter > 0.5:
+			if r < 0.55:
+				mk.ellipse(Vector2(x, y), (9.0 + 12.0 * h1) * scale, (2.4 + 2.2 * h1) * scale, Color(0.95, 0.97, 1.0, 0.8), 8)
+			else:
+				mk.blade(Vector2(x, y), (h1 - 0.5) * 6.0, (7.0 + 9.0 * h1) * scale, 1.8 * scale, Color("#a59a68").linear_interpolate(HAZE, hz), Color("#cbbf86").linear_interpolate(HAZE, hz))
+			continue
+		if r < 0.55:
+			var gc = lit if h1 > 0.5 else dark
+			for q in 3:
+				mk.blade(Vector2(x + (q - 1) * 3.0 * scale, y), (q - 1) * 3.0 * scale, (6.0 + 8.0 * _hh(x + q, 95.0)) * scale, 2.0 * scale, dark, gc)
+		elif r < 0.72:
+			var bs = (7.0 + 8.0 * h1) * scale
+			mk.blob(Vector2(x, y - bs * 0.4), bs, bs * 0.62, x0 + k, 0.15, dark, 9)
+			mk.blob(Vector2(x + bs * 0.12, y - bs * 0.55), bs * 0.7, bs * 0.4, x0 + k + 3.0, 0.15, lit, 8)
+		elif r < 0.84 and autumn < 0.5:
+			var fc = [Color("#ffffff"), Color("#f7d046"), Color("#f08fb0"), Color("#9a7be0")][int(h1 * 3.99)]
+			mk.ellipse(Vector2(x, y - 3.0 * scale), 2.0 * scale, 2.0 * scale, fc.linear_interpolate(HAZE, hz * 0.6), 6)
+		elif r > 0.93 and autumn > 0.3:
+			mk.ellipse(Vector2(x, y), 5.0 * scale, 1.7 * scale, Color("#c8661e").linear_interpolate(HAZE, hz), 7)
 
 
 # Columns of tiny ants marching along a layer's ridge, some carrying a leaf. Deterministic in x and time,
@@ -621,12 +672,13 @@ func _cloud_layer(v: Rect2, f: float, meshes: Array, alpha: float, span: float, 
 	var i1 = int(ceil((p1 - _t * speed) / span))
 	for i in range(i0, i1 + 1):
 		var hh = _hh(i * 91.7, f * 10.0)
-		if hh < 0.3:
-			continue
-		var sc = size * (0.7 + 0.8 * fmod(hh * 7.3, 1.0))
+		var cl = day.cloud if day != null else 0.0
+		if hh < 0.3 * (1.0 - cl):
+			continue                      # under a gathering sky more of the clouds are there, and they are bigger and darker
+		var sc = size * (0.7 + 0.8 * fmod(hh * 7.3, 1.0)) * (1.0 + 0.35 * cl)
 		var pos = Vector2(i * span + _t * speed + hh * span * 0.4, anchor.y - high - hh * 260.0 * size)
 		draw_set_transform(off + pos * s, 0.0, Vector2(s * sc, s * sc))     # layer-space position, own size
-		draw_mesh(meshes[int(hh * 97.0) % meshes.size()], null, null, Transform2D(), Color(1, 1, 1, alpha))
+		draw_mesh(meshes[int(hh * 97.0) % meshes.size()], null, null, Transform2D(), Color(1.0 - 0.4 * cl, 1.0 - 0.36 * cl, 1.0 - 0.27 * cl, min(1.0, alpha * (1.0 + 0.35 * cl))))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 

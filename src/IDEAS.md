@@ -4,6 +4,17 @@ Direction from the owner (v0.27): *the game is boring just watching*. The player
 to decide and to do, with consequences, not a fish tank. Items 1, 2 and 4 below are meant to become that role together, not stay
 separate features. Item 5 is wanted. Item 6 must look super realistic and use real Brotato art.
 
+## The point of the game (owner, v0.33): monstrosities, takeover, collapse, the void
+The whole game is a climb: breed the most mutated ants in the nest (find them, breed from them on purpose), until what you have is no longer ants. Monstrosities
+spread and take over the world; when they have, the ground itself gives way (tremors, sinkholes, caved-in tunnels, then the crust falls) and huge bosses climb up
+out of the void underneath. Your own past strains from the Wild come back as those bosses, twisted by the void.
+- **Mutation score** for every ant (how far its body has drifted from a plain ant); the most mutated are marked and shown in full, the plain ones drawn quieter and
+  simpler (also a big saving in drawing).
+- **Monstrosity meter** (the colony's total) in the status line; **Apex** = the most mutated living ant, with a one-click "breed from this one".
+- **Dominion**: the meadow around the nest is overrun as the meter rises; the rival nest and the wild fauna are driven out or consumed.
+- **The Collapse**: tremors, sinkholes, caved-in tunnels, then the crust falls; a void layer opens under the bedrock.
+- **Void bosses**: art from the owner (`art_src/void_*`, cracked bone-white body, violet light in the cracks, jaws and legs that move); they emerge from underground.
+
 ## The direction (v0.30): the Wild, history as the world
 Researched in v0.30: evolving ants + a roguelite shop is already SuperColony's ground (it even has DNA harvested from defeated foes), so gene theft is not the hook.
 Not found anywhere: **your own past runs becoming the world**. Everything from here should serve one line: *every colony you lose is the enemy you meet next.*

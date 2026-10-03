@@ -259,7 +259,7 @@ var rerolls := 0
 var _raid_active := false
 var _shop_visits := 0
 # food ledger (harness): where food came from and went, cumulative
-var ledger := {"forage": 0.0, "kills": 0.0, "farm": 0.0, "other_in": 0.0, "upkeep": 0.0, "eggs": 0.0, "lab": 0.0, "rot": 0.0, "other_out": 0.0}
+var ledger := {"forage": 0.0, "kills": 0.0, "farm": 0.0, "other_in": 0.0, "upkeep": 0.0, "eggs": 0.0, "lab": 0.0, "rot": 0.0, "other_out": 0.0, "orders": 0.0}
 var toasts: Array = []           # [{"text", "t"}] evolution milestones for the HUD
 var _announced := {}
 var _toast_timer := 5.0
@@ -315,6 +315,11 @@ const COMMANDS = {
 	"strike": {"name": "Strike", "cost": 35.0, "cd": 75.0, "key": "Y", "target": false,
 		"tip": "Send a strike party (soldiers first, half the colony) to the rival nest: beat its guards, then storm the mound for its food and five quiet minutes. Needs the nest found"},
 }
+# Doing things costs a little food as well: the colony feeds the ants it sends out and the brood it is told to hurry. Small next to a
+# larder, but it adds up if you spam. Orders (orders.gd) cost by how many ants and what kind; a refusal never takes the larder under the reserve.
+const FOOD_COST = {"rally": 6.0, "harvest": 4.0, "recall": 3.0, "surge": 5.0, "breed": 10.0, "strike": 12.0}
+const BEACON_FOOD = 2.0
+const FOOD_RESERVE = 5.0
 var will := 50.0
 var cmd_cd := {}                  # command id -> seconds left
 var rally_x := 0
@@ -379,6 +384,10 @@ var wild_saved := false
 # Squad orders (orders.gd): id -> {"kind", "x", "y", "z", "ref", "job", "field", "under"}
 var squads := {}
 var squad_seq := 1
+# What the player is looking at, for the squads' stand-down (orders.gd): the view in cells and the ids of the selected ants. The scene keeps
+# them current; a sim running without a view counts everything as watched.
+var attn_rect := Rect2(-10000000.0, -10000000.0, 20000000.0, 20000000.0)
+var attn_sel := {}
 var _squad_t := 1.0
 var _squad_warned := false
 
@@ -717,23 +726,49 @@ func _step_seasons(_dt: float) -> void:
 # Weather: now and then it rains. Rain washes the scent trails away (they lose strength ~4x faster while it pours), so
 # foragers fall back on route memory and the colony has to re-lay its roads. The views add streaks, splashes and grey light.
 var rain := 0.0
+var overcast := 0.0                # cloud cover: it builds before the rain, and lingers after it (0..1)
 var wet := 0.0                     # the ground stays wet (puddles) for a while after rain
-var _rain_goal := 0.0
-var _rain_timer := 170.0
+# Weather moves through phases, never in a jump: clear -> the clouds gather (30-45 s) -> rain that builds to its peak over about half a minute
+# -> it eases off -> the sky clears slowly. `rain` and `overcast` follow their goals along a smooth curve, so a drizzle comes before the shower
+# and the shower thins out before it stops.
+var _wx := 0                       # 0 clear, 1 gathering, 2 raining, 3 clearing
+var _rain_goal := 0.0              # the rain the current phase is heading for
+var _rain_timer := 170.0           # seconds left in the current phase
+var _rain_peak := 0.8
 
 
 func _step_weather(dt: float) -> void:
 	_rain_timer -= dt
-	if _rain_timer <= 0.0:
-		if _rain_goal > 0.0:
-			_rain_goal = 0.0
-			_rain_timer = rng.randf_range(150.0, 300.0)
-			toasts.append({"text": "The rain stops. The scent trails will need re-laying.", "t": 5.0})
-		else:
-			_rain_goal = rng.randf_range(0.55, 1.0)
-			_rain_timer = rng.randf_range(35.0, 70.0)
-			toasts.append({"text": "Rain! The scent trails are washing away.", "t": 5.0})
-	rain = move_toward(rain, _rain_goal, dt / 6.0)
+	var over_goal := 0.0
+	_rain_goal = 0.0
+	match _wx:
+		0:
+			if _rain_timer <= 0.0:
+				_wx = 1
+				_rain_timer = rng.randf_range(30.0, 45.0)
+				_rain_peak = rng.randf_range(0.55, 1.0)
+		1:
+			over_goal = 0.8
+			if _rain_timer <= 0.0:
+				_wx = 2
+				_rain_timer = rng.randf_range(45.0, 85.0)
+				toasts.append({"text": "Rain! The scent trails are washing away.", "t": 5.0})
+		2:
+			over_goal = 1.0
+			_rain_goal = _rain_peak
+			if _rain_timer <= 0.0:
+				_wx = 3
+				_rain_timer = rng.randf_range(40.0, 60.0)
+				toasts.append({"text": "The rain eases. The scent trails will need re-laying.", "t": 5.0})
+		3:
+			over_goal = 0.35
+			if _rain_timer <= 0.0 and rain < 0.02:
+				_wx = 0
+				_rain_timer = rng.randf_range(150.0, 300.0)
+	rain += (_rain_goal - rain) * (1.0 - exp(-dt / 16.0))
+	if _rain_goal <= 0.0 and rain < 0.004:
+		rain = 0.0
+	overcast += (over_goal - overcast) * (1.0 - exp(-dt / 14.0))
 	wet = clamp(wet + (dt / 22.0 if rain > 0.3 else -dt / 100.0), 0.0, 1.0)
 
 
@@ -823,6 +858,11 @@ func place_beacon(x: int) -> bool:
 	if _beacon_cd > 0.0:
 		toasts.append({"text": "Beacon recharging (%d s)." % int(ceil(_beacon_cd)), "t": 2.5})
 		return false
+	if food < BEACON_FOOD + FOOD_RESERVE:
+		toasts.append({"text": "Not enough food for a scent flag (%d needed)." % int(ceil(BEACON_FOOD + FOOD_RESERVE)), "t": 2.5})
+		return false
+	food -= BEACON_FOOD
+	ledger["orders"] += BEACON_FOOD
 	var ex = int(grid.entrance.x)
 	x = int(clamp(x, ex - RANGE_MAX + 30, ex + RANGE_MAX - 30))
 	_beacon_cd = 25.0
@@ -838,6 +878,10 @@ func place_beacon(x: int) -> bool:
 # What the director's items do to the Will meter and the commands (the base numbers live in COMMANDS).
 func will_max() -> float:
 	return WILL_MAX + mod("will_max")
+
+
+func food_cost(id: String) -> float:
+	return float(FOOD_COST.get(id, 0.0))
 
 
 func cmd_cost(id: String) -> float:
@@ -860,6 +904,10 @@ func cast(id: String, x: int = 0, sel = null) -> bool:
 	var cost = cmd_cost(id)
 	if will < cost:
 		toasts.append({"text": "Not enough Will for %s (%d needed)." % [c["name"], int(ceil(cost))], "t": 2.0})
+		return false
+	var fcost = food_cost(id)
+	if food < fcost + FOOD_RESERVE:
+		toasts.append({"text": "Not enough food for %s (%d needed)." % [c["name"], int(ceil(fcost + FOOD_RESERVE))], "t": 2.5})
 		return false
 	var ex = int(grid.entrance.x)
 	x = int(clamp(x, ex - RANGE_MAX + 20, ex + RANGE_MAX - 20))
@@ -942,6 +990,8 @@ func cast(id: String, x: int = 0, sel = null) -> bool:
 				fate.ray_eggs += nb2
 				toasts.append({"text": "Breed: the next %d eggs mutate hard. (Select an ant first to breed from it.)" % nb2, "t": 5.0})
 	will -= cost
+	food -= fcost
+	ledger["orders"] += fcost
 	cmd_cd[id] = cmd_recharge(id)
 	return true
 
@@ -2538,7 +2588,7 @@ func _spawn_enemy(kind: String, side: int, from_x: int = 0, guard_at: int = 0) -
 	e.hp = e.max_hp
 	e.heading = -side
 	e.facing = e.heading
-	e.lane = rng.randf_range(0.1, 0.9)
+	e.lane = rng.randf_range(0.45, 0.9)
 	enemies.append(e)
 	if kind == "butcher" or kind == "anteater":
 		shake = max(shake, 0.7)
@@ -2812,6 +2862,9 @@ func _nearest_surface_enemy(x: int, max_d: int):
 	return best
 
 
+const FIGHT_LANE = 0.78            # the depth lane an engaged raider is drawn in, and the ants fighting it with it
+
+
 func _combat(dt: float) -> void:
 	var scale = 1.0 + 0.065 * (raid_n - 1) + RAID_BITE_LATE * pow(max(0, raid_n - 8), 2.0)
 	var queen_hit := false
@@ -2861,7 +2914,7 @@ func _combat(dt: float) -> void:
 				dmg_in += hit * (1.0 - float(e.def.get("armor", 0.0)))     # evolved kin shrug off a share of every bite
 				a.fitness += hit * 0.08
 				a.f_fight += hit * 0.08
-				a.lane = lerp(a.lane, clamp(e.lane + (a.id % 3 - 1) * 0.12, 0.0, 1.0), clamp(dt * 6.0, 0.0, 1.0))   # fighters line up with their raider quickly
+				a.lane = lerp(a.lane, clamp(e.lane + (a.id % 3 - 1) * 0.05, 0.0, 1.0), clamp(dt * 6.0, 0.0, 1.0))   # fighters line up with their raider quickly
 				if d <= r2 and d < td:
 					td = d
 					target = a
@@ -2890,11 +2943,13 @@ func _combat(dt: float) -> void:
 			dmg_in += mod("siege_dmg") * dt
 		elif grid.is_under(e.x, e.y):
 			dmg_in += mod("tunnel_dmg") * dt
+		if e.engaged and e.cls != "prey":
+			e.lane = lerp(e.lane, FIGHT_LANE, clamp(dt * 1.5, 0.0, 1.0))      # fights happen in one readable lane, near the front, not scattered through the depth
 		if dmg_in > 0.0:
 			if e.flash <= 0.0 and target != null:
 				_sfx("hit")
 			if e.spark <= 0.0 and dmg_in > 0.0:
-				e.spark = 0.25
+				e.spark = 0.4
 				fx.append({"kind": "spark", "pos": enemy_pos(e) + Vector2(rng.randf_range(-14.0, 14.0), -rng.randf_range(8.0, 30.0)), "t": 0.0, "color": Color("#ffe08a")})
 			e.hp -= dmg_in
 			e.flash = 0.1

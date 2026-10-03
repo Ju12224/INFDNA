@@ -1,0 +1,175 @@
+{
+ "spider": {
+  "canvas": [
+   724,
+   543
+  ],
+  "order": [
+   "far",
+   "body",
+   "near"
+  ],
+  "parts": [
+   {
+    "layer": "far",
+    "file": "spider_far_0.png",
+    "x": 10,
+    "y": 158,
+    "pivot": [
+     242.1,
+     160.0
+    ],
+    "phase": 0
+   },
+   {
+    "layer": "far",
+    "file": "spider_far_1.png",
+    "x": 501,
+    "y": 166,
+    "pivot": [
+     570.1,
+     168.0
+    ],
+    "phase": 1
+   },
+   {
+    "layer": "near",
+    "file": "spider_near_0.png",
+    "x": 8,
+    "y": 158,
+    "pivot": [
+     242.1,
+     160.0
+    ],
+    "phase": 0
+   },
+   {
+    "layer": "near",
+    "file": "spider_near_1.png",
+    "x": 572,
+    "y": 236,
+    "pivot": [
+     643.2,
+     238.0
+    ],
+    "phase": 1
+   }
+  ],
+  "body": {
+   "file": "spider_body.png",
+   "x": 46,
+   "y": 26
+  },
+  "jaws": [
+   {
+    "file": "spider_jaw_0.png",
+    "x": 468,
+    "y": 341,
+    "pivot": [
+     495.3,
+     350
+    ],
+    "open": 0.2
+   },
+   {
+    "file": "spider_jaw_1.png",
+    "x": 548,
+    "y": 333,
+    "pivot": [
+     575.6,
+     342
+    ],
+    "open": -0.16
+   },
+   {
+    "file": "spider_jaw_2.png",
+    "x": 566,
+    "y": 347,
+    "pivot": [
+     594.7,
+     356
+    ],
+    "open": 0.2
+   }
+  ],
+  "cavity": {
+   "file": "spider_cavity.png",
+   "x": 466,
+   "y": 331
+  },
+  "feet": [
+   366.0,
+   524.0
+  ],
+  "width": 716.0,
+  "scale": 0.1676
+ },
+ "void": {
+  "canvas": [
+   1180,
+   590
+  ],
+  "order": [
+   "far",
+   "near",
+   "body"
+  ],
+  "parts": [
+   {
+    "layer": "far",
+    "file": "void_far_0.png",
+    "x": 293,
+    "y": 192,
+    "pivot": [
+     380.5,
+     194.0
+    ],
+    "phase": 0
+   },
+   {
+    "layer": "near",
+    "file": "void_near_0.png",
+    "x": 292,
+    "y": 190,
+    "pivot": [
+     425.2,
+     192.0
+    ],
+    "phase": 0
+   }
+  ],
+  "body": {
+   "file": "void_body.png",
+   "x": 0,
+   "y": 0
+  },
+  "jaws": [
+   {
+    "file": "void_jaw_0.png",
+    "x": 838,
+    "y": 284,
+    "pivot": [
+     845,
+     318
+    ],
+    "open": 0.34
+   }
+  ],
+  "cavity": {
+   "file": "void_cavity.png",
+   "x": 836,
+   "y": 282
+  },
+  "glow": {
+   "file": "void_glow.png",
+   "x": 0,
+   "y": 0
+  },
+  "feet": [
+   590.0,
+   582.0
+  ],
+  "width": 1180.0,
+  "scale": 0.44068
+ }
+}

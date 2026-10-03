@@ -10,11 +10,25 @@ extends Reference
 #
 # The sim owns the ants (`Ant.squad` is the squad id, 0 = free) and `sim.squads`; this module is the rules.
 
+# When ordered ants are no longer being used they free themselves, so a forgotten guard does not sit at a post for the rest of the run:
+const LEFT_BEHIND = 30.0    # a guard squad the player is not looking at (off screen) and has not selected for this long goes back to work
+const QUIET = 150.0         # a guard squad that has seen no raider and no fight for this long goes back to work, even in view
+const LEAN_LARDER = 0.08    # with the larder below this share of its target, guards with nothing to do go back to foraging
 const LEASH = 26            # how far a guard strays from its post to meet a foe (columns)
 const SIGHT = 14            # how far a guard sees a foe
 const KINDS = ["move", "attack", "harvest", "dig"]
 const LABELS = {"move": "GUARD", "attack": "ATTACK", "harvest": "HARVEST", "dig": "DIG"}
 const COLORS = {"move": Color("#6ec1ff"), "attack": Color("#ff5a4a"), "harvest": Color("#ffd86b"), "dig": Color("#c79a5a")}
+
+
+# What an order costs the larder: a base plus a little per ant, by kind (a harvest pays for itself, a dig is the dearest), never above MAX_COST.
+const COST = {"move": [1.0, 0.25], "attack": [1.5, 0.3], "harvest": [1.0, 0.15], "dig": [2.0, 0.4]}
+const MAX_COST = 12.0
+
+
+static func cost(kind: String, n: int) -> float:
+	var c = COST.get(kind, COST["move"])
+	return min(MAX_COST, float(c[0]) + float(c[1]) * float(n))
 
 
 static func paused(sim) -> bool:
@@ -32,8 +46,13 @@ static func issue(sim, list: Array, kind: String, x: int, y: int, z: int = 0, re
 	if ants.empty():
 		res["msg"] = "Nobody selected."
 		return res
+	var want = cost(kind, ants.size())
+	if sim.food < want + sim.FOOD_RESERVE:
+		res["msg"] = "Not enough food to give that order (%d needed)." % int(ceil(want + sim.FOOD_RESERVE))
+		return res
 	var g = sim.grid
-	var sq = {"id": sim.squad_seq, "kind": kind, "x": x, "y": y, "z": z, "ref": ref, "job": 0, "field": PoolIntArray(), "field_t": -99.0, "under": false}
+	var sq = {"id": sim.squad_seq, "kind": kind, "x": x, "y": y, "z": z, "ref": ref, "job": 0, "field": PoolIntArray(), "field_t": -99.0, "under": false,
+		"t_seen": sim.time, "t_act": sim.time}
 	match kind:
 		"harvest":
 			var best = null
@@ -107,11 +126,14 @@ static func issue(sim, list: Array, kind: String, x: int, y: int, z: int = 0, re
 		res["msg"] = "Those ants are all busy carrying; try again in a moment."
 		return res
 	res["ok"] = true
+	var paid = cost(kind, int(res["n"]))
+	sim.food = max(0.0, sim.food - paid)
+	sim.ledger["orders"] += paid
 	var where = Vector2(sq["x"], sq["y"]) if (kind == "dig" or sq["under"]) else Vector2(sq["x"], g.surf_y(int(sq["x"])) - 2)
 	var col: Color = COLORS[sq["kind"]]
 	sim.fx.append({"kind": "ring", "pos": g.center(int(where.x), int(where.y)), "t": 0.0, "color": col})
 	sim.fx.append({"kind": "text", "pos": g.center(int(where.x), int(where.y) - 4), "t": 0.0, "text": LABELS[sq["kind"]], "color": col})
-	res["msg"] = "%s: %d ant%s%s" % [LABELS[sq["kind"]].capitalize(), res["n"], "" if res["n"] == 1 else "s", (" (%d busy, skipped)" % res["skipped"]) if res["skipped"] > 0 else ""]
+	res["msg"] = "%s: %d ant%s%s  (-%d food)" % [LABELS[sq["kind"]].capitalize(), res["n"], "" if res["n"] == 1 else "s", (" (%d busy, skipped)" % res["skipped"]) if res["skipped"] > 0 else "", int(ceil(paid))]
 	return res
 
 
@@ -238,9 +260,15 @@ static func step(sim, dt: float) -> void:
 	if sim.squads.empty():
 		return
 	var counts := {}
+	var seen := {}
+	var fought := {}
 	for a in sim.ants:
 		if a.squad != 0:
 			counts[a.squad] = counts.get(a.squad, 0) + 1
+			if sim.attn_sel.has(a.id) or sim.attn_rect.has_point(Vector2(a.x, a.y)):
+				seen[a.squad] = true
+			if a.hurt > 0.0:
+				fought[a.squad] = true
 	var ordered := 0
 	for id in sim.squads.keys():
 		var sq = sim.squads[id]
@@ -248,6 +276,29 @@ static func step(sim, dt: float) -> void:
 			sim.squads.erase(id)
 			continue
 		ordered += counts[id]
+		if seen.has(id):
+			sq["t_seen"] = sim.time
+		if fought.has(id) or _raider_near(sim, sq):
+			sq["t_act"] = sim.time
+		# the player has moved on, or nothing has happened for a long while: a guard stands down (harvesters and diggers finish their job)
+		if sq["kind"] == "move" or sq["kind"] == "attack":
+			var selected_now = false
+			for a in sim.ants:
+				if a.squad == id and sim.attn_sel.has(a.id):
+					selected_now = true
+					break
+			if not selected_now:
+				var why = ""
+				if sim.time - float(sq["t_seen"]) > LEFT_BEHIND:
+					why = "left behind"
+				elif sim.time - float(sq["t_act"]) > QUIET:
+					why = "quiet"
+				elif sim.food < sim._food_target * LEAN_LARDER and sim.time - float(sq["t_act"]) > 20.0:
+					why = "lean"
+				if why != "":
+					var nn = counts[id]
+					complete(sim, id, "%d guard%s went back to work: %s." % [nn, "" if nn == 1 else "s", {"left behind": "you moved on", "quiet": "nothing came to the post", "lean": "the larder is low"}[why]])
+					continue
 		match sq["kind"]:
 			"harvest":
 				var left = false
@@ -270,11 +321,6 @@ static func step(sim, dt: float) -> void:
 				if not alive:
 					sq["kind"] = "move"        # the foe has fallen: the squad guards the spot
 					sq["ref"] = 0
-	if ordered > 0 and sim.food < sim._food_target * 0.1 and not sim._squad_warned:
-		sim._squad_warned = true
-		sim.toasts.append({"text": "The larder is nearly empty and %d ants are under orders. Select them and press Q to free them." % ordered, "t": 7.0})
-	elif sim.food > sim._food_target * 0.3:
-		sim._squad_warned = false
 
 
 static func count(sim) -> int:
@@ -283,6 +329,14 @@ static func count(sim) -> int:
 		if a.squad != 0:
 			n += 1
 	return n
+
+
+# Is a raider within a guard post's reach (so the squad is earning its keep).
+static func _raider_near(sim, sq) -> bool:
+	for e in sim.enemies:
+		if e.cls != "prey" and e.state != 2 and abs(e.x - int(sq["x"])) <= LEASH + SIGHT:
+			return true
+	return false
 
 
 # The foe a guard goes to meet: the squad's own target if it has one, else the nearest hostile near the ant on the open ground and

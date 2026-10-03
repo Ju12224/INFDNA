@@ -69,27 +69,27 @@ func build(target: Dictionary) -> Array:
 		for a in sel:
 			if a.squad != 0:
 				ordered += 1
-		out.append(head("%d ant%s selected" % [sel.size(), "" if sel.size() == 1 else "s"]))
+		out.append(head("%d ant%s selected      Food %d" % [sel.size(), "" if sel.size() == 1 else "s", int(sim.food)]))
 		match kind:
 			"foe":
 				var e = target["foe"]
-				out.append(item("Attack the %s" % str(e.def["name"]).to_lower(), {"t": "order", "kind": "attack", "x": e.x, "y": e.y, "z": e.z, "ref": e.id}, true, "", Orders.COLORS["attack"]))
-				out.append(item("Guard here", {"t": "order", "kind": "move", "x": e.x, "y": e.y, "z": e.z}, true, "", Orders.COLORS["move"]))
+				out.append(_ord("Attack the %s" % str(e.def["name"]).to_lower(), {"t": "order", "kind": "attack", "x": e.x, "y": e.y, "z": e.z, "ref": e.id}, true, sel.size()))
+				out.append(_ord("Guard here", {"t": "order", "kind": "move", "x": e.x, "y": e.y, "z": e.z}, true, sel.size()))
 			"pile":
 				var p = target["pile"]
-				out.append(item("Harvest this pile  (%d food)" % int(p["amount"]), {"t": "order", "kind": "harvest", "x": col, "y": int(target["row"])}, true, "", Orders.COLORS["harvest"]))
-				out.append(item("Guard here", {"t": "order", "kind": "move", "x": col, "y": int(target["row"])}, true, "", Orders.COLORS["move"]))
+				out.append(_ord("Harvest this pile  (%d food)" % int(p["amount"]), {"t": "order", "kind": "harvest", "x": col, "y": int(target["row"])}, true, sel.size()))
+				out.append(_ord("Guard here", {"t": "order", "kind": "move", "x": col, "y": int(target["row"])}, true, sel.size()))
 			"soil":
 				var can = bool(target["diggable"])
-				out.append(item("Dig here" if can else "Too hard to dig", {"t": "order", "kind": "dig", "x": col, "y": int(target["row"]), "z": int(target["z"])}, can, "", Orders.COLORS["dig"]))
+				out.append(_ord("Dig here" if can else "Too hard to dig", {"t": "order", "kind": "dig", "x": col, "y": int(target["row"]), "z": int(target["z"])}, can, sel.size()))
 			"tunnel":
-				out.append(item("Go here and guard", {"t": "order", "kind": "move", "x": col, "y": int(target["row"]), "z": int(target["z"])}, true, "", Orders.COLORS["move"]))
+				out.append(_ord("Go here and guard", {"t": "order", "kind": "move", "x": col, "y": int(target["row"]), "z": int(target["z"])}, true, sel.size()))
 			_:
-				out.append(item("Guard here", {"t": "order", "kind": "move", "x": col, "y": int(target["row"])}, true, "", Orders.COLORS["move"]))
+				out.append(_ord("Guard here", {"t": "order", "kind": "move", "x": col, "y": int(target["row"])}, true, sel.size()))
 		if ordered > 0:
 			out.append(item("Free these ants", {"t": "free"}, true, "Q", Color("#ff9a8a")))
 	out.append(sep())
-	out.append(head("Powers      Will %d / %d" % [int(sim.will), int(sim.will_max())]))
+	out.append(head("Powers  (w Will, f food)      Will %d / %d" % [int(sim.will), int(sim.will_max())]))
 	out.append(_power("rally", "Rally here", col))
 	var hp = target["pile"] if kind == "pile" else null
 	var harvest = _power("harvest", "Harvest this pile", col)
@@ -106,8 +106,16 @@ func build(target: Dictionary) -> Array:
 			st["ok"] = false
 		out.append(st)
 	var bk = sim._beacon_cd
-	out.append(item("Scent flag here: scouts search it", {"t": "beacon", "x": col}, bk <= 0.0, "B" if bk <= 0.0 else "%ds" % int(ceil(bk)), Color("#7ed957")))
+	out.append(item("Scent flag here: scouts search it", {"t": "beacon", "x": col}, bk <= 0.0 and sim.food >= sim.BEACON_FOOD + sim.FOOD_RESERVE, ("B   %df" % int(ceil(sim.BEACON_FOOD))) if bk <= 0.0 else "%ds" % int(ceil(bk)), Color("#7ed957")))
 	return out
+
+
+# An order: its cost in food rides on the right, and it greys out when the larder cannot pay it.
+func _ord(label: String, act: Dictionary, can: bool, n: int) -> Dictionary:
+	var sim = scene.sim
+	var c = Orders.cost(str(act["kind"]), n)
+	var afford = sim.food >= c + sim.FOOD_RESERVE
+	return item(label, act, can and afford, ("%df" % int(ceil(c))) if can else "", Orders.COLORS[str(act["kind"])])
 
 
 func _power(id: String, label: String, col: int) -> Dictionary:
@@ -115,8 +123,9 @@ func _power(id: String, label: String, col: int) -> Dictionary:
 	var c = sim.COMMANDS[id]
 	var cd = float(sim.cmd_cd.get(id, 0.0))
 	var cost = sim.cmd_cost(id)
-	var ok = cd <= 0.0 and sim.will >= cost
-	var tail = ("%ds" % int(ceil(cd))) if cd > 0.0 else str(int(ceil(cost)))
+	var fc = sim.food_cost(id)
+	var ok = cd <= 0.0 and sim.will >= cost and sim.food >= fc + sim.FOOD_RESERVE
+	var tail = ("%ds" % int(ceil(cd))) if cd > 0.0 else ("%dw %df" % [int(ceil(cost)), int(ceil(fc))])
 	return item(label, {"t": "cast", "id": id, "x": col}, ok, "%s   %s" % [c["key"], tail], Color("#f2c14e"))
 
 

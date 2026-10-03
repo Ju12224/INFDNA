@@ -122,15 +122,30 @@ func ribbon(pts: PoolVector2Array, widths: PoolRealArray, col: Color, col_end: C
 		prev_c = cc
 
 
+# One surface per 64998 vertices: a mesh with more silently loses its tail (the leaves of a big tree were drawn as dark discs), so it is cut up instead.
 func build() -> ArrayMesh:
 	if v.size() == 0:
 		return null
-	var arrays := []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = v
-	arrays[Mesh.ARRAY_COLOR] = c
 	var m = ArrayMesh.new()
-	m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var total = v.size()
+	var i = 0
+	while i < total:
+		var j = min(total, i + 64998)
+		var arrays := []
+		arrays.resize(Mesh.ARRAY_MAX)
+		if total > 64998:
+			var vs := PoolVector2Array()
+			var cs := PoolColorArray()
+			for k in range(i, j):
+				vs.append(v[k])
+				cs.append(c[k])
+			arrays[Mesh.ARRAY_VERTEX] = vs
+			arrays[Mesh.ARRAY_COLOR] = cs
+		else:
+			arrays[Mesh.ARRAY_VERTEX] = v
+			arrays[Mesh.ARRAY_COLOR] = c
+		m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		i = j
 	return m
 
 

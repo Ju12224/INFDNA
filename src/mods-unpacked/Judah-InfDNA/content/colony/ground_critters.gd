@@ -104,28 +104,78 @@ static func _caterpillar(ci: CanvasItem, walk: float, moving: bool, shade: float
 
 
 static func _grasshopper(ci: CanvasItem, t: float, air: float, crouch: float, shade: float) -> void:
-	var green = _c(Color("#86b83c"), shade)
-	var green_d = _c(Color("#557f24"), shade)
-	var belly = _c(Color("#d9d37c"), shade)
+	var green = _c(Color("#7fb336"), shade)
+	var green_l = _c(Color("#a8d655"), shade)
+	var green_d = _c(Color("#4e7a22"), shade)
+	var olive = _c(Color("#657f2a"), shade)
+	var belly = _c(Color("#e2da8c"), shade)
+	var gold = _c(Color("#e9d56a"), shade)
+	var wing_c = _c(Color("#93c04a"), shade)
 	var folded = 1.0 - air
 	var dip = crouch * 3.0 * folded
-	# the hind leg: a big thigh folded up behind the body, the shin tucked back down; it straightens in the air
-	var hip = Vector2(-3.0, -11.0 + dip)
-	var knee = hip.linear_interpolate(Vector2(-19.0, -22.0 + dip), folded) + Vector2(-16.0, 4.0) * air
-	var foot = Vector2(-7.0, 0.0).linear_interpolate(Vector2(-34.0, 0.0), air) + Vector2(0.0, -8.0) * air
-	CA._limb(ci, PoolVector2Array([hip, knee]), 5.4, green_d)
-	CA._limb(ci, PoolVector2Array([knee, foot]), 2.2, green)
-	# front legs
-	ci.draw_line(Vector2(8.0, -8.0 + dip), Vector2(12.0 - 3.0 * air, -1.0 - 6.0 * air), INK, 2.4, true)
-	ci.draw_line(Vector2(3.0, -8.0 + dip), Vector2(5.0 - 3.0 * air, -1.0 - 6.0 * air), INK, 2.4, true)
-	# the body: long abdomen, thorax, a tall blunt head with a big eye
-	CA._ink(ci, Vector2(-12.0, -12.5 + dip), 14.5, 5.4, green, 1.8, 0.04)
-	CA._ell(ci, Vector2(-12.0, -9.5 + dip), 12.0, 2.6, belly, 0.04, 10)
-	CA._ink(ci, Vector2(4.5, -14.0 + dip), 8.2, 6.6, green, 1.8)
-	CA._ell(ci, Vector2(-9.0, -17.0 + dip), 16.0, 3.0, Color(green_d.r, green_d.g, green_d.b, 0.8), -0.04, 12)
-	CA._ink(ci, Vector2(14.6, -12.5 + dip), 5.0, 6.4, green, 1.8)
-	ci.draw_circle(Vector2(16.4, -15.0 + dip), 2.6, INK)
-	ci.draw_circle(Vector2(16.4, -15.0 + dip), 1.8, _c(Color("#e9e27a"), shade))
-	ci.draw_circle(Vector2(16.8, -15.0 + dip), 0.8, INK)
-	var tw = sin(t * 5.0) * 1.2
-	ci.draw_polyline(PoolVector2Array([Vector2(16.0, -18.0 + dip), Vector2(23.0, -26.0 + dip + tw), Vector2(31.0, -28.0 + dip + tw * 1.5)]), INK, 1.4, true)
+	var br = sin(t * 3.0) * 0.5
+	# the far side first: a hind leg and two thin legs, darker
+	_hind(ci, Vector2(1.0, -1.0), folded, air, dip, green_d, olive, shade)
+	CA._bones(ci, PoolVector2Array([Vector2(10.0, -9.0 + dip), Vector2(14.0, -5.0), Vector2(15.0 - 3.0 * air, -1.0 - 6.0 * air)]), PoolRealArray([2.6, 2.2, 1.8]), olive, 1.6)
+	# the folded hindwings fan open in the air
+	if air > 0.15:
+		var wa = clamp((air - 0.15) * 2.0, 0.0, 1.0)
+		var fan = PoolVector2Array([Vector2(4.0, -20.0), Vector2(-4.0, -20.0 - 22.0 * wa), Vector2(-22.0, -22.0 - 20.0 * wa), Vector2(-33.0, -17.0 - 10.0 * wa), Vector2(-28.0, -15.0)])
+		CA._poly(ci, fan, Color(1.0, 0.95, 0.72, 0.6 * wa), 1.4)
+		for k in 3:
+			ci.draw_line(Vector2(4.0, -20.0), fan[1 + k], Color(0.45, 0.4, 0.2, 0.5 * wa), 1.0, true)
+	# the long tapering abdomen with its rings, the thorax and its saddle, the blunt head
+	var ab = PoolVector2Array([Vector2(3.0, -19.0 + dip), Vector2(-8.0, -20.5 + dip + br), Vector2(-20.0, -19.0 + dip + br), Vector2(-32.0, -15.5 + dip), Vector2(-38.0, -11.0 + dip), Vector2(-34.0, -8.0 + dip), Vector2(-24.0, -8.5 + dip), Vector2(-12.0, -9.0 + dip), Vector2(1.0, -9.5 + dip)])
+	CA._poly(ci, ab, green, 2.0)
+	CA._ell(ci, Vector2(-14.0, -10.6 + dip), 15.0, 2.2, belly, 0.03, 12)
+	CA._ell(ci, Vector2(-12.0, -19.0 + dip + br), 14.0, 1.5, green_l, 0.0, 10)
+	for k in 5:
+		var rx = -7.0 - k * 6.2
+		ci.draw_line(Vector2(rx, -20.0 + dip + k * 1.1), Vector2(rx + 1.2, -9.5 + dip), Color(green_d.r, green_d.g, green_d.b, 0.5), 1.2, true)
+	var thorax = PoolVector2Array([Vector2(-3.0, -19.5 + dip), Vector2(5.0, -22.5 + dip), Vector2(13.0, -21.5 + dip), Vector2(16.0, -16.0 + dip), Vector2(13.0, -10.0 + dip), Vector2(0.0, -9.5 + dip)])
+	CA._poly(ci, thorax, green, 2.0)
+	CA._ell(ci, Vector2(6.0, -19.5 + dip), 8.0, 1.8, green_l, -0.1, 10)
+	ci.draw_line(Vector2(-2.0, -20.0 + dip), Vector2(14.0, -20.0 + dip), Color(green_d.r, green_d.g, green_d.b, 0.7), 1.4, true)
+	var head = PoolVector2Array([Vector2(13.0, -21.5 + dip), Vector2(20.0, -23.0 + dip), Vector2(26.0, -19.0 + dip), Vector2(27.5, -12.5 + dip), Vector2(23.0, -8.0 + dip), Vector2(15.0, -9.0 + dip), Vector2(13.0, -14.0 + dip)])
+	CA._poly(ci, head, green, 2.0)
+	CA._ell(ci, Vector2(20.0, -21.0 + dip), 5.0, 1.4, green_l, 0.0, 8)
+	ci.draw_line(Vector2(26.5, -13.0 + dip), Vector2(23.0, -9.5 + dip), green_d, 1.6, true)
+	# the big eye
+	CA._ell(ci, Vector2(21.5, -16.8 + dip), 4.6, 5.4, INK, 0.0, 14)
+	CA._ell(ci, Vector2(21.5, -16.8 + dip), 3.6, 4.4, gold, 0.0, 14)
+	ci.draw_circle(Vector2(22.4, -16.4 + dip), 1.7, INK)
+	ci.draw_circle(Vector2(21.0, -18.4 + dip), 1.0, Color(1, 1, 0.9, 0.9))
+	# the folded forewing lies along the back, longer than the abdomen
+	var fw = PoolVector2Array([Vector2(8.0, -22.0 + dip), Vector2(-6.0, -24.0 + dip), Vector2(-22.0, -22.5 + dip), Vector2(-38.0, -17.5 + dip), Vector2(-44.0, -14.5 + dip), Vector2(-38.0, -12.8 + dip), Vector2(-22.0, -15.0 + dip), Vector2(-6.0, -17.0 + dip), Vector2(6.0, -18.0 + dip)])
+	CA._poly(ci, fw, wing_c, 1.8)
+	ci.draw_polyline(PoolVector2Array([Vector2(6.0, -20.0 + dip), Vector2(-14.0, -20.5 + dip), Vector2(-36.0, -15.5 + dip)]), Color(green_d.r, green_d.g, green_d.b, 0.8), 1.2, true)
+	for k in 4:
+		ci.draw_line(Vector2(-4.0 - k * 9.0, -21.5 + dip + k * 1.0), Vector2(-9.0 - k * 9.0, -15.5 + dip + k * 0.7), Color(green_d.r, green_d.g, green_d.b, 0.45), 1.0, true)
+	# the near side: two front legs, the great hind leg over everything
+	CA._bones(ci, PoolVector2Array([Vector2(7.0, -9.0 + dip), Vector2(10.0, -5.0), Vector2(11.0 - 3.0 * air, -1.0 - 6.0 * air)]), PoolRealArray([2.8, 2.3, 1.9]), green, 1.7)
+	CA._bones(ci, PoolVector2Array([Vector2(12.0, -9.0 + dip), Vector2(17.0, -5.5), Vector2(19.0 - 3.0 * air, -1.0 - 6.0 * air)]), PoolRealArray([2.8, 2.3, 1.9]), green, 1.7)
+	_hind(ci, Vector2.ZERO, folded, air, dip, green, green_l, shade)
+	# the feelers
+	var tw = sin(t * 5.0) * 1.4
+	CA._limb(ci, PoolVector2Array([Vector2(24.0, -22.0 + dip), Vector2(31.0, -30.0 + dip + tw), Vector2(41.0, -32.0 + dip + tw * 1.6)]), 0.9, olive)
+
+
+# The great jumping leg: a thick thigh folded up behind the body, the shin tucked back down; it straightens in the air.
+static func _hind(ci: CanvasItem, off: Vector2, folded: float, air: float, dip: float, col: Color, col_s: Color, shade: float) -> void:
+	var hip = Vector2(-2.0, -12.0 + dip) + off
+	var knee = hip.linear_interpolate(Vector2(-21.0, -25.0 + dip) + off, folded) + Vector2(-16.0, 4.0) * air
+	var foot = Vector2(-8.0, 0.0).linear_interpolate(Vector2(-36.0, 0.0), air) + Vector2(0.0, -8.0) * air + off
+	var mid = (hip + knee) * 0.5 + Vector2(0.0, -2.0 - 2.0 * folded)
+	CA._bones(ci, PoolVector2Array([hip, mid, knee]), PoolRealArray([9.0, 7.0, 3.0]), col, 2.0)
+	var dir = (knee - hip).normalized()
+	var nrm = Vector2(-dir.y, dir.x)
+	for k in 3:
+		var q = hip.linear_interpolate(knee, 0.3 + 0.2 * k)
+		ci.draw_line(q - nrm * 2.4, q + nrm * 1.2 + dir * 2.4, Color(0.2, 0.3, 0.08, 0.55), 1.2, true)
+	var smid = (knee + foot) * 0.5 + Vector2(-2.0, 0.0) * folded
+	CA._bones(ci, PoolVector2Array([knee, smid, foot]), PoolRealArray([3.2, 2.6, 2.0]), col_s, 1.6)
+	for k in 3:
+		var q2 = knee.linear_interpolate(foot, 0.3 + 0.2 * k)
+		ci.draw_line(q2, q2 + Vector2(-2.4, -1.2), INK, 1.0, true)
+	ci.draw_line(foot, foot + Vector2(-4.0, 0.0), INK, 2.2, true)
+	ci.draw_line(foot, foot + Vector2(3.0, 0.0), INK, 2.2, true)

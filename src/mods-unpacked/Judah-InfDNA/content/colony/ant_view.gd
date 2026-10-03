@@ -70,7 +70,7 @@ func _process(delta: float) -> void:
 				if not alive.has(kk):
 					dct.erase(kk)
 	var g = sim.grid
-	var k = clamp(delta * 14.0, 0.0, 1.0)
+	var k = 1.0 - exp(-delta * 3.0)        # depth changes (a hole mouth, the other tunnel plane) take about a second: an ant climbs, it does not jump
 	var vr0 = _view_rect()
 	var C1 = g.CELL
 	var kl = 1.0 - exp(-delta * 4.0)
@@ -135,7 +135,7 @@ func _track_plane(key: int, u, g, k: float) -> void:
 	var bz = 1.0 if u.tz == 1 else 0.0
 	_back_k[key] = lerp(_back_k.get(key, bz), bz, k)
 	var hid = 1.0 if (u.tz == 1 and g.is_solid(u.tx, u.ty, 0)) else 0.0
-	_hid_k[key] = lerp(_hid_k.get(key, hid), hid, k)
+	_hid_k[key] = lerp(_hid_k.get(key, hid), hid, min(1.0, k * 1.8))
 
 
 func _depth(key: int, lane: float) -> Array:

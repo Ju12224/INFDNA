@@ -111,6 +111,9 @@ func _ready() -> void:
 	_overlay.connect("draw", self, "_draw_overlay")
 	add_child(_overlay)
 
+	var fx_under = Node2D.new()     # hit sparks and dust: under the ants and raiders (enemy_view draws on it)
+	add_child(fx_under)
+
 	ant_view = AntView.new()
 	ant_view.sim = sim
 	ant_view.baker = baker
@@ -122,6 +125,8 @@ func _ready() -> void:
 	enemy_view.sim = sim
 	enemy_view.perf = perf
 	enemy_view.baker = baker
+	enemy_view.under = fx_under
+	fx_under.connect("draw", enemy_view, "_draw_under")
 	add_child(enemy_view)
 	ant_view.enemy_view = enemy_view
 
@@ -223,7 +228,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	day.update(sim.time, sim.rain, sim.wet)
+	day.update(sim.time, sim.rain, sim.wet, sim.overcast)
 	# a button released over a panel never reaches _unhandled_input: finish the drag from the real button state
 	if _lmb and not Input.is_mouse_button_pressed(BUTTON_LEFT):
 		_end_box(get_viewport().get_mouse_position(), Input.is_key_pressed(KEY_SHIFT))
@@ -235,6 +240,10 @@ func _process(delta: float) -> void:
 	if _sel_t <= 0.0:
 		_sel_t = 0.25
 		live_selection()
+		var tl = _to_world(Vector2.ZERO) / sim.grid.CELL
+		var br = _to_world(get_viewport().get_visible_rect().size) / sim.grid.CELL
+		sim.attn_rect = Rect2(tl, br - tl).abs().grow(6.0)
+		sim.attn_sel = ant_view.sel_ids
 	if sim.shop_pending and not shop_open and not sim.collapsed:
 		if not watch_mode:
 			open_shop()

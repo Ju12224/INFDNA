@@ -147,6 +147,9 @@ static func grade(t: float) -> Color:
 	return blend_color(t, [Color(1.0, 1.0, 1.0), Color(1.0, 0.985, 0.94), Color(1.0, 0.92, 0.82), Color(0.86, 0.93, 1.0)])
 
 
-# A whole number that changes every ~75 s of the year: the views rebuild their cached scenery when it does.
+# A whole number that changes every ~75 s of the year (every ~19 s while the trees bud and shed): the views rebuild their cached scenery when it does.
 static func stage(t: float) -> int:
-	return int(floor(phase(t) * 16.0))
+	var w = phase(t)
+	if w < 0.12 or (w >= 0.55 and w < 0.75):
+		return 1000 + int(floor(w * 64.0))      # the trees bud and shed leaf in finer steps (about 19 s each), so it reads as a slow change
+	return int(floor(w * 16.0))

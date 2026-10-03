@@ -12,6 +12,7 @@ const LIFE = {"puff": 1.0, "text": 1.2, "spark": 0.45, "heal": 1.3, "ring": 0.7,
 	"wave": 0.6, "arc": 0.28, "beam": 0.22, "web": 1.4, "corpse": 0.9}
 
 const ANT_SCALE = 0.24      # the same drawing scale as ant_view.gd: a kin ant is as big as one of yours
+const KIN_SIZE = {"small": 1.0, "brute": 1.1, "elite": 1.22, "boss": 1.4}   # their soldiers are only a little bigger than yours (the body plan itself carries the rest)
 
 var sim
 var baker            # sprite_baker.gd (set by the scene): the rival's kin are drawn from their genome, like your own ants
@@ -24,6 +25,8 @@ var _ring
 var _tex := {}
 var _font: DynamicFont
 var _t := 0.0
+var under: Node2D     # hit sparks, dust and bursts are drawn on this layer, UNDER the ants and raiders (the scene puts it there), so a fight is never covered by its own effects
+const UNDER_KINDS = ["spark", "puff", "burst"]
 
 
 func _ready() -> void:
@@ -58,6 +61,8 @@ func _process(delta: float) -> void:
 		else:
 			i += 1
 	update()
+	if under != null:
+		under.update()
 
 
 func draw_enemy(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade: float, alpha: float = 1.0, air: float = 0.0) -> void:
@@ -115,12 +120,13 @@ func draw_enemy(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade: flo
 func _draw_kin(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade: float, alpha: float, moving: bool) -> void:
 	var k = float(e.def.get("art_scale", 1.0))
 	var a = alpha * (0.75 if e.state == 2 else 1.0)
+	var kin_k = KIN_SIZE.get(e.cls, 1.0)
 	var frame = int(fposmod(_t * 2.6 + e.id * 0.37, 1.0) * baker.FRAMES) % baker.FRAMES if moving else 0
 	var tex = baker.get_texture(e.genome, 1.0, frame) if baker != null else null
 	if tex == null:
 		CreatureArt.draw("redant", ci, feet, depth_scale * k, shade, a, _t, e.facing, e.id, moving, e.flash > 0.0, 0.0)
 		return
-	var s = ANT_SCALE * depth_scale * k * 1.15
+	var s = ANT_SCALE * depth_scale * kin_k
 	var bob = sin(_t * 12.0 + e.id) * 0.05 if moving else 0.0
 	var tint = Color(shade, shade * 0.72, shade * 0.68, a)
 	if e.flash > 0.0:
@@ -130,17 +136,60 @@ func _draw_kin(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade: floa
 
 
 # Only effects here; units are drawn depth-sorted by ant_view.gd.
-func _sprite(tex, p: Vector2, rot: float, size: float, col: Color) -> void:
+func _sprite(tex, p: Vector2, rot: float, size: float, col: Color, ci = null) -> void:
 	if tex == null or size <= 0.5 or col.a <= 0.01:
 		return
-	draw_set_transform(p, rot, Vector2.ONE)
-	draw_texture_rect(tex, Rect2(-size * 0.5, -size * 0.5, size, size), false, col)
+	if ci == null:
+		ci = self
+	ci.draw_set_transform(p, rot, Vector2.ONE)
+	ci.draw_texture_rect(tex, Rect2(-size * 0.5, -size * 0.5, size, size), false, col)
+
+
+# The hit effects (sparks, dust, bursts) go under the units and are small and faint: a fight is many hits a second, and big bright effects
+# between the bodies are what made it hard to see. Called from the `under` layer's draw.
+func _draw_under() -> void:
+	if under == null:
+		return
+	var cap = (perf.fx if perf != null else 400) / 2
+	var nfx := 0
+	for f in sim.fx:
+		if not (f["kind"] in UNDER_KINDS):
+			continue
+		nfx += 1
+		if nfx > cap:
+			break
+		var k = clamp(f["t"] / LIFE.get(f["kind"], 1.2), 0.0, 1.0)
+		var c: Color = f["color"]
+		var pos: Vector2 = f["pos"]
+		var seed_i = int(abs(pos.x)) + int(abs(pos.y))
+		match f["kind"]:
+			"puff":
+				for j in 4:
+					var ang = j * TAU / 4.0 + seed_i * 0.37
+					var dist = 4.0 + k * 16.0
+					var tx = _dust[(j + seed_i) % _dust.size()] if _dust.size() > 0 else null
+					_sprite(tx, pos + Vector2(cos(ang), sin(ang) * 0.7) * dist, ang + k * 2.5, 17.0 * (1.0 - k * 0.5) + 3.0, Color(c.r, c.g, c.b, (1.0 - k) * 0.55), under)
+			"spark":
+				for j in 3:
+					var ang2 = j * TAU / 3.0 + seed_i * 0.9
+					var dist2 = 3.0 + k * 16.0
+					var tx2 = _stars[(j + seed_i) % _stars.size()] if _stars.size() > 0 else null
+					_sprite(tx2, pos + Vector2(cos(ang2), sin(ang2)) * dist2, ang2 + k * 4.0, 12.0 * (1.0 - k), Color(c.r, c.g, c.b, (1.0 - k * k) * 0.8), under)
+			"burst":
+				for j in 6:
+					var ang3 = j * TAU / 6.0 + seed_i * 0.21
+					var dist3 = 6.0 + k * 34.0
+					var tx3 = _stars[(j + seed_i) % _stars.size()] if _stars.size() > 0 else null
+					_sprite(tx3, pos + Vector2(cos(ang3), sin(ang3) * 0.8) * dist3, ang3 * 2.0 + k * 5.0, 18.0 * (1.0 - k * 0.75), Color(c.r, c.g, c.b, (1.0 - k * k) * 0.75), under)
+	under.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _draw() -> void:
 	var cap = perf.fx if perf != null else 400
 	var nfx := 0
 	for f in sim.fx:
+		if under != null and (f["kind"] in UNDER_KINDS):
+			continue
 		nfx += 1
 		if nfx > cap:
 			break
@@ -168,7 +217,7 @@ func _draw() -> void:
 					var tx3 = _stars[(j + seed_i) % _stars.size()] if _stars.size() > 0 else null
 					_sprite(tx3, pos + Vector2(cos(ang3), sin(ang3) * 0.8) * dist3, ang3 * 2.0 + k * 5.0, 32.0 * (1.0 - k * 0.75), Color(c.r, c.g, c.b, 1.0 - k * k))
 			"ring":
-				_sprite(_ring, pos, 0.0, 40.0 + k * 150.0, Color(c.r, c.g, c.b, (1.0 - k) * 0.85))
+				_sprite(_ring, pos, 0.0, 28.0 + k * 100.0, Color(c.r, c.g, c.b, (1.0 - k) * 0.6))
 			"heal":
 				for j in 3:
 					var jk = clamp(k * 1.3 - j * 0.12, 0.0, 1.0)

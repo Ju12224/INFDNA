@@ -30,7 +30,7 @@ func _cloud_shadows(vp: Vector2, z: float, c: Vector2) -> void:
 	var span = 1500.0
 	var x0 = c.x - vp.x * z * 0.5 - 500.0
 	var x1 = c.x + vp.x * z * 0.5 + 500.0
-	var strength = (1.0 - day.night) * (1.0 - clamp(day.rain * 2.0, 0.0, 1.0)) * (1.0 - day.warm * 0.6)
+	var strength = (1.0 - day.night) * (1.0 - clamp(day.cloud * 2.0, 0.0, 1.0)) * (1.0 - day.warm * 0.6)
 	if strength < 0.05:
 		return
 	for i in range(int(floor(x0 / span)) - 1, int(ceil(x1 / span)) + 1):

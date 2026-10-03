@@ -73,7 +73,7 @@ func _draw() -> void:
 		draw_circle(Vector2.ZERO, (8.0 + 5.0 * ps) * (1.0 - lift * 0.003), Color(0.05, 0.1, 0.03, 0.14))
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		if kind_bee:
-			CreatureArt.draw("bee", self, gp, 0.75 * ps, 1.0, 1.0, _t + s, face, s, true, false, lift)
+			CreatureArt.draw("bee", self, gp, 0.42 * ps, 1.0, 1.0, _t + s, face, s, true, false, lift)
 		else:
 			var wc: Color = WINGS[int(_h(s, 1.0) * 5.99)]
 			CreatureArt.butterfly(self, gp + Vector2(0.0, -lift - 10.0 + sin(tt * 3.0) * 12.0), 1.3 * ps, _t * 1.0 + s, face, wc, 1.0)

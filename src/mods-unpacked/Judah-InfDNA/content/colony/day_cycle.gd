@@ -20,6 +20,7 @@ var warm := 0.0          # 0..1 around sunrise and sunset
 var tint := Color.white  # multiply surface colours by this
 var day_n := 1
 var rain := 0.0          # 0..1, from the sim's weather
+var cloud := 0.0         # 0..1 how overcast the sky is: the clouds that gather before the rain and linger after it count, as does the rain itself
 var wet := 0.0           # 0..1, how wet the ground still is
 # the year (seasons.gd), as the views want it
 var season_force := -1.0 # >= 0 pins the year phase (screenshots and tests)
@@ -34,9 +35,10 @@ var snowing := false     # precipitation falls as snow
 const RAIN_TINT = Color(0.68, 0.76, 0.88)
 
 
-func update(t: float, rain_k: float = 0.0, wet_k: float = 0.0) -> void:
+func update(t: float, rain_k: float = 0.0, wet_k: float = 0.0, over_k: float = 0.0) -> void:
 	rain = rain_k
 	wet = wet_k
+	cloud = max(rain_k, over_k * 0.85)
 	sea_t = season_force * Seasons.YEAR_LEN if season_force >= 0.0 else t
 	season = Seasons.index(sea_t)
 	snow = Seasons.snow(sea_t)
@@ -54,8 +56,8 @@ func update(t: float, rain_k: float = 0.0, wet_k: float = 0.0) -> void:
 	warm = exp(-h * h) * (1.0 - night * 0.5)
 	var c = Color.white.linear_interpolate(NIGHT_TINT, night)
 	var w = warm * 0.65
-	w *= 1.0 - 0.6 * rain
-	var wet = Color.white.linear_interpolate(RAIN_TINT, rain)
+	w *= 1.0 - 0.6 * cloud
+	var wet = Color.white.linear_interpolate(RAIN_TINT, cloud)
 	var sg = Seasons.grade(sea_t)
 	tint = Color(c.r * (1.0 - w + w * DUSK_TINT.r) * wet.r * sg.r, c.g * (1.0 - w + w * DUSK_TINT.g) * wet.g * sg.g, c.b * (1.0 - w + w * DUSK_TINT.b) * wet.b * sg.b, 1.0)
 

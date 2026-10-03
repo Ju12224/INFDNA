@@ -486,6 +486,7 @@ func _idle(_delta):
 		esc0.pressed = true
 		s.cmenu._input(esc0)
 		_check(not s.cmenu.is_open, "Esc closes the menu")
+		sim.food = 300.0
 		var ob2 = Od.count(sim)
 		s._set_selection(s.ant_view.pick_rect(Rect2(s._to_world(Vector2.ZERO), s._to_world(vp) - s._to_world(Vector2.ZERO)).abs()), false)
 		s.open_context_menu(s.get_canvas_transform().xform(gwp), true)
@@ -501,6 +502,31 @@ func _idle(_delta):
 		key1.pressed = true
 		s.cmenu._input(key1)
 		_check(not s.cmenu.is_open, "a number key picks the numbered option")
+		# orders and powers cost a little food; a hungry colony refuses them; guards nobody is looking at go back to work
+		sim.food = 300.0
+		sim.will = 100.0
+		sim.cmd_cd = {}
+		var f0 = sim.food
+		sim.cast("surge", 0, null)
+		_check(sim.food < f0 and abs((f0 - sim.food) - sim.food_cost("surge")) < 0.01, "a power costs food as well as Will (%.1f)" % (f0 - sim.food))
+		sim.food = 6.0
+		sim.cmd_cd = {}
+		_check(not sim.cast("rally", 0, null), "a power is refused when the larder cannot pay for it")
+		var ord_n = Od.count(sim)
+		var rr = Od.issue(sim, s.selection, "move", ex2 + 20, sim.grid.surf_y(ex2 + 20) - 2)
+		_check(not rr["ok"] and Od.count(sim) == ord_n, "an order is refused when the larder cannot pay for it")
+		sim.food = 300.0
+		s.release_selection()
+		var chosen = s.selection.slice(0, 4)
+		var rg = Od.issue(sim, chosen, "move", ex2 + 25, sim.grid.surf_y(ex2 + 25) - 2)
+		_check(rg["ok"] and sim.food < 300.0, "a guard order costs food (%.1f)" % (300.0 - sim.food))
+		sim.attn_rect = Rect2(-5000.0, -5000.0, 10.0, 10.0)      # the player is looking somewhere else
+		sim.attn_sel = {}
+		sim.time += Od.LEFT_BEHIND + 5.0
+		sim._squad_t = 0.0
+		Od.step(sim, 0.1)
+		_check(Od.count(sim) == 0, "guards the player has left behind go back to work by themselves")
+		sim.attn_rect = Rect2(-10000000.0, -10000000.0, 20000000.0, 20000000.0)
 		# the three screens: view (bare), standard, full
 		_check(s.hud.mode == 0 and not s.hud._left_col.visible and s.hud._strip.visible and not s.hud._dir_panel.visible and not s.hud._layers_panel.visible, "view mode is bare: no colony card, no panels, just the status line")
 		s.hud._edge_reveal(1.0)

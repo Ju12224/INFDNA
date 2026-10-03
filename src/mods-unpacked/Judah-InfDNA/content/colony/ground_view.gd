@@ -350,20 +350,26 @@ func _build_snow(ci: int, ch: Dictionary):
 			var xb = xa + C
 			mk.quad_c(Vector2(xa, lane_y(sy[i], la)), Color(ca.r, ca.g, ca.b, 0.88 * m0), Vector2(xb, lane_y(sy[i + 1], la)), Color(ca.r, ca.g, ca.b, 0.88 * m1),
 				Vector2(xb, lane_y(sy[i + 1], lb)), Color(cb.r, cb.g, cb.b, 0.9 * m1), Vector2(xa, lane_y(sy[i], lb)), Color(cb.r, cb.g, cb.b, 0.9 * m0))
-	# soft drifts piled on the turf
-	for i in range(0, CH, 2):
-		var col = c0 + i
-		if mf[i] > 0.2 or MK.hash1(col * 2.9 + 7.0) < 0.3:
-			continue
-		var lane = MK.hash1(col * 6.3 + 1.0)
-		var px = (col + MK.hash1(col * 4.1)) * C
-		var p = Vector2(px, lane_y(_sy_at(sy, c0, px, C), lane))
-		var ps = persp(lane)
-		var rx = (14.0 + 24.0 * MK.hash1(col * 8.7 + 2.0)) * ps
-		var ry = rx * 0.26
-		mk.ellipse(p + Vector2(0, 1.5 * ps), rx * 1.08, ry * 1.1, Color(shade_c.r, shade_c.g, shade_c.b, 0.85), 12)
-		mk.ellipse(p, rx, ry, white, 12)
-		mk.ellipse(p + Vector2(rx * 0.2, -ry * 0.35), rx * 0.55, ry * 0.45, Color(1, 1, 1, 0.9), 9)
+	# soft drifts: long ridges that follow the lanes across the whole chunk (their thickness comes from the absolute column, so they run on
+	# over the chunk edges), thick in some places and thin in others; not blobs scattered on the turf
+	for j in 6:
+		var dl = 0.06 + 0.88 * float(j) / 5.0
+		var dp := PoolVector2Array()
+		var dpl := PoolVector2Array()
+		var dw := PoolRealArray()
+		var dw2 := PoolRealArray()
+		var dps = persp(dl)
+		for i in CH + 1:
+			var colx = c0 + i
+			var nz = 0.5 + 0.5 * sin(colx * 0.083 + j * 2.3) * sin(colx * 0.029 + j * 1.1 + 0.7)
+			var thick = (2.0 + 13.0 * nz * nz) * dps * (1.0 - clamp(mf[i] * 3.0, 0.0, 1.0))
+			var yy = lane_y(sy[i], dl) - 1.5 * dps * nz + sin(colx * 0.21 + j) * 0.8
+			dp.append(Vector2(colx * C, yy))
+			dpl.append(Vector2(colx * C, yy + 2.0 * dps))
+			dw.append(max(0.5, thick))
+			dw2.append(max(0.5, thick * 1.1))
+		mk.ribbon(dpl, dw2, Color(shade_c.r, shade_c.g, shade_c.b, 0.7))
+		mk.ribbon(dp, dw, white)
 	# the lip: a thick white edge with a cool shadow under it, broken where the mound is
 	var run := PoolVector2Array()
 	var run_lo := PoolVector2Array()
@@ -459,10 +465,12 @@ func _decor(sl: Array, shade, band, c0: int, sy: PoolRealArray, mf: PoolRealArra
 	var ents := []
 	for en in g.entrances:
 		ents.append(int(en.x))
-	for i in range(0, CH, 4):
+	for i in range(0, CH, 2):
 		var col = c0 + i
 		var h0 = MK.hash1(col * 3.17 + 0.5)
-		if h0 > 0.8 or mf[i] > 0.25:
+		# meadow patches: thick grass in some stretches, thin in others (a smooth function of the column, so it flows over chunk edges)
+		var patch = 0.5 + 0.5 * sin(col * 0.047 + 1.3) * sin(col * 0.0173 + 0.4)
+		if h0 > 0.12 + 0.62 * patch or mf[i] > 0.25:
 			continue
 		var near = false
 		for ex in ents:
@@ -470,12 +478,14 @@ func _decor(sl: Array, shade, band, c0: int, sy: PoolRealArray, mf: PoolRealArra
 				near = true
 		if near:
 			continue
-		var lane = MK.hash1(col * 5.71 + 2.0)
+		var lane = fposmod(col * 0.618034 + 0.2 * MK.hash1(col * 5.71 + 2.0), 1.0)      # spread evenly through the depth, not in random clumps and gaps
 		var px = (col + MK.hash1(col * 9.1)) * C
 		var p = Vector2(px, lane_y(_sy_at(sy, c0, px, C), lane))
 		var ps = persp(lane)
 		var sd = col * 1.37 + 0.11
 		var r = MK.hash1(col * 1.93 + 7.0)
+		if patch > 0.62 and r > 0.5 and MK.hash1(col * 2.6 + 5.0) > 0.45:
+			r = r * 0.7                  # in a thick patch most of what grows is grass and flowers
 		var mkr = sl[slice_of(lane)]
 		if r < 0.36:
 			_tuft(mkr, p, ps, sd, lane)
@@ -498,9 +508,10 @@ func _decor(sl: Array, shade, band, c0: int, sy: PoolRealArray, mf: PoolRealArra
 		else:
 			_fern(mkr, p, ps, sd, lane)
 	# foreground: tall grass in front of everything (units walk behind it)
-	for i in range(0, CH, 10):
+	for i in range(0, CH, 6):
 		var col2 = c0 + i
-		if mf[i] > 0.25 or MK.hash1(col2 * 4.4 + 1.0) > 0.7:
+		var patch2 = 0.5 + 0.5 * sin(col2 * 0.047 + 1.3) * sin(col2 * 0.0173 + 0.4)
+		if mf[i] > 0.25 or MK.hash1(col2 * 4.4 + 1.0) > 0.25 + 0.6 * patch2:
 			continue
 		var lane2 = 1.03 + 0.12 * MK.hash1(col2 * 6.1)
 		var px2 = (col2 + MK.hash1(col2 * 2.9)) * C
@@ -661,61 +672,20 @@ func _tree(f: Dictionary) -> Dictionary:
 	for i in n + 1:
 		var t = float(i) / n
 		pts.append(b + Vector2(lean * t * t + sin(t * 3.4 + sd) * w * 0.12 * t + sin(t * 9.0 + sd * 2.0) * w * 0.025, -top_y * t))
-		var ww = w * (1.0 - 0.3 * t) + w * 0.9 * pow(1.0 - t, 5.0)
+		var ww = w * (1.0 - 0.42 * t) + w * 0.9 * pow(1.0 - t, 5.0)
 		wid.append(ww)
 		wink.append(ww + 12.0)
-	# roots splay out and grip the ground
-	for k in 6:
-		var sgn = -1.0 if k % 2 == 0 else 1.0
-		var rl = w * (0.6 + 0.6 * MK.hash1(sd + k * 3.3))
-		var rp := PoolVector2Array()
-		var rw := PoolRealArray()
-		var rwi := PoolRealArray()
-		for j in 7:
-			var u = float(j) / 6.0
-			rp.append(b + Vector2(sgn * (w * 0.18 + rl * u), -w * 0.55 * pow(1.0 - u, 2.2) + 4.0 * u + (k % 3) * 1.5))
-			rw.append(w * 0.46 * pow(1.0 - u, 0.8) + 4.0)
-			rwi.append(w * 0.46 * pow(1.0 - u, 0.8) + 11.0)
-		mk.ribbon(rp, rwi, INK)
-		mk.ribbon(rp, rw, bark_m, bark_d)
-	# branches go behind the trunk, so they grow out of its sides instead of being drawn across it
+	# branches go behind the trunk, so they grow out of its sides instead of being drawn across it. Slim, tapering to a point, forking into
+	# twigs that fork again: a bare tree in winter has to look like a tree, not a thorn bush. The trunk itself ends in three limbs.
 	var ends := []
-	for k in 7:
-		var t0 = 0.4 + 0.08 * k
+	var snow_k = float(_P["snow"])
+	for k in 8:
+		var t0 = 0.36 + 0.07 * k
 		var idx = int(t0 * n)
 		var dir = 1.0 if k % 2 == 0 else -1.0
-		var ln = h * (0.13 + 0.14 * MK.hash1(sd + k * 5.0))
+		var ln = h * (0.14 + 0.14 * MK.hash1(sd + k * 5.0))
 		var ang = -PI * 0.5 + dir * (0.5 + 0.55 * MK.hash1(sd + k * 7.0))
-		var bp := PoolVector2Array()
-		var bw := PoolRealArray()
-		var bwi := PoolRealArray()
-		for j in 7:
-			var u2 = float(j) / 6.0
-			var bend = sin(u2 * 2.6 + k) * ln * 0.07
-			bp.append(pts[idx] + Vector2(cos(ang), sin(ang)) * ln * u2 + Vector2(dir * ln * 0.12 * u2 + bend, -ln * 0.28 * u2 * u2))
-			bw.append(wid[idx] * 0.52 * pow(1.0 - u2, 0.9) + 5.0)
-			bwi.append(wid[idx] * 0.52 * pow(1.0 - u2, 0.9) + 12.0)
-		mk.ribbon(bp, bwi, INK)
-		mk.ribbon(bp, bw, bark_m, bark_d)
-		mk.ribbon(bp, PoolRealArray([bw[0] * 0.3, bw[1] * 0.3, bw[2] * 0.3, bw[3] * 0.3, bw[4] * 0.3, bw[5] * 0.3, bw[6] * 0.3]), Color(bark_h.r, bark_h.g, bark_h.b, 0.4))
-		ends.append(bp[6])
-		if float(_P["snow"]) > 0.3:
-			for j in [1, 2, 3, 4, 5]:
-				mk.ellipse(bp[j] + Vector2(0, -bw[j] * 0.55), bw[j] * 0.85 + 3.0, bw[j] * 0.34 + 1.6, Color(0.96, 0.98, 1.0), 8)
-		for q in 2:
-			var sp = bp[3 + q]
-			var sa = ang + (0.7 if q == 0 else -0.8) * dir
-			var tp := PoolVector2Array()
-			var tw := PoolRealArray()
-			var twi := PoolRealArray()
-			for j in 4:
-				var u3 = float(j) / 3.0
-				tp.append(sp + Vector2(cos(sa), sin(sa)) * ln * 0.34 * u3 + Vector2(0, -ln * 0.06 * u3))
-				tw.append(bw[3] * 0.5 * (1.0 - u3) + 3.0)
-				twi.append(bw[3] * 0.5 * (1.0 - u3) + 9.0)
-			mk.ribbon(tp, twi, INK)
-			mk.ribbon(tp, tw, bark_m, bark_d)
-			ends.append(tp[3])
+		_limb(mk, pts[idx], ang, ln, wid[idx] * 0.3, 2, sd + k * 11.0, bark_m, bark_d, snow_k, ends)
 	mk.ribbon(pts, wink, INK)
 	# the trunk in five vertical bands, shaded left to right (the sun is on the right)
 	var band_cols = [bark_d, bark_m, bark, bark_l, bark_h]
@@ -746,11 +716,10 @@ func _tree(f: Dictionary) -> Dictionary:
 		var ti = int((0.05 + 0.85 * MK.hash1(sd + k * 4.1)) * n)
 		var u = (MK.hash1(sd + k * 6.3) - 0.5) * 0.7
 		var kp = pts[ti] + Vector2(wid[ti] * u, 0)
-		if k % 4 == 0:
-			var kr = wid[ti] * 0.05 + 3.5
-			mk.ellipse_ink(kp, kr, kr * 1.45, bark_d, 2.0, 14)
-			mk.ellipse(kp + Vector2(kr * 0.12, kr * 0.2), kr * 0.72, kr * 1.15, Color(0.05, 0.03, 0.02, 0.85), 12)
-			mk.ellipse(kp + Vector2(0, kr * 1.25), kr * 0.8, kr * 0.22, Color(bark_h.r, bark_h.g, bark_h.b, 0.55), 8)
+		if k % 8 == 0:
+			var kr = wid[ti] * 0.034 + 2.6
+			mk.ellipse(kp, kr * 1.5, kr * 2.0, Color(bark_d.r, bark_d.g, bark_d.b, 0.8), 12)
+			mk.ellipse(kp + Vector2(kr * 0.1, kr * 0.25), kr * 0.85, kr * 1.3, Color(0.07, 0.045, 0.03, 0.7), 12)
 		else:
 			var rr := PoolVector2Array([kp + Vector2(-wid[ti] * 0.1, 2), kp + Vector2(0, -1.5), kp + Vector2(wid[ti] * 0.1, 2)])
 			mk.ribbon(rr, PoolRealArray([2.5, 3.2, 2.5]), Color(0.1, 0.07, 0.05, 0.4))
@@ -767,6 +736,30 @@ func _tree(f: Dictionary) -> Dictionary:
 		for q in 3:
 			var tq = mp + Vector2((q - 1.0) * mr * 0.7, -mr * (0.35 + 0.15 * MK.hash1(sd + k * 3.0 + q)))
 			mk.ellipse(tq, mr * 0.28, mr * 0.2, mlite.lightened(0.15), 6)
+	# the top of the trunk: a knot where it divides, then its limbs, so it never ends in a flat cut
+	mk.blob_ink(pts[n] + Vector2(0, 4.0), wid[n] * 0.56, wid[n] * 0.36, sd + 33.0, 0.12, bark_m, 3.4, 14, bark)
+	for k in 3:
+		var ca = -PI * 0.5 + (k - 1) * (0.42 + 0.12 * MK.hash1(sd + 70.0 + k))
+		_limb(mk, pts[n] + Vector2(0, 6.0), ca, h * (0.2 + 0.08 * MK.hash1(sd + 80.0 + k)), wid[n] * 0.5, 2, sd + 90.0 + k * 7.0, bark_m, bark_d, snow_k, ends)
+	# the foot of the trunk: rounded root lumps at its corners, then a mound of turf with moss and grass over the join, so the flat bottom edge
+	# is buried: the trunk comes OUT of the ground instead of standing on it
+	var w0 = wid[0]
+	for sgn2 in [-1.0, 1.0]:
+		for q in 2:
+			var cx = b.x + sgn2 * (w0 * 0.5 - w * (0.04 + 0.22 * q))
+			mk.ellipse_ink(Vector2(cx, b.y - w * 0.04 * (1.0 - 0.5 * q)), w * (0.3 - 0.08 * q), w * (0.14 - 0.03 * q), bark_m, 2.4, 14, sgn2 * 0.3)
+	var turf = hz(_sg(Color("#6fa93f")), lane)
+	var turf_c = hz(_sg(Color("#8cc352")), lane)
+	mk.ellipse(b + Vector2(0, 9.0), w0 * 0.6, w * 0.07 + 3.0, Color(0.08, 0.16, 0.04, 0.3), 20)
+	mk.blob(b + Vector2(0, 2.0), w0 * 0.58, w * 0.12 + 4.0, sd + 80.0, 0.08, turf, 24, turf_c)
+	for k in 7:
+		var mx = b.x + (k - 3.0) * w0 * 0.15 + (MK.hash1(sd + k * 2.0) - 0.5) * w * 0.12
+		mk.blob(Vector2(mx, b.y - w * 0.05), w * 0.14, w * 0.05, sd + 90.0 + k, 0.2, hz(Color("#4a7a33"), lane), 10)
+	for k in 18:
+		var ux = (float(k) / 17.0 - 0.5) * 2.0
+		var gp = b + Vector2(ux * w0 * 0.56 + (MK.hash1(sd + k * 1.9) - 0.5) * w * 0.1, 3.0 + MK.hash1(sd + k * 4.3) * 5.0 - abs(ux) * w * 0.02)
+		var gl = clamp(w * (0.07 + 0.13 * MK.hash1(sd + k * 5.7)), 10.0, 44.0)
+		mk.blade(gp, (MK.hash1(sd + k * 8.1) - 0.5) * gl * 0.8, gl, clamp(w * 0.02, 2.5, 5.5), hz(_sg(Color("#3f7a2a")), lane), hz(_sg(Color("#7cbc4c")), lane))
 	# crown: a wide canopy of many round leaf clusters, dark under, light on top (sun upper right)
 	var cc = pts[n] + Vector2(lean * 0.2, -h * 0.17)
 	var Rx = h * 0.36
@@ -787,18 +780,21 @@ func _tree(f: Dictionary) -> Dictionary:
 	var lobes := []
 	var N = 34
 	for i in N:
-		if leafk < 0.999 and MK.hash1(sd + i * 9.3) > leafk:
-			continue          # leaves not out yet, or already down
-		var ang2 = i * 2.39996 + sd
 		var rr = sqrt((i + 0.5) / N)
+		if leafk < 0.999 and rr + 0.3 * (MK.hash1(sd + i * 9.3) - 0.5) > 0.12 + 0.88 * leafk:
+			continue          # leaves not out yet, or already down: the crown thins from the outside in (and the leaves that are left are smaller)
+		var ang2 = i * 2.39996 + sd
 		var jx = (MK.hash1(sd + i * 1.3) - 0.5) * 0.25
 		var jy = (MK.hash1(sd + i * 2.7) - 0.5) * 0.25
 		var pos = cc + Vector2((cos(ang2) * rr + jx) * Rx, (sin(ang2) * rr * 0.9 + jy) * Ry)
-		var rad = h * (0.062 + 0.05 * MK.hash1(sd + i * 3.9)) * (1.15 - 0.4 * rr)
+		var rad = h * (0.062 + 0.05 * MK.hash1(sd + i * 3.9)) * (1.15 - 0.4 * rr) * (0.72 + 0.28 * leafk)
 		lobes.append([pos, rad])
-	for e in ends:
-		if leafk >= 0.999 or MK.hash1(sd + e.x * 0.1) <= leafk:
-			lobes.append([e, h * 0.058])
+	var ends_n = ends.size()
+	var ends_step = max(1, ends_n / 44)                  # a few dozen leaf clusters at the twig tips, not one per twig
+	for ei in range(0, ends_n, ends_step):
+		var e = ends[ei]
+		if leafk >= 0.999 or MK.hash1(sd + e.x * 0.1) <= leafk * 0.85:
+			lobes.append([e, h * 0.05 * (0.6 + 0.4 * leafk)])
 	lobes.sort_custom(self, "_lobe_y")
 	var shadow_ell = Color(g_d.r * 0.6, g_d.g * 0.6, g_d.b * 0.6, 0.4 * leafk)
 	mk.ellipse(cc + Vector2(0, Ry * 0.95), Rx * 0.85, Ry * 0.38, shadow_ell, 16)
@@ -822,14 +818,6 @@ func _tree(f: Dictionary) -> Dictionary:
 			var sunny = (cos(fa) - sin(fa)) > 0.0
 			mk.ellipse(fp, L[1] * 0.13, L[1] * 0.08, Color(g_h.r, g_h.g, g_h.b, 0.75) if sunny else Color(g_d.r, g_d.g, g_d.b, 0.55), 6, fa)
 		k2 += 1
-	# the scalloped edge: small clusters hanging off the crown
-	for i in 12:
-		if leafk < 0.999 and MK.hash1(sd + i * 4.7) > leafk:
-			continue
-		var ea = TAU * i / 12.0 + sd
-		var ep = cc + Vector2(cos(ea) * Rx * 1.02, sin(ea) * Ry * 0.98)
-		var er = h * (0.03 + 0.025 * MK.hash1(sd + i * 8.3))
-		mk.blob_ink(ep, er, er * 0.9, sd + i * 5.0, 0.06, g_m, 3.0, 16, g_l)
 	if MK.hash1(sd + 8.0) > 0.4 and leafk > 0.9 and snowk < 0.3:
 		for i in 11:
 			var a2 = PI * (0.05 + 0.9 * MK.hash1(sd + i * 4.4))
@@ -848,9 +836,41 @@ func _tree(f: Dictionary) -> Dictionary:
 	if snowk > 0.3:
 		mk.ellipse(b + Vector2(-w * 0.15, 2.0), w * 1.35, w * 0.2, Color(0.62, 0.73, 0.86), 12)
 		mk.ellipse(b + Vector2(-w * 0.15, 0.0), w * 1.3, w * 0.17, Color(0.97, 0.985, 1.0), 12)
-	sh.shadow(b + Vector2(-w * 1.8, 5.0), w * 2.8 + h * 0.12, w * 0.34, Color(0.06, 0.1, 0.04, 0.18 * (0.4 + 0.6 * leafk)), 3)
+	sh.shadow(b + Vector2(-w * 1.4, 5.0), w * 2.0 + h * 0.05, w * 0.3, Color(0.06, 0.1, 0.04, 0.13 * (0.4 + 0.6 * leafk)), 4)
 	var ext = Rx * 1.25 + w * 1.3
 	return {"mesh": mk.build(), "shade": sh.build(), "slice": slice_of(lane), "x0": min(b.x, cc.x) - ext, "x1": max(b.x, cc.x) + ext, "sway": 1.0, "by": b.y}
+
+
+# One limb of a tree: a ribbon that tapers to a point and curves up, and, while `depth` lasts, side branches along it and a fork at its tip.
+# The tips are collected in `ends` (the leaf clusters hang there).
+func _limb(mk, base: Vector2, ang: float, ln: float, w0: float, depth: int, sd: float, bark_m: Color, bark_d: Color, snow_k: float, ends: Array) -> void:
+	var m = 7
+	var pts := PoolVector2Array()
+	var wf := PoolRealArray()
+	var wi := PoolRealArray()
+	var dx = cos(ang)
+	var dy = sin(ang)
+	for j in m:
+		var u = float(j) / (m - 1)
+		var bend = sin(u * 2.4 + sd) * ln * 0.06
+		pts.append(base + Vector2(dx * ln * u + bend, dy * ln * u - ln * 0.3 * u * u))
+		wf.append(w0 * pow(1.0 - u, 1.1) + 2.0)
+		wi.append(w0 * pow(1.0 - u, 1.1) + 6.0)
+	mk.ribbon(pts, wi, INK)
+	mk.ribbon(pts, wf, bark_m, bark_d)
+	if snow_k > 0.3 and depth >= 1:
+		for j in [1, 2, 3, 4, 5]:
+			mk.ellipse(pts[j] + Vector2(0, -wf[j] * 0.55), wf[j] * 0.8 + 2.0, wf[j] * 0.3 + 1.2, Color(0.96, 0.98, 1.0), 8)
+	ends.append(pts[m - 1])
+	if depth <= 0:
+		return
+	for q in 2:
+		var at = pts[2 + q * 2]
+		var side = 1.0 if (int(sd * 3.0) + q) % 2 == 0 else -1.0
+		var turn = side * (0.55 + 0.35 * MK.hash1(sd + q * 4.3))
+		_limb(mk, at, ang + turn, ln * (0.52 - 0.08 * q), w0 * (0.55 - 0.08 * q), depth - 1, sd * 1.7 + q * 3.1 + 1.0, bark_m, bark_d, snow_k, ends)
+	for f in 2:
+		_limb(mk, pts[m - 1], ang + (0.5 if f == 0 else -0.5), ln * 0.34, w0 * 0.3, depth - 1, sd * 2.3 + f * 5.7 + 2.0, bark_m, bark_d, snow_k, ends)
 
 
 func _lobe_y(a, b) -> bool:
@@ -868,30 +888,103 @@ func _boulder(f: Dictionary) -> Dictionary:
 	var b = _base_point(f)
 	var warm = MK.hash1(sd + 2.0)
 	var base_c = hz(Color("#8d8c88").linear_interpolate(Color("#8f7e68"), warm), lane)
-	var dark = base_c.darkened(0.3)
-	var lite = base_c.lightened(0.28)
-	mk.blob_ink(b + Vector2(0, -ry * 0.85), rx, ry, sd, 0.13, base_c, 4.0 * sc + 1.0, 14)
-	mk.blob(b + Vector2(-rx * 0.18, -ry * 0.45), rx * 0.82, ry * 0.5, sd + 1.0, 0.12, Color(dark.r, dark.g, dark.b, 0.6), 12)
-	mk.blob(b + Vector2(rx * 0.22, -ry * 1.3), rx * 0.55, ry * 0.38, sd + 2.0, 0.14, Color(lite.r, lite.g, lite.b, 0.85), 10)
+	var dark = base_c.darkened(0.34)
+	var lite = base_c.lightened(0.3)
+	var mid = base_c.lightened(0.12)
+	var snowy = float(_P["snow"]) > 0.5
+	# an angular silhouette (a rock, not a blob) with a flat base
+	var c = b + Vector2(0, -ry * 0.62)
+	var n = 12
+	var outl := PoolVector2Array()
+	for i in n:
+		var a2 = TAU * (i + 0.5 * MK.hash1(sd + i)) / n
+		var k = 0.84 + 0.3 * MK.hash1(sd + i * 3.7)
+		var p = Vector2(cos(a2) * rx * k, sin(a2) * ry * k)
+		p.y = min(p.y, ry * 0.62)
+		outl.append(c + p)
+	var ow = 3.4 * sc + 1.4
+	var ink_pts := PoolVector2Array()
+	for p in outl:
+		ink_pts.append(p + (p - c).normalized() * ow)
+	mk.fan(c, ink_pts, INK)
+	mk.fan(c, outl, base_c, base_c.lightened(0.08))
+	# planes: a lit top, a lighter right face, a shaded left and underside
+	for i in n:
+		var j = (i + 1) % n
+		var d0 = outl[i] - c
+		var d1 = outl[j] - c
+		var am = atan2((d0.y + d1.y) * 0.5, (d0.x + d1.x) * 0.5)
+		var col = null
+		var r = 0.6
+		if am > -2.45 and am < -0.75:
+			col = Color(lite.r, lite.g, lite.b, 0.9)
+			r = 0.5
+		elif am >= -0.75 and am < 0.75:
+			col = Color(mid.r, mid.g, mid.b, 0.75)
+			r = 0.68
+		elif am > 1.5 or am < -2.6:
+			col = Color(dark.r, dark.g, dark.b, 0.6)
+			r = 0.55
+		if col != null:
+			mk.quad(outl[i], outl[j], c + d1 * r, c + d0 * r, col)
+			mk.ribbon(PoolVector2Array([c + d0 * r, outl[i]]), PoolRealArray([1.6 * sc + 0.6, 1.6 * sc + 0.6]), Color(0.08, 0.06, 0.05, 0.35))
+	# strata
+	for k in 3:
+		var yy = c.y + ry * (-0.25 + 0.3 * k)
+		var hw = rx * (0.78 - 0.18 * abs(-0.25 + 0.3 * k) * 2.0)
+		var lp := PoolVector2Array()
+		var lw := PoolRealArray()
+		for j in 6:
+			var u = float(j) / 5.0
+			lp.append(Vector2(c.x - hw + 2.0 * hw * u, yy + sin(u * 5.0 + sd + k) * ry * 0.05))
+			lw.append((1.8 + 0.8 * sin(u * PI)) * sc + 0.5)
+		mk.ribbon(lp, lw, Color(0.08, 0.06, 0.05, 0.22))
+	# cracks that fork
 	for k in 2:
-		var cx = b.x + (MK.hash1(sd + k * 4.0) - 0.5) * rx * 0.8
+		var cx = c.x + (MK.hash1(sd + k * 4.0) - 0.5) * rx * 0.9
 		var cp := PoolVector2Array()
 		var cw := PoolRealArray()
-		for j in 4:
-			var u = float(j) / 3.0
-			cp.append(Vector2(cx + sin(u * 4.0 + k) * rx * 0.08, b.y - ry * (1.5 - 0.9 * u)))
-			cw.append(3.0 * sc + 1.0)
-		mk.ribbon(cp, cw, Color(0.1, 0.08, 0.07, 0.55))
-	if MK.hash1(sd + 6.0) > 0.4 and float(_P["snow"]) < 0.5:
-		mk.blob(b + Vector2(-rx * 0.3, -ry * 1.6), rx * 0.45, ry * 0.2, sd + 3.0, 0.2, hz(Color("#5b8f3a"), lane), 9)
-	if float(_P["snow"]) > 0.5:
-		mk.blob(b + Vector2(rx * 0.02, -ry * 1.62), rx * 0.8, ry * 0.36, sd + 7.0, 0.14, Color(0.62, 0.73, 0.86), 12)
-		mk.blob(b + Vector2(rx * 0.04, -ry * 1.68), rx * 0.76, ry * 0.3, sd + 8.0, 0.14, Color(0.97, 0.985, 1.0), 12)
+		for j in 5:
+			var u = float(j) / 4.0
+			cp.append(Vector2(cx + sin(u * 5.0 + k * 2.0 + sd) * rx * 0.1, c.y - ry * (0.85 - 1.15 * u)))
+			cw.append((3.2 * (1.0 - u * 0.6)) * sc + 0.8)
+		mk.ribbon(cp, cw, Color(0.07, 0.05, 0.05, 0.62))
+		var fork := PoolVector2Array([cp[2], cp[2] + Vector2((1.0 if k == 0 else -1.0) * rx * 0.2, ry * 0.12), cp[2] + Vector2((1.0 if k == 0 else -1.0) * rx * 0.3, ry * 0.34)])
+		mk.ribbon(fork, PoolRealArray([2.2 * sc + 0.6, 1.8 * sc + 0.5, 1.2 * sc + 0.4]), Color(0.07, 0.05, 0.05, 0.55))
+	# mineral speckle
+	for k in 16:
+		var sa = TAU * MK.hash1(sd + k * 2.9)
+		var sr = sqrt(MK.hash1(sd + k * 5.3)) * 0.72
+		var q = c + Vector2(cos(sa) * rx * sr, sin(sa) * ry * sr * 0.8)
+		mk.ellipse(q, 1.5 * sc + 0.7, 1.1 * sc + 0.5, Color(0.05, 0.04, 0.04, 0.4) if k % 2 == 0 else Color(1, 1, 1, 0.35), 5)
+	if not snowy:
+		# lichen on the lit top, moss in the shade and round the foot
+		for k in 3:
+			var la = -2.3 + 1.5 * MK.hash1(sd + 20.0 + k)
+			var lp2 = c + Vector2(cos(la) * rx * 0.55, sin(la) * ry * 0.5)
+			var lc = hz(Color("#d9a441") if MK.hash1(sd + 30.0 + k) > 0.5 else Color("#a8c08a"), lane)
+			var lr = rx * (0.07 + 0.05 * MK.hash1(sd + 40.0 + k))
+			mk.blob(lp2, lr, lr * 0.7, sd + 50.0 + k, 0.25, lc, 9)
+			for q2 in 4:
+				mk.ellipse(lp2 + Vector2((q2 - 1.5) * lr * 0.55, (q2 % 2) * lr * 0.2 - lr * 0.1), lr * 0.22, lr * 0.16, lc.lightened(0.25), 5)
+		if MK.hash1(sd + 6.0) > 0.3:
+			mk.blob(c + Vector2(-rx * 0.28, -ry * 0.82), rx * 0.42, ry * 0.2, sd + 3.0, 0.22, hz(Color("#4f8a3a"), lane), 10)
+			mk.blob(c + Vector2(-rx * 0.22, -ry * 0.88), rx * 0.28, ry * 0.12, sd + 4.0, 0.2, hz(Color("#7cb653"), lane), 9)
+		mk.blob(b + Vector2(-rx * 0.5, -ry * 0.08), rx * 0.3, ry * 0.12, sd + 5.0, 0.25, hz(Color("#4a7e36"), lane), 9)
+	else:
+		mk.blob(c + Vector2(rx * 0.02, -ry * 1.0), rx * 0.82, ry * 0.4, sd + 7.0, 0.14, Color(0.62, 0.73, 0.86), 12)
+		mk.blob(c + Vector2(rx * 0.04, -ry * 1.08), rx * 0.78, ry * 0.32, sd + 8.0, 0.14, Color(0.97, 0.985, 1.0), 12)
 		mk.ellipse(b + Vector2(0, 1.0), rx * 1.25, ry * 0.18, Color(0.97, 0.985, 1.0), 12)
-	for k in 3:
-		var q = b + Vector2((MK.hash1(sd + k * 9.0) - 0.5) * rx * 2.6, 0)
-		var pr = rx * (0.06 + 0.07 * MK.hash1(sd + k * 3.0))
-		mk.ellipse_ink(q + Vector2(0, -pr * 0.5), pr, pr * 0.65, base_c, 1.5, 8)
+	# pebbles and a few blades of grass round the foot
+	for k in 5:
+		var q3 = b + Vector2((MK.hash1(sd + k * 9.0) - 0.5) * rx * 2.8, MK.hash1(sd + k * 4.0) * 2.0)
+		var pr = rx * (0.05 + 0.07 * MK.hash1(sd + k * 3.0))
+		mk.ellipse_ink(q3 + Vector2(0, -pr * 0.5), pr, pr * 0.65, base_c.darkened(0.08 * (k % 3)), 1.4, 8)
+	if not snowy:
+		for k in 5:
+			var gx = b.x + (MK.hash1(sd + 60.0 + k) - 0.5) * rx * 2.2
+			var gl = clamp(rx * (0.18 + 0.2 * MK.hash1(sd + 70.0 + k)), 8.0, 40.0)
+			mk.blade(Vector2(gx, b.y + 1.0), (MK.hash1(sd + 80.0 + k) - 0.5) * gl * 0.9, gl, clamp(rx * 0.04, 2.5, 5.0), hz(_sg(Color("#3f7a2a")), lane), hz(_sg(Color("#7cbc4c")), lane))
 	sh.shadow(b + Vector2(-rx * 0.5, 4.0), rx * 1.6, ry * 0.3, Color(0.06, 0.1, 0.04, 0.2), 3)
 	return {"mesh": mk.build(), "shade": sh.build(), "slice": slice_of(lane), "x0": b.x - rx * 2.2, "x1": b.x + rx * 1.4}
 

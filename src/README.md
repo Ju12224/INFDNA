@@ -1,4 +1,26 @@
-# InfDNA (Brotato mod) - v0.32.0
+# InfDNA (Brotato mod) - v0.33.0
+
+## v0.33.0 - look and feel: readable fights, grounded trees, real seasons, smoother everything
+From the second playtest. The big items (a self-steering movement system, a faster sim, the zoom-into-the-grass view, the mutation score and the world-takeover arc) are next.
+- **Fights you can see.** The rival's ants were drawn two to three times the size of yours (the plain red ants at 1x to 2.2x of a 75 px drawing next to a 35 px ant, and the kin at 1.15x of their class
+  scale on top); they are now the size of yours, soldiers a little bigger. Hit sparks, dust and bursts are small and faint and are drawn UNDER the ants and raiders, not over them (a fight is dozens of hits a
+  second). A raider that is fighting drifts to one shared depth lane (0.78) and the ants fighting it line up with it within a few percent, instead of standing in different lanes up to 115 px apart.
+- **Orders and powers cost a little food.** Orders: 1 + 0.25 per ant to guard, 1.5 + 0.3 per ant to attack, 1 + 0.15 per ant to harvest, 2 + 0.4 per ant to dig, never more than 12. Powers: Rally 6, Harvest 4, Recall 3,
+  Surge 5, Breed 10, Strike 12, scent flag 2 (on top of the Will). Nothing takes the larder under 5 food. The right-click menu shows the cost (f = food, w = Will) and greys out what the larder cannot pay.
+- **Ants stand down by themselves.** A guard squad you are not looking at (off screen and not selected) for 30 s goes back to work; so does one that has seen no raider and no fight for 150 s, and one in a nearly empty
+  larder. Harvesters and diggers finish their job and are freed as before. A toast says why.
+- **Trees.** Trunks end in a rounded knot that divides into limbs (no flat cut at the top) and grow out of a mound of turf with root lumps (no flat cut at the foot, no dark plate under them). Branches are slim and fork into
+  twigs that fork again, so a bare winter tree looks like a tree; the crown now thins from the outside in through autumn (finer steps, about every 19 s of the year) and is bare in winter. Fewer knot holes. A bug that
+  drew leaf clusters over the canopy as dark discs is gone. Meshes bigger than 65k vertices are split instead of being silently cut.
+- **Boulders** are angular, with lit and shaded planes, strata, forking cracks, speckle, lichen, moss, pebbles and blades of grass round the foot, and a snow cap in winter.
+- **Weather moves in phases.** The sky clouds over for 30-45 s first (darker, more and bigger clouds, dimmer light), the rain then builds to its peak over about half a minute, thins out for 40-60 s, and the clouds
+  clear slowly afterwards. Before, the rain went from nothing to full in six seconds.
+- **Snow and grass.** Snow lies as long soft drifts that follow the ground across the whole width (the scattered white ovals are gone). Grass grows in meadow patches, thick here and thin there, spread evenly through
+  the depth. The backdrop under the trees and hedge is no longer one flat colour: strips of turf, tufts, bushes, flowers (straw and drifts in winter, fallen leaves in autumn).
+- **Creatures.** The grasshopper, the anteater and the butterfly were redrawn (the butterfly's wings were being cut off by a bad flap curve). Bees are about the size of an ant. The creature code has new helpers
+  (`_poly`, `_bones`) for tapering limbs with joints.
+- **Ants change layers slowly.** Going into the nest mouth or across to the back tunnel plane took a tenth of a second (a jump of up to 115 px); it takes about a second now.
+- **Not verified:** none of it has been played in Brotato. Everything was checked in renders at 1920x1080 and with the headless tests (smoke, orders, invariants, fuzz, eight balance runs).
 
 ## v0.32.0 - view mode: the bare world, and everything done with select + right-click
 Second playtest note: "the game shouldn't be a bunch of menus you click; it should be select an area, right-click, pick an option, like a view mode without all that stuff
@@ -827,3 +849,8 @@ P: trails | C: caste badges | L: lineage | Esc: back to title
 - UI was only rendered at 1920x1080. Smaller windows (1280x720) were not tested; the left column,
   lineage panel and inspector may crowd each other.
 - Animations were checked in still frames only, so easing and timing are unjudged.
+
+## Art pipeline (new in the repo)
+The owner draws creature parts (ChatGPT, one transparent PNG per part: body, near legs, far legs, wings, head, claws). `art_src/` keeps the originals. `tools/art/make_art.py` shrinks them, thickens the
+outline so it still reads small, cuts the legs into separate pieces and the jaw or fangs out of the body, and writes `src/mods-unpacked/Judah-InfDNA/content/art/` with an `art_manifest.json` (where every
+piece sits and where it hinges). The game will draw the pieces back together and move them (walk, ripple, bite, flap). Spider, void boss, bird and rocks are in; they are wired into the game in the next build.
