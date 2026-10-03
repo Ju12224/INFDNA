@@ -160,6 +160,68 @@ class Sheet:
             # specks of halo / JPEG noise: small islands that are not the beige-brown-cream of the drawing (olive, red, grey)
             good = sum(1 for (x, y) in c["pts"] if _beige(px[x, y]))
             c["junk"] = c["area"] < 1500 and good < 0.5 * c["area"]
+        self._weed_thin()
+        self._cluster()
+
+    def _island_mask(self, idx):
+        m = Image.new("L", self.size, 0)
+        p = m.load()
+        for i in idx:
+            for (x, y) in self.comps[i]["pts"]:
+                p[x, y] = 255
+        return m
+
+    def _weed_thin(self):
+        """Thin islands (2-4 px wide: the bright edge line of the halo, not a part of the drawing) are junk unless they sit inside the outline band of
+        something real -- antenna stripes and tiny claws do, they are chained to their neighbours at less than an outline's width."""
+        thin = []
+        solid = []
+        for i, c in enumerate(self.comps):
+            if c["junk"] or c["area"] < 12:
+                continue
+            if c["area"] >= 1500:
+                solid.append(i)
+                continue
+            x0, y0, x1, y1 = c["box"]
+            m = Image.new("L", (x1 - x0 + 6, y1 - y0 + 6), 0)
+            p = m.load()
+            for (x, y) in c["pts"]:
+                p[x - x0 + 3, y - y0 + 3] = 255
+            if m.filter(ImageFilter.MinFilter(3)).filter(ImageFilter.MinFilter(3)).getbbox() is None:
+                thin.append(i)
+            else:
+                solid.append(i)
+        reach_r = max(2, self.ink - 2)
+        for _ in range(6):
+            reach = grow_in(self._island_mask(solid), Image.new("L", self.size, 255), reach_r)
+            rp = reach.load()
+            moved = []
+            for i in thin:
+                pts = self.comps[i]["pts"]
+                if sum(1 for (x, y) in pts if rp[x, y]) >= 0.35 * len(pts):
+                    moved.append(i)
+            if not moved:
+                break
+            solid += moved
+            thin = [i for i in thin if i not in moved]
+        for i in thin:
+            self.comps[i]["junk"] = True
+
+    def _cluster(self, gap=None):
+        """Islands that belong to one drawn piece: their outline bands touch (fills closer than `gap` px).  Sets c['cluster']."""
+        gap = gap or self.ink
+        real = [i for i, c in enumerate(self.comps) if not c["junk"] and c["area"] >= 12]
+        band = grow_in(self._island_mask(real), Image.new("L", self.size, 255), max(1, gap // 2))
+        cl = label_pixels(band.resize((self.size[0] // 2, self.size[1] // 2), Image.NEAREST))
+        lab = {}
+        for k, c in enumerate(cl):
+            for (x, y) in c["pts"]:
+                lab[(x, y)] = k
+        for i, c in enumerate(self.comps):
+            c["cluster"] = None
+            if i in real:
+                x, y = c["pts"][0]
+                c["cluster"] = lab.get((x // 2, y // 2))
 
     def pick(self, boxes, min_area=60, drop=()):
         """Indices of the fill islands whose centre lies in any of the boxes (and in none of the `drop` boxes)."""

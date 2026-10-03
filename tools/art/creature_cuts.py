@@ -579,3 +579,119 @@ def make_creatures(manifest, only=None, out_dir=None):
         manifest[name] = entry
         print("%s: %d parts, canvas %s, game scale %.4f" % (name, len(entry["parts"]), size, entry["scale"]))
     return manifest
+
+
+# ---------------------------------------------------------------- the bird
+def cap_open_ends(im, light=90, r=12, min_px=15):
+    """Where a drawn part was cut off straight (the top of the bird's legs, which the artist left open) there is no outline: close it with a band of the
+    picture's own outline colour, so the end of the leg reads as a stump in front of the feathers instead of a raw cut."""
+    a = im.getchannel("A")
+    solid = a.point(lambda v: 255 if v >= 200 else 0)
+    edge = ImageChops.subtract(solid, solid.filter(ImageFilter.MinFilter(5)))
+    px = im.load()
+    e = edge.load()
+    w, h = im.size
+    m = Image.new("L", im.size, 0)
+    mp = m.load()
+    for y in range(h):
+        for x in range(w):
+            if e[x, y]:
+                p = px[x, y]
+                if max(p[0], p[1], p[2]) >= light:
+                    mp[x, y] = 255
+    lab, sizes = labels_of(m, 128)
+    keep = [k for k, n in enumerate(sizes) if n >= min_px]
+    if not keep:
+        return im
+    cap = dilate(mask_from(lab, im.size, keep), r)
+    ink = Image.new("RGBA", im.size, edge_ink(im) + (255,))
+    ink.putalpha(cap)
+    out = im.copy()
+    out.alpha_composite(ink)
+    return out
+
+
+def make_bird(manifest, out_dir=None):
+    """The bird's five parts, each cropped; the game assembles and flaps them."""
+    out_dir = out_dir or OUT
+    os.makedirs(out_dir, exist_ok=True)
+    parts = {}
+    for nm in ["head", "wing_a", "wing_b", "claw_1", "claw_2"]:
+        im = load("bird_%s.png" % nm)
+        if nm.startswith("claw"):
+            im = cap_open_ends(im)
+        im = im.resize((int(im.size[0] * 0.4), int(im.size[1] * 0.4)), Image.LANCZOS)
+        t = trim(im)
+        fn = "bird_%s.png" % nm
+        t.save(os.path.join(out_dir, fn), optimize=True)
+        parts[nm] = {"file": fn, "w": t.size[0], "h": t.size[1]}
+        print("bird %s: %dx%d" % (nm, t.size[0], t.size[1]))
+    manifest["bird"] = parts
+    return manifest
+
+
+# ---------------------------------------------------------------- the rocks
+def make_rocks(manifest, out_dir=None, merge_gap=3):
+    """The rock sheet: every separate rock becomes a sprite for the meadow (a boulder with pebbles round it that touch it is one rock; pebbles of a row
+    that are no more than `merge_gap` px apart after the outline went on are one sprite too, as the game expects 7 sprites: spire, dome, cairn, two low
+    boulders, a pebble row, a single stone). The pieces are cut by label, pixel by pixel, so nothing of a neighbour's outline comes along."""
+    out_dir = out_dir or OUT
+    os.makedirs(out_dir, exist_ok=True)
+    sheet = load("rocks.png")
+    sheet = sheet.resize((int(sheet.size[0] * 0.4), int(sheet.size[1] * 0.4)), Image.LANCZOS)
+    sheet = thicken(sheet, 3)
+    a = sheet.getchannel("A")
+    w, h = a.size
+    lab, sizes = labels_of(a, 40)
+    bbs = {}
+    for j, v in enumerate(lab):
+        if v >= 0:
+            x, y = j % w, j // w
+            b = bbs.setdefault(v, [x, y, x, y])
+            b[0] = min(b[0], x)
+            b[1] = min(b[1], y)
+            b[2] = max(b[2], x)
+            b[3] = max(b[3], y)
+    ids = [v for v, n in enumerate(sizes) if n >= 150]          # dust is not a rock
+    # group pieces that are close: let every piece grow by half the gap; pieces whose grown shapes meet are one rock
+    big = [v if v in ids else -1 for v in lab]
+    reach = (merge_gap + 1) // 2
+    grown = grow_labels(list(big), (w, h), lambda j: True, reach)
+    group = {v: v for v in ids}
+
+    def find(v):
+        while group[v] != v:
+            v = group[v]
+        return v
+    for j, v in enumerate(grown):
+        if v < 0:
+            continue
+        x = j % w
+        for k in ((j + 1) if x + 1 < w else -1, (j + w) if j + w < w * h else -1):
+            if k >= 0 and grown[k] >= 0 and grown[k] != v:
+                group[find(grown[k])] = find(v)
+    groups = {}
+    for v in ids:
+        groups.setdefault(find(v), []).append(v)
+    # the soft edge pixels the label threshold left out go to the nearest rock
+    ap = a.load()
+    lab = grow_labels(lab, (w, h), lambda j: ap[j % w, j // w] >= 8, 2)
+    pieces = []
+    for g, members in groups.items():
+        m = mask_from(lab, (w, h), members)
+        piece = sheet.copy()
+        piece.putalpha(ImageChops.multiply(a, m))
+        bb = bbox_of(piece)
+        pieces.append(piece.crop(bb))
+    pieces.sort(key=lambda im: -(im.size[0] * im.size[1]))
+    rocks = []
+    for i, im in enumerate(pieces):
+        fn = "rock_%d.png" % i
+        im.save(os.path.join(out_dir, fn), optimize=True)
+        rw, rh = im.size
+        rocks.append({"file": fn, "w": rw, "h": rh, "tall": rh > 1.25 * rw})
+        print("rock %d: %dx%d%s" % (i, rw, rh, " (spire)" if rh > 1.25 * rw else ""))
+    if len(rocks) != 7:
+        print("  WARNING: %d rock sprites (the game expects 7: see ground_view._rock_sprite)" % len(rocks))
+    manifest["rocks"] = rocks
+    return manifest

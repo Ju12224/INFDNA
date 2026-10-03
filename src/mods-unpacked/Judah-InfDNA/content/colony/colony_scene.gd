@@ -372,6 +372,10 @@ func _unhandled_input(event: InputEvent) -> void:
 				set_watch(not watch_mode)
 			KEY_N:
 				show_new_strain()
+			KEY_BRACKETRIGHT, KEY_5:
+				show_apex(1)
+			KEY_BRACKETLEFT:
+				show_apex(-1)
 			KEY_R:
 				command("rally", true)
 			KEY_E:
@@ -517,7 +521,7 @@ func menu_target(wp: Vector2) -> Dictionary:
 	var g = sim.grid
 	var C = g.CELL
 	var col = int(floor(wp.x / C))
-	var t = {"kind": "surface", "col": col, "row": g.surf_y(col) - 2, "z": 0, "foe": null, "pile": null, "diggable": false}
+	var t = {"kind": "surface", "col": col, "row": g.surf_y(col) - 2, "z": 0, "foe": null, "pile": null, "diggable": false, "ant": ant_view.pick(wp, 30.0)}
 	var foe = ant_view.pick_enemy(wp, 34.0)
 	if foe != null:
 		t["kind"] = "foe"
@@ -572,6 +576,11 @@ func menu_choice(act: Dictionary) -> void:
 			var from = selected
 			if from == null and str(act["id"]) == "breed" and not sel.empty():
 				from = sel[0]
+			if act.has("ant"):                 # "Breed from this ant" on an ant under the cursor: that one, selected or not
+				for a in sim.ants:
+					if a.id == int(act["ant"]):
+						from = a
+						break
 			sim.cast(str(act["id"]), int(act.get("x", 0)), from)
 		"beacon":
 			sim.place_beacon(int(act["x"]))
@@ -639,6 +648,34 @@ func show_new_strain() -> void:
 	cam.zoom = Vector2.ONE * clamp(0.5, cam.min_zoom, cam.max_zoom)
 	if watch_mode:
 		watch.follow(a)
+
+
+# ] / [ (or 5): the next / previous Apex ant (the most mutated alive, best first): select it and bring the camera to it.
+func show_apex(step: int = 1) -> void:
+	if shop_open or sim.collapsed:
+		return
+	var n = sim.apex.size()
+	if n == 0:
+		sim.toasts.append({"text": "No standout mutants yet: breed strange ants (right-click one, Breed) and the most mutated will show here.", "t": 4.0})
+		return
+	var i = int(sim.apex_ids[selected.id]) if (selected != null and sim.apex_ids.has(selected.id)) else -1
+	i = posmod(i + step, n) if i >= 0 else (0 if step > 0 else n - 1)
+	focus_ant(sim.apex[i])
+
+
+# Select one ant and bring the camera to it (the HUD's Apex list and the ] key).
+func focus_ant(a) -> void:
+	if a == null or not sim.ants.has(a):
+		return
+	if watch_mode:
+		selected = a
+		watch.follow(a)
+	else:
+		_set_selection([a], false)
+	var d = ant_view._depth(a.id, ant_view.lane_of(a, a.id))
+	cam.position = sim.ant_pos(a) + Vector2(0, d[0] - 30.0)
+	if cam.zoom.x > 0.9:
+		cam.zoom = Vector2.ONE * clamp(0.5, cam.min_zoom, cam.max_zoom)
 
 
 # Watch mode (V): hide the HUD, switch the busy layers off and let the camera direct itself.

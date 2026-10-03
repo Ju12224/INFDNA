@@ -311,7 +311,7 @@ func _draw_sprite(ci: CanvasItem, sp: Dictionary, xf: Transform2D, z: float, swa
 		if sp["shade"] != null:
 			ci.draw_texture_rect(sp["shade"], rect, false, Color(mod.r, mod.g, mod.b, sa))
 		var da = 1.0 - smoothstep(CLOSE_DETAIL_LO, CLOSE_DETAIL_HI, z)
-		if da > 0.03:
+		if da > 0.03 and sp.has("detail_f"):
 			var dt = _overlay(sp, "detail")
 			if dt != null:
 				# the detail rides a little differently from the picture under it, so the leaves seem to move against each other
@@ -417,10 +417,11 @@ func _tree_sprite(f: Dictionary):
 		if not looks.has(spr["autumn"]):
 			spr.erase("looks")
 	# the close-up layers: the owner's outline (the picture itself carries a thinner one), soft light and shadow, and the detail (loaded when first wanted)
-	if def.has("ink") and def.has("shade") and def.has("detail"):
+	if def.has("ink") and def.has("shade"):
 		spr["ink"] = lib.tex_mip(str(def["ink"]))
 		spr["shade"] = lib.tex_mip(str(def["shade"]))
-		spr["detail_f"] = str(def["detail"])
+		if def.has("detail"):
+			spr["detail_f"] = str(def["detail"])
 	var sh = MK.new()
 	sh.shadow(b + Vector2(-size.x * 0.12, 5.0), size.x * 0.42, 14.0 * sc + size.x * 0.03, Color(0.06, 0.1, 0.04, 0.2), 3)
 	var e = _sprite_entry(f, spr, sh)
@@ -430,8 +431,8 @@ func _tree_sprite(f: Dictionary):
 	return e
 
 
-# Where a drawn tree meets the ground: a low mound of turf over the join, a few dark clumps of moss and tufts of grass, so the bottom edge of the picture
-# is buried and the trunk grows out of the meadow. Built once with the tree.
+# Where a drawn tree meets the ground: a soft dark patch over the join and two rows of grass in front of it (the far row darker and taller), so the flat bottom
+# edge of the picture is buried and the trunk grows out of the meadow. Built once with the tree.
 func _tree_foot(mk, spr: Dictionary, def: Dictionary, b: Vector2, sc: float, lane: float, sd: float) -> void:
 	var size: Vector2 = spr["size"]
 	var foot = def.get("foot", [0.25, 0.75])
@@ -440,24 +441,22 @@ func _tree_foot(mk, spr: Dictionary, def: Dictionary, b: Vector2, sc: float, lan
 	var fw = max(x1 - x0, 30.0)
 	var cx = (x0 + x1) * 0.5
 	var fy = spr["pos"].y + size.y                  # the bottom of the picture
-	var snowy = float(_P["snow"]) > 0.3
-	var turf_b = _P["gb"].linear_interpolate(_P["gf"], clamp(lane, 0.0, 1.0))
 	var ry = 4.0 * sc + fw * 0.03
-	if snowy:
+	if float(_P["snow"]) > 0.3:
 		mk.ellipse(Vector2(cx, fy + 1.0), fw * 0.62, ry * 1.1, Color(0.62, 0.73, 0.86), 16)
 		mk.ellipse(Vector2(cx, fy - 1.0), fw * 0.6, ry * 0.95, Color(0.97, 0.985, 1.0), 16)
 		return
-	mk.blob(Vector2(cx, fy + 1.0), fw * 0.56, ry * 1.25, sd + 80.0, 0.09, turf_b.darkened(0.12), 22, turf_b.lightened(0.04))
-	for k in 5:
-		var mx = x0 + fw * (0.1 + 0.8 * MK.hash1(sd + k * 3.3))
-		var mr = fw * (0.05 + 0.04 * MK.hash1(sd + k * 5.1))
-		mk.blob(Vector2(mx, fy - ry * 0.2), mr, mr * 0.42, sd + 90.0 + k, 0.2, hz(_sg(Color("#4a7a33")), lane), 10, hz(_sg(Color("#6fa650")), lane))
-	var nb = int(clamp(fw / 11.0, 8.0, 34.0))
-	for k in nb:
-		var ux = (float(k) + MK.hash1(sd + k * 1.9)) / nb
-		var gp = Vector2(x0 - fw * 0.06 + ux * fw * 1.12, fy + 1.0 + MK.hash1(sd + k * 4.3) * 4.0)
-		var gl = clamp((9.0 + 22.0 * MK.hash1(sd + k * 5.7)) * (0.6 + 0.4 * sc), 8.0, 38.0)
-		mk.blade(gp, (MK.hash1(sd + k * 8.1) - 0.5) * gl * 0.9, gl, clamp(gl * 0.17, 2.0, 5.0), hz(_sg(Color("#3f7a2a")), lane), hz(_sg(Color("#7cbc4c")), lane))
+	mk.shadow(Vector2(cx, fy - 2.0), fw * 0.6, ry * 1.5, Color(0.04, 0.06, 0.02, 0.17), 4)
+	var c_dark = hz(_sg(Color("#2f6420")), lane)
+	var c_mid = hz(_sg(Color("#4f8e30")), lane)
+	var c_lite = hz(_sg(Color("#8cc656")), lane)
+	for row in 2:
+		var n = int(clamp(fw / (7.0 if row == 0 else 10.0), 10.0, 64.0))
+		for k in n:
+			var h1 = MK.hash1(sd + k * 1.9 + row * 40.0)
+			var gp = Vector2(x0 - fw * 0.05 + (float(k) + h1) / n * fw * 1.1, fy + (-3.0 if row == 0 else 3.0) + MK.hash1(sd + k * 4.3 + row) * 4.0)
+			var gl = (16.0 + 24.0 * MK.hash1(sd + k * 5.7 + row * 9.0)) * (0.6 + 0.4 * sc) * (1.0 if row == 0 else 0.62)
+			mk.blade(gp, (MK.hash1(sd + k * 8.1 + row * 3.0) - 0.5) * gl * 0.9, gl, clamp(gl * 0.17, 2.0, 5.5), c_dark if row == 0 else c_mid, c_mid if row == 0 else c_lite)
 
 
 func _rock_sprite(f: Dictionary):

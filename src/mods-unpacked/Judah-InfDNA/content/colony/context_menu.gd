@@ -99,7 +99,12 @@ func build(target: Dictionary) -> Array:
 	out.append(harvest)
 	out.append(_power("recall", "Recall every ant", col))
 	out.append(_power("surge", "Surge: sprint", col))
-	out.append(_power("breed", "Breed from this ant" if not sel.empty() else "Breed: mutate hard", col))
+	var breed = _power("breed", "Breed from this ant" if not sel.empty() else "Breed: mutate hard", col)
+	var under = target.get("ant")           # an ant under the cursor (apex ones above all) can be bred from with one click
+	if under != null and sim.ants.has(under):
+		breed["label"] = "Breed from this ant   mutation %d%s" % [int(sim.ms_of(under)), "  APEX" if sim.is_apex(under) else ""]
+		breed["act"]["ant"] = under.id
+	out.append(breed)
 	if sim.rival.found:
 		var st = _power("strike", "Strike the %s" % sim.rival.name, col)
 		if not sim.rival.can_strike():

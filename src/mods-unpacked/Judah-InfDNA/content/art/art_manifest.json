@@ -47,7 +47,6 @@
    "file": "tree_stump.png",
    "ink": "tree_stump_ink.png",
    "shade": "tree_stump_shade.png",
-   "detail": "tree_stump_detail.png",
    "foot": [
     0.0081,
     0.7291
@@ -72,7 +71,6 @@
    "file": "tree_spruce.png",
    "ink": "tree_spruce_ink.png",
    "shade": "tree_spruce_shade.png",
-   "detail": "tree_spruce_detail.png",
    "foot": [
     0.066,
     0.8522
@@ -97,7 +95,6 @@
    "file": "tree_log.png",
    "ink": "tree_log_ink.png",
    "shade": "tree_log_shade.png",
-   "detail": "tree_log_detail.png",
    "foot": [
     0.0,
     0.9956
