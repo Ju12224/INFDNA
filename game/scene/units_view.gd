@@ -117,7 +117,7 @@ var _q_eggs := 0
 var _q_lay := 0.0
 var _q_face := 1.0
 var _q_x := 0.0
-var _lane_alpha := false    # band.gd has lane_alpha(lane) (the depth zoom cuts lanes): surface ants fade with their lane
+var _lane_alpha := Callable()   # band.gd's lane_alpha(lane), if it has one (the depth zoom cuts lanes): surface ants fade with it
 
 
 func _ready() -> void:
@@ -126,9 +126,10 @@ func _ready() -> void:
 	var mat = CanvasItemMaterial.new()
 	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_PREMULT_ALPHA
 	material = mat
-	for m in (Band as Script).get_script_method_list():
+	var band: Object = Band
+	for m in band.get_script_method_list():
 		if m["name"] == "lane_alpha":
-			_lane_alpha = true
+			_lane_alpha = Callable(band, "lane_alpha")
 	kit = AntKit.new()
 	kit.name = "AntKit"
 	add_child(kit)
@@ -480,8 +481,8 @@ func _draw_ant(a, p: Vector2, st: Array, far: float, poses: bool, sel: Dictionar
 	# colour: shade by depth and haze, the strain's colour over the drab kit, hurt flash, selection
 	var shade = lerp(1.0, BACK_SHADE, plane) * lerp(1.0, HIDDEN_SHADE, hidden)
 	var alpha = lerp(1.0, HIDDEN_ALPHA, hidden) * (0.55 if a.shelter_t > 0.0 else 1.0)
-	if _lane_alpha and surf > 0.0:
-		alpha *= lerp(1.0, float(Band.call("lane_alpha", lane)), surf)
+	if _lane_alpha.is_valid() and surf > 0.0:
+		alpha *= lerp(1.0, float(_lane_alpha.call(lane)), surf)
 		if alpha <= 0.01:
 			return
 	var light = Color(shade, shade, shade, alpha)

@@ -487,6 +487,31 @@ func _furnish(fl: Dictionary, items: Array, sd: float, clear: Array, around = nu
 		return
 	var xs = fl.keys()
 	xs.sort()
+	# the two orders the columns are tried in (left side first, right side first), worked out once
+	var orders := []
+	if around == null:
+		var rev = xs.duplicate()
+		rev.reverse()
+		orders = [xs, rev]
+	else:
+		var a: int = around
+		var lft := []
+		var rgt := []
+		for x in xs:
+			if x > a:
+				rgt.append(x)
+			else:
+				lft.append(x)
+		lft.sort_custom(func(p, q): return abs(p - a) < abs(q - a))
+		rgt.sort_custom(func(p, q): return abs(p - a) < abs(q - a))
+		orders = [lft + rgt, rgt + lft]
+	# only what already stands near these floors can be in the way
+	var x0 = xs[0] * C - 60.0
+	var x1 = (xs[xs.size() - 1] + 1) * C + 60.0
+	var near := []
+	for o in _occ:
+		if o.end.x > x0 and o.position.x < x1:
+			near.append(o)
 	var first = 0 if _h(sd) < 0.5 else 1
 	for k in items.size():
 		var it = items[k]
@@ -498,39 +523,23 @@ func _furnish(fl: Dictionary, items: Array, sd: float, clear: Array, around = nu
 		var jit = (0.94 + 0.12 * _h(sd + k * 2.3)) * scale
 		var w = sp["w"] * jit
 		var h = sp["h"] * jit
-		var cand := []
-		var right = (k + first) % 2 == 1
-		if around == null:
-			cand = xs.duplicate()
-			if right:
-				cand.reverse()
-		else:
-			var a: int = around
-			var side := []
-			var other := []
-			for x in xs:
-				if (x > a) == right:
-					side.append(x)
-				else:
-					other.append(x)
-			side.sort_custom(func(p, q): return abs(p - a) < abs(q - a))
-			other.sort_custom(func(p, q): return abs(p - a) < abs(q - a))
-			cand = side + other
+		var cand: Array = orders[(k + first) % 2]
 		var placed = false
 		for min_s in [0.97, 0.72]:
 			for x in cand:
-				var r = _fit(fl, x, w, h, clear, min_s)
+				var r = _fit(fl, x, w, h, clear, min_s, near)
 				if r == null:
 					continue
 				_add_prop(sp, r[0], r[1], r[2] * jit, _h(sd + k * 1.7) < 0.5)
+				near.append(_occ[_occ.size() - 1])
 				placed = true
 				break
 			if placed:
 				break
 
 
-# Can an item w x h px stand centred on column x? Returns [centre x, floor y, scale] or null.
-func _fit(fl: Dictionary, x: int, w: float, h: float, clear: Array, min_s: float):
+# Can an item w x h px stand centred on column x? Returns [centre x, floor y, scale] or null. occ: the footprints it must not hit.
+func _fit(fl: Dictionary, x: int, w: float, h: float, clear: Array, min_s: float, occ: Array):
 	var cx = (x + 0.5) * C
 	var a = int(floor((cx - w * 0.4) / C))
 	var b = int(floor((cx + w * 0.4) / C))
@@ -538,9 +547,9 @@ func _fit(fl: Dictionary, x: int, w: float, h: float, clear: Array, min_s: float
 	var hi = -1
 	var ceil_y = -1e9
 	for xx in range(a, b + 1):
-		if not fl.has(xx):
+		var f = fl.get(xx)
+		if f == null:
 			return null
-		var f = fl[xx]
 		lo = min(lo, f[0])
 		hi = max(hi, f[0])
 		ceil_y = max(ceil_y, (f[0] - f[1] + 1) * C)
@@ -554,7 +563,7 @@ func _fit(fl: Dictionary, x: int, w: float, h: float, clear: Array, min_s: float
 	if s < min_s:
 		return null
 	var foot = Rect2(cx - w * s * 0.5, base - h * s, w * s, h * s)
-	for o in _occ:
+	for o in occ:
 		if _overlap(foot, o):
 			return null
 	return [cx, base, s]
