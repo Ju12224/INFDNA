@@ -1,19 +1,17 @@
 extends RefCounted
-# Side-view ant-farm world: a fixed WORLD_W columns wide (v1.3: big, not infinite), with the nest in the middle.
+# Side-view ant-farm world, infinite in both directions along x.
 #
 # Layers of data:
-#  - the surface PROFILE (one int per column) is generated outward from the original playfield (it is defined
-#    beyond the world too, so the view can pad its chunk edges). On top of it sits the MOUND: real dirt the diggers
-#    carried up (see deposit()).
-#  - the SIM arrays cover the whole world, built once when the colony starts (_alloc_fresh, with native image fills
-#    so it takes a fraction of a second). Nothing grows after that; units cannot step or dig past the edges.
+#  - the surface PROFILE (one int per column) is generated lazily outward from the
+#    original playfield and is cheap, so the view can draw terrain anywhere. On top of
+#    it sits the MOUND: real dirt the diggers carried up (see deposit()).
+#  - the SIM arrays only cover the columns things actually reach. They grow in CHUNK
+#    steps when ants or raiders get near an edge.
 #  - two tunnel PLANES: 0 = front (the cut face the camera looks at, surface, shafts),
 #    1 = back (a second layer of tunnels behind it). A back tunnel can run behind a
 #    front one without touching it; the two planes only connect through HOLES (link).
 #  - MATERIAL per cell: strata (humus, clay, sand, red clay, bedrock), stones and
 #    fossils. Material sets how fast a cell digs; bedrock, stones and fossils do not dig.
-#  - for the view: one packed int per cell (_cellp: solid front, solid back, stone, fossil, a byte each) kept in step
-#    with the arrays, so a chunk's mask images are built from it in a few ms (chunk_images).
 # All public functions take WORLD coordinates (x can be negative) and a plane z (0/1).
 # Internally cells are indexed z * WH + y * W + (x - ox).
 #
@@ -23,11 +21,11 @@ extends RefCounted
 
 const UG = preload("res://core/underground.gd")
 const CELL = 6.0
-const CHUNK = 64          # render step (columns)
+const CHUNK = 64          # render + growth step (columns)
 const PAD = 2             # render padding so chunk seams filter cleanly
-const WORLD_CHUNKS = 48   # the world is this many chunks wide...
-const WORLD_W = CHUNK * WORLD_CHUNKS   # ...3072 columns (about 18,400 px), chunk aligned, the nest in the middle
-const PM = PAD + 1        # columns of _cellp beyond each world edge (a chunk's padding plus its smoothing ring)
+const MARGIN = 24         # keep this many sim columns beyond any unit
+const INIT_L = -448       # first sim range (chunk aligned). v0.22: wide enough for foragers ranging
+const INIT_R = 704        # ~520 cells either side of the nest, so nothing grows mid-game
 const PLANES = 2
 
 # materials (index into DIG_RATE / MAT_NAMES)
@@ -48,7 +46,7 @@ const SEAMS = [10.0, 31.2, 56.5, 86.0, 122.0, 158.0]   # humus|clay|sand|red|lim
 const SB = 10             # stone placement block (cells)
 const SKY_LIMIT = 12      # the mound never grows above this row
 
-var W: int                # sim columns (the whole world)
+var W: int                # sim columns
 var H: int
 var WH: int
 var ox := 0               # world x of sim column 0
@@ -88,17 +86,15 @@ var _prof_r := PackedInt32Array()   # base surface y for x = 0, 1, 2 ...
 var _prof_l := PackedInt32Array()   # base surface y for x = -1, -2, ...
 var _mound := {}                # x -> rows of spoil piled on the base surface
 var _grain_acc := 0.0
-var _chunk_img := {}            # k -> [front, aux] mask images of chunk k, built on first use, repainted in place on digs
+var _chunk_img := {}            # k -> [front, aux] images of chunks that overlap the sim range
+var _far_img := {}              # k -> [front, aux] images of chunks outside it (nothing is dug there), oldest first
+const FAR_KEEP = 96             # how many of those are kept (each pair is about 120 KB)
 var _neg := PackedInt32Array()      # all -1, PLANES * WH: copied (COW) as a BFS start
-var _cellp := PackedInt32Array()    # PW * H, columns ox - PM ..: solid front | solid back << 8 | stone << 16 | fossil << 24
-var PW := 0                         # W + 2 * PM
-var _dug_lo := PackedInt32Array()   # per sim column: first row dug open (either plane), H if none
-var _dug_hi := PackedInt32Array()   # per sim column: last row dug open, -1 if none
-var _lut_v := PackedByteArray()     # byte that Image.set_pixel stores for v / 16.0 (v = 0..16)
-var _lut_a := PackedByteArray()     # ... and for 1.0 - v / 16.0
+var _air_col: Image
 var _nest_x := 130
 var _nest_y := 70
 var _block_cache := {}
+var _smap = null                # stone cells of the chunk being built (outside the sim range)
 var ug = null                   # core/underground.gd registry: this world's underground structures
 
 const N8 = [Vector2(-1, -1), Vector2(0, -1), Vector2(1, -1), Vector2(-1, 0),
@@ -146,10 +142,13 @@ func _init(w: int, h: int, seed_value: int) -> void:
 	for v in s0:
 		_prof_r.append(v)
 
+	_air_col = Image.create_empty(1, H, false, Image.FORMAT_RGBA8)
+	_air_col.fill(Color(0, 0, 0, 1))
+
 	_nest_x = ex
 	_nest_y = surf_y(ex) + 26
-	ox = int(round((ex - WORLD_W / 2.0) / CHUNK)) * CHUNK
-	W = WORLD_W
+	ox = INIT_L
+	W = INIT_R - INIT_L
 	_alloc_fresh()
 
 	entrance = Vector2(ex, surf_y(ex) - 1)
@@ -166,8 +165,7 @@ func _init(w: int, h: int, seed_value: int) -> void:
 			var dy = (y - chamber.y) / chamber_r.y
 			if dx * dx + dy * dy <= 1.0:
 				_open(x, y, 0, true)
-	# (the shaft carves refreshed their own footing; the chamber's cells were opened directly)
-	_refresh_walk(int(chamber.x - chamber_r.x) - 2, int(chamber.y - chamber_r.y) - 2, int(chamber.x + chamber_r.x) + 3, int(chamber.y + chamber_r.y) + 3)
+	_refresh_walk(ox, 0, ox + W - 1, H - 1)
 	dirty_chunks.clear()
 	_chunk_img.clear()
 	rebuild_nav()
@@ -317,7 +315,6 @@ func stones_in(xa: int, xb: int) -> Array:
 
 func _stamp_stones(xa: int, xb: int) -> void:
 	for s in stones_in(xa, xb):
-		var bits = (1 << 16) | ((1 << 24) if s[4] == M_FOSSIL else 0)
 		for y in range(int(s[1] - s[3]) - 1, int(s[1] + s[3]) + 2):
 			for x in range(int(s[0] - s[2]) - 1, int(s[0] + s[2]) + 2):
 				if x < xa or x > xb or not inb(x, y):
@@ -328,21 +325,13 @@ func _stamp_stones(xa: int, xb: int) -> void:
 					var j = y * W + (x - ox)
 					if solid[j] == 1 and solid[WH + j] == 1:
 						mat[j] = s[4]
-						var pj = y * PW + (x - ox + PM)
-						_cellp[pj] = (_cellp[pj] & 0xffff) | bits
 
 
-# Underground structures (core/underground.gd: roots, caverns, buried things, veins, ruins) written into the sim columns.
-# They write the arrays directly, so the columns they touch are re-read afterwards (footing, view cells, dug rows).
+# Underground structures (core/underground.gd: roots, caverns, buried things, veins, ruins) written into new sim columns.
 func _stamp_features(xa: int, xb: int) -> void:
 	if ug == null:
 		ug = UG.make()
 	ug.stamp_range(self, xa, xb)
-	var mods = ug.modules()
-	for n in mods.keys():
-		if ug.has_fn(mods[n], "stamp"):
-			for f in ug.features(n, self, xa, xb):
-				_resync_cols(max(xa, int(f["x0"])), min(xb, int(f["x1"])))
 
 
 # Material anywhere (outside the sim range it is computed from the generators).
@@ -353,6 +342,8 @@ func mat_at(x: int, y: int) -> int:
 		return M_HUMUS
 	if y < base_y(x) + 4:
 		return strata_at(x, y)
+	if _smap != null:
+		return _smap.get(x * 1024 + y, strata_at(x, y))
 	for s in stones_in(x, x):
 		var dx = (x + 0.5 - s[0]) / s[2]
 		var dy = (y + 0.5 - s[1]) / s[3]
@@ -365,7 +356,7 @@ func dig_rate(x: int, y: int) -> float:
 	return DIG_RATE[mat_at(x, y)]
 
 
-# ---------- the world's columns ----------
+# ---------- sim range ----------
 func sim_l() -> int:
 	return ox
 
@@ -374,135 +365,116 @@ func sim_r() -> int:
 	return ox + W - 1
 
 
-# A colour that Image fills store as exactly these bytes (Image truncates channel * 255).
-static func _bytes(r: int, g: int = 0, b: int = 0, a: int = 0) -> Color:
-	return Color((r + 0.25) / 255.0, (g + 0.25) / 255.0, (b + 0.25) / 255.0, (a + 0.25) / 255.0)
-
-
-# Builds every array for the whole world. Each column of pristine ground is a few runs (air, the strata, solid below
-# the surface, footing just above it), so it is written with one native fill per run instead of cell by cell.
 func _alloc_fresh() -> void:
 	WH = W * H
-	PW = W + 2 * PM
-	var su := PackedInt32Array()       # surface of columns ox - 1 .. ox + W
-	su.resize(W + 2)
-	for i in W + 2:
-		su[i] = surf_y(ox - 1 + i)
-	var img_u := Image.create_empty(W, H, false, Image.FORMAT_R8)
-	var img_m := Image.create_empty(W, H, false, Image.FORMAT_R8)
-	var img_w := Image.create_empty(W, H, false, Image.FORMAT_R8)
-	var img_p := Image.create_empty(PW, H, false, Image.FORMAT_RGBA8)
-	var one := _bytes(1)
-	var both := _bytes(1, 1)
-	var mcol := []
-	for m in MAT_NAMES.size():
-		mcol.append(_bytes(m))
-	var run_mat = [M_HUMUS, M_CLAY, M_SAND, M_RED, M_LIME, M_SHALE, M_BED]
-	for c in W:
-		var x = ox + c
-		var s: int = su[c + 1]
-		if s < H:
-			img_u.fill_rect(Rect2i(c, s, 1, H - s), one)
-			img_p.fill_rect(Rect2i(c + PM, s, 1, H - s), both)
-		# footing: the open cells that touch the ground (the rule of _walk_rule on untouched columns)
-		var ylo = max(0, min(s, min(su[c], su[c + 2])) - 1)
-		if s > ylo:
-			img_w.fill_rect(Rect2i(c, ylo, 1, s - ylo), one)
-		# strata: the same seams as strata_at, found exactly
-		var b = base_y(x)
-		var off = strata_off(x)
-		var ya = s
-		for m in 7:
-			var yb = H if m == 6 else clampi(_seam_y(b, off, SEAMS[m]), s, H)
-			if yb > ya and run_mat[m] != 0:
-				img_m.fill_rect(Rect2i(c, ya, 1, yb - ya), mcol[run_mat[m]])
-			ya = max(ya, yb)
-	under = img_u.get_data()
-	solid = under.duplicate()           # Godot 4 shares packed arrays: each plane needs its own copy
-	solid.append_array(under)
-	mat = img_m.get_data()
-	link = PackedByteArray()
+	solid.resize(PLANES * WH)
+	walk.resize(PLANES * WH)
+	under.resize(WH)
+	mat.resize(WH)
 	link.resize(WH)
-	link.fill(0)
-	walk = img_w.get_data()
-	var back := PackedByteArray()
-	back.resize(WH)
-	back.fill(0)
-	walk.append_array(back)
-	_cellp = img_p.get_data().to_int32_array()
-	for i in PM:
-		for x in [ox - PM + i, ox + W + i]:
-			var col = _pristine_col(x)
-			var ci = x - ox + PM
-			for y in H:
-				_cellp[y * PW + ci] = col[y]
+	for x in range(ox, ox + W):
+		var s = surf_y(x)
+		var c = x - ox
+		for y in H:
+			var u = 1 if y >= s else 0
+			var j = y * W + c
+			solid[j] = u
+			solid[WH + j] = u
+			under[j] = u
+			walk[j] = 0
+			walk[WH + j] = 0
+			link[j] = 0
+			mat[j] = strata_at(x, y) if u == 1 else M_HUMUS
 	pher.resize(W)
-	pher.fill(0.0)
-	_dug_lo.resize(W)
-	_dug_lo.fill(H)
-	_dug_hi.resize(W)
-	_dug_hi.fill(-1)
+	for i in W:
+		pher[i] = 0.0
 	_stamp_stones(ox, ox + W - 1)
 	_stamp_features(ox, ox + W - 1)
 	_make_neg()
 	layout += 1
 
 
-# First row y at which strata_at's depth (y - b) + off reaches the seam (the same float sum, so the same answer).
-static func _seam_y(b: int, off: float, seam: float) -> int:
-	var y = int(ceil(seam + b - off))
-	while (y - 1 - b) + off >= seam:
-		y -= 1
-	while (y - b) + off < seam:
-		y += 1
-	return y
-
-
-# View cells (_cellp values) of an untouched column outside the world: solid below the surface, stones as mat_at has them.
-func _pristine_col(x: int) -> PackedInt32Array:
-	var col := PackedInt32Array()
-	col.resize(H)
-	col.fill(0)
-	var s = surf_y(x)
-	for y in range(max(0, s), H):
-		col[y] = 0x101
-	var lim = max(s, base_y(x) + 4)
-	for st in stones_in(x, x):
-		var bits = 0x101 | (1 << 16) | ((1 << 24) if st[4] == M_FOSSIL else 0)
-		for y in range(max(lim, int(st[1] - st[3]) - 1), min(H, int(st[1] + st[3]) + 2)):
-			var dx = (x + 0.5 - st[0]) / st[2]
-			var dy = (y + 0.5 - st[1]) / st[3]
-			if dx * dx + dy * dy <= 1.0:
-				col[y] = bits
-	return col
-
-
-# Re-read columns xa..xb after something wrote the arrays directly: view cells, dug rows, footing.
-func _resync_cols(xa: int, xb: int) -> void:
-	xa = max(xa, ox)
-	xb = min(xb, ox + W - 1)
-	if xa > xb:
-		return
-	for x in range(xa, xb + 1):
-		var c = x - ox
-		_dug_lo[c] = H
-		_dug_hi[c] = -1
-		for y in H:
-			var j = y * W + c
-			var m = mat[j]
-			var p = solid[j] | (solid[WH + j] << 8)
-			if m == M_STONE or m == M_FOSSIL:
-				p |= (1 << 16) | ((1 << 24) if m == M_FOSSIL else 0)
-			_cellp[y * PW + c + PM] = p
-			if under[j] == 1 and (solid[j] == 0 or solid[WH + j] == 0):
-				_dug_lo[c] = min(_dug_lo[c], y)
-				_dug_hi[c] = y
-	_refresh_walk(xa - 1, 0, xb + 1, H - 1)
-
-
 func _make_neg() -> void:
 	_neg.resize(PLANES * WH)
-	_neg.fill(-1)
+	for i in PLANES * WH:
+		_neg[i] = -1
+
+
+# Grow the sim range so [xa, xb] (plus MARGIN) is covered. Returns true if it grew.
+func ensure_cols(xa: int, xb: int) -> bool:
+	xa -= MARGIN
+	xb += MARGIN
+	var add_l := 0
+	var add_r := 0
+	while xa < ox - add_l:
+		add_l += CHUNK
+	while xb > ox + W - 1 + add_r:
+		add_r += CHUNK
+	if add_l == 0 and add_r == 0:
+		return false
+	_extend(add_l, add_r)
+	return true
+
+
+func _fresh_row(xa: int, xb: int, y: int, what: int) -> PackedByteArray:
+	var r := PackedByteArray()
+	for x in range(xa, xb):
+		var s = surf_y(x)
+		if what == 0:
+			r.append(1 if y >= s else 0)
+		elif what == 1:
+			r.append(0)
+		else:
+			r.append(strata_at(x, y) if y >= s else M_HUMUS)
+	return r
+
+
+func _extend(add_l: int, add_r: int) -> void:
+	var nw = W + add_l + add_r
+	var nox = ox - add_l
+	var new_arrays := []
+	# solid, walk: per plane. under, mat, link: one plane.
+	for spec in [[solid, 0, PLANES], [walk, 1, PLANES], [under, 0, 1], [mat, 2, 1], [link, 1, 1]]:
+		var src: PackedByteArray = spec[0]
+		var out := PackedByteArray()
+		for z in spec[2]:
+			for y in H:
+				out.append_array(_fresh_row(nox, ox, y, spec[1]))
+				if W > 0:
+					var r0 = z * WH + y * W
+					out.append_array(src.slice(r0, r0 + W))
+				out.append_array(_fresh_row(ox + W, nox + nw, y, spec[1]))
+		new_arrays.append(out)
+	var np := PackedFloat32Array()
+	for i in add_l:
+		np.append(0.0)
+	np.append_array(pher)
+	for i in add_r:
+		np.append(0.0)
+	solid = new_arrays[0]
+	walk = new_arrays[1]
+	under = new_arrays[2]
+	mat = new_arrays[3]
+	link = new_arrays[4]
+	pher = np
+	var old_l = ox
+	var old_r = ox + W - 1
+	ox = nox
+	W = nw
+	WH = W * H
+	if add_l > 0:
+		_stamp_stones(ox, old_l - 1)
+		_stamp_features(ox, old_l - 1)
+	if add_r > 0:
+		_stamp_stones(old_r + 1, ox + W - 1)
+		_stamp_features(old_r + 1, ox + W - 1)
+	_make_neg()
+	layout += 1
+	if add_l > 0:
+		_refresh_walk(ox, 0, old_l, H - 1)
+	if add_r > 0:
+		_refresh_walk(old_r, 0, ox + W - 1, H - 1)
+	rebuild_nav()
 
 
 # ---------- queries ----------
@@ -669,6 +641,8 @@ func _carve_raw(cx: float, cy: float, r: float, allow_roof: bool, z: int = 0, fo
 	var x1 = int(ceil(cx + r)) + 1
 	var y0 = int(floor(cy - r)) - 1
 	var y1 = int(ceil(cy + r)) + 1
+	if x0 < ox + 2 or x1 > ox + W - 3:
+		ensure_cols(x0, x1)
 	var n := 0
 	for y in range(y0, y1 + 1):
 		for x in range(x0, x1 + 1):
@@ -692,13 +666,6 @@ func _open(x: int, y: int, z: int = 0, force: bool = false) -> bool:
 	var i = z * WH + j
 	if solid[i] == 1 and under[j] == 1 and (force or DIG_RATE[mat[j]] > 0.0):
 		solid[i] = 0
-		var pj = y * PW + (x - ox + PM)
-		_cellp[pj] = _cellp[pj] & ~(1 << (8 * z))
-		var c = x - ox
-		if y < _dug_lo[c]:
-			_dug_lo[c] = y
-		if y > _dug_hi[c]:
-			_dug_hi[c] = y
 		open_under += 1
 		dug_by_mat[mat[j]] += 1
 		return true
@@ -770,8 +737,8 @@ func deposit(x0: int, cells: float, rng) -> Array:
 	while _grain_acc >= 1.0:
 		_grain_acc -= 1.0
 		var x = _roll(x0, rng)
-		if x == null or x < ox + 3 or x > ox + W - 4:
-			spoil_lost += 1          # (or it rolled off the edge of the world)
+		if x == null:
+			spoil_lost += 1
 			continue
 		_raise(x)
 		mound_cells += 1
@@ -818,6 +785,7 @@ func _roll(x: int, rng):
 
 
 func _raise(x: int) -> void:
+	ensure_cols(x - 2, x + 2)
 	var y = surf_y(x) - 1
 	_mound[x] = _mound.get(x, 0) + 1
 	surf_dirty[x] = true
@@ -826,7 +794,6 @@ func _raise(x: int) -> void:
 	solid[WH + j] = 1
 	under[j] = 1
 	mat[j] = M_SPOIL
-	_cellp[y * PW + (x - ox + PM)] = 0x101
 	var y_lo = y
 	# a mouth next to this column rises with the pile: its column becomes an open chimney
 	for c in [x - 1, x + 1]:
@@ -841,9 +808,6 @@ func _raise(x: int) -> void:
 				solid[WH + jc] = 1
 				under[jc] = 1
 				mat[jc] = M_SPOIL
-				_cellp[cy * PW + (c - ox + PM)] = 0x100
-				_dug_lo[c - ox] = min(_dug_lo[c - ox], cy)
-				_dug_hi[c - ox] = max(_dug_hi[c - ox], cy)
 				y_lo = min(y_lo, cy)
 	for i in entrances.size():
 		entrances[i] = Vector2(entrances[i].x, surf_y(int(entrances[i].x)) - 1)
@@ -869,139 +833,55 @@ func _touch(x0: int, y0: int, x1: int, y1: int) -> void:
 #  front: R = solid front plane (3x3 smoothed so outlines curve), G = underground, B = turf
 #  aux:   R = solid back plane (smoothed), G = stone or fossil (smoothed), B = hole between
 #         planes, A = 1 - fossil
-# Built from _cellp in a few ms: the image starts as plain ground (air above the surface, solid below) and only the
-# pixels that can differ from it are worked out (around the surface line, the stones and whatever the colony dug).
-# One packed int holds a cell's four flags a byte each, so one weighted sum smooths all four masks at once.
-func has_chunk_images(k: int) -> bool:
-	return _chunk_img.has(k)
-
-
 func chunk_images(k: int) -> Array:
 	if _chunk_img.has(k):
 		return _chunk_img[k]
-	if _lut_v.is_empty():
-		_make_lut()
-	var cw := CHUNK + 2 * PAD
-	var x0 := k * CHUNK - PAD
-	var lw := cw + 2
-	var P := _cells(x0 - 1, lw)          # lw x H: the chunk's cells and a ring of one column either side
-	var front := Image.create_empty(cw, H, false, Image.FORMAT_RGBA8)
+	var cw = CHUNK + 2 * PAD
+	var x0 = k * CHUNK - PAD
+	var in_sim = max(x0, ox) <= min(x0 + cw - 1, ox + W - 1)
+	if not in_sim and _far_img.has(k):
+		return _far_img[k]          # pristine ground never changes: building it is the slow part
+	var front = Image.create_empty(cw, H, false, Image.FORMAT_RGBA8)
 	front.fill(Color(1, 1, 0, 1))
-	var aux := Image.create_empty(cw, H, false, Image.FORMAT_RGBA8)
+	var aux = Image.create_empty(cw, H, false, Image.FORMAT_RGBA8)
 	aux.fill(Color(1, 0, 0, 1))
-	var need := Image.create_empty(cw, H, false, Image.FORMAT_R8)
-	var air := Color(0, 0, 0, 1)
-	var on := Color(1, 1, 1, 1)
-	var sy := PackedInt32Array()
-	sy.resize(cw)
-	var gy := PackedInt32Array()
-	gy.resize(cw)
+	# pristine columns: air above, one smooth transition, solid below
 	for c in cw:
 		var x = x0 + c
 		var s = surf_y(x)
-		sy[c] = s
-		gy[c] = base_y(x)
-		if s > 2:
-			front.fill_rect(Rect2i(c, 0, 1, s - 2), air)
-			aux.fill_rect(Rect2i(c, 0, 1, s - 2), air)
-		# the surface line: one smooth transition from air to ground
-		var ya = max(0, s - 2)
-		var yb = min(H, s + 3)
-		if yb > ya:
-			need.fill_rect(Rect2i(c, ya, 1, yb - ya), on)
-	for st in stones_in(x0 - 2, x0 + cw + 1):
-		_need(need, x0, int(st[0] - st[2]) - 2, int(st[1] - st[3]) - 2, int(st[0] + st[2]) + 2, int(st[1] + st[3]) + 2)
-	# anything the colony has changed: rows dug open in either plane, and the mound
-	for x in range(max(x0 - 1, ox), min(x0 + cw, ox + W - 1) + 1):
-		var c = x - ox
-		var ymin = _dug_lo[c] if _dug_hi[c] >= 0 else -1
-		var ymax = _dug_hi[c]
-		var m = _mound.get(x, 0)
-		if m > 0:
-			var s = surf_y(x)
-			ymin = s - 2 if ymin < 0 else min(ymin, s - 2)
-			ymax = max(ymax, s + m + 2)
-		if ymin >= 0:
-			_need(need, x0, x - 2, ymin - 2, x + 2, ymax + 2)
-	var fb := front.get_data()
-	var ab := aux.get_data()
-	var nb := need.get_data()
-	var lv := _lut_v
-	var la := _lut_a
-	var lk_arr := link
-	var hm := H - 1
-	var w := W
-	var xo := ox
-	var i := nb.find(255)
-	while i >= 0:
-		var y := i / cw
-		var c := i - y * cw
-		var r0 := y * lw + c + 1
-		var rm := r0 - lw if y > 0 else r0
-		var rp := r0 + lw if y < hm else r0
-		var p0: int = P[r0]
-		var acc: int = P[rm - 1] + 2 * P[rm] + P[rm + 1] + 2 * P[r0 - 1] + 4 * p0 + 2 * P[r0 + 1] + P[rp - 1] + 2 * P[rp] + P[rp + 1]
-		var s: int = sy[c]
-		var o := i * 4
-		fb[o] = lv[acc & 255]
-		fb[o + 1] = 255 if y >= s else 0
-		fb[o + 2] = 255 if ((p0 & 1) == 1 and y <= s + 1 and y >= gy[c]) else 0
-		ab[o] = lv[(acc >> 8) & 255]
-		ab[o + 1] = lv[(acc >> 16) & 255]
-		var xl := x0 + c - xo
-		ab[o + 2] = 255 if (xl >= 0 and xl < w and (p0 & 0x101) == 0 and lk_arr[y * w + xl] == 1) else 0
-		ab[o + 3] = la[(acc >> 24) & 255]
-		i = nb.find(255, i + 1)
-	front.set_data(cw, H, false, Image.FORMAT_RGBA8, fb)
-	aux.set_data(cw, H, false, Image.FORMAT_RGBA8, ab)
+		front.blit_rect(_air_col, Rect2(0, 0, 1, max(0, s - 2)), Vector2(c, 0))
+		aux.blit_rect(_air_col, Rect2(0, 0, 1, max(0, s - 2)), Vector2(c, 0))
 	var pair = [front, aux]
-	_chunk_img[k] = pair
+	for c in cw:
+		var x = x0 + c
+		var s = surf_y(x)
+		for y in range(max(0, s - 2), min(H, s + 3)):
+			front.set_pixel(c, y, _pix(x, y))
+			aux.set_pixel(c, y, _pix_aux(x, y))
+	# stones
+	var sts = stones_in(x0 - 2, x0 + cw + 1)
+	_smap = {}
+	for st in sts:
+		for y in range(int(st[1] - st[3]) - 1, int(st[1] + st[3]) + 2):
+			for x in range(int(st[0] - st[2]) - 1, int(st[0] + st[2]) + 2):
+				var dx = (x + 0.5 - st[0]) / st[2]
+				var dy = (y + 0.5 - st[1]) / st[3]
+				if dx * dx + dy * dy <= 1.0 and y >= surf_y(x):
+					_smap[x * 1024 + y] = st[4]
+	for st in sts:
+		_paint(pair, k, int(st[0] - st[2]) - 1, int(st[1] - st[3]) - 1, int(st[0] + st[2]) + 1, int(st[1] + st[3]) + 1)
+	_smap = null
+	# anything the colony has changed
+	var lo = max(x0, ox)
+	var hi = min(x0 + cw - 1, ox + W - 1)
+	if lo <= hi:
+		_paint_dug(pair, k, lo - 1, hi + 1)
+		_chunk_img[k] = pair
+	else:
+		_far_img[k] = pair
+		if _far_img.size() > FAR_KEEP:
+			_far_img.erase(_far_img.keys()[0])
 	return pair
-
-
-# Mark cells xa..xb, ya..yb (world) of the chunk starting at column x0 for working out.
-func _need(need: Image, x0: int, xa: int, ya: int, xb: int, yb: int) -> void:
-	xa = max(xa, x0)
-	xb = min(xb, x0 + need.get_width() - 1)
-	ya = max(ya, 0)
-	yb = min(yb, H - 1)
-	if xa <= xb and ya <= yb:
-		need.fill_rect(Rect2i(xa - x0, ya, xb - xa + 1, yb - ya + 1), Color(1, 1, 1, 1))
-
-
-# The bytes Image.set_pixel stores for the smoothed masks (it truncates), so the fast path writes exactly what it would.
-func _make_lut() -> void:
-	var im = Image.create_empty(17, 1, false, Image.FORMAT_RGBA8)
-	for v in 17:
-		im.set_pixel(v, 0, Color(v / 16.0, 0, 0, 1.0 - v / 16.0))
-	var d = im.get_data()
-	_lut_v.resize(17)
-	_lut_a.resize(17)
-	for v in 17:
-		_lut_v[v] = d[v * 4]
-		_lut_a[v] = d[v * 4 + 3]
-
-
-# _cellp values of n columns from world column xa, all rows (n x H). Beyond _cellp the ground is untouched.
-func _cells(xa: int, n: int) -> PackedInt32Array:
-	var out := PackedInt32Array()
-	var c0 = xa - (ox - PM)
-	if c0 >= 0 and c0 + n <= PW:
-		for y in H:
-			var b = y * PW + c0
-			out.append_array(_cellp.slice(b, b + n))
-		return out
-	out.resize(n * H)
-	for i in n:
-		var ci = c0 + i
-		if ci >= 0 and ci < PW:
-			for y in H:
-				out[y * n + i] = _cellp[y * PW + ci]
-		else:
-			var col = _pristine_col(xa + i)
-			for y in H:
-				out[y * n + i] = col[y]
-	return out
 
 
 # Per column of chunk k: R = surface y / 255 (mound included), G = original ground y / 255,
@@ -1015,47 +895,78 @@ func chunk_surf_image(k: int) -> Image:
 	return img
 
 
-# Repaint cells x0..x1, y0..y1 (and a ring of one) of chunk k's images after a dig.
+func _paint_dug(pair: Array, k: int, xa: int, xb: int) -> void:
+	# rows that differ from pristine: any dug cell (either plane) or mound in the column
+	for x in range(xa, xb + 1):
+		if x < ox or x >= ox + W:
+			continue
+		var c = x - ox
+		var ymin = -1
+		var ymax = -1
+		for y in H:
+			var j = y * W + c
+			if under[j] == 1 and (solid[j] == 0 or solid[WH + j] == 0):
+				if ymin < 0:
+					ymin = y
+				ymax = y
+		var m = _mound.get(x, 0)
+		if m > 0:
+			var s = surf_y(x)
+			ymin = s - 2 if ymin < 0 else min(ymin, s - 2)
+			ymax = max(ymax, s + m + 2)
+		if ymin >= 0:
+			_paint(pair, k, x - 1, ymin - 1, x + 1, ymax + 1)
+
+
 func _paint(pair: Array, k: int, x0: int, y0: int, x1: int, y1: int) -> void:
 	var cx0 = k * CHUNK - PAD
 	var cw = CHUNK + 2 * PAD
-	var xa = max(cx0, x0 - 1)
-	var xb = min(cx0 + cw - 1, x1 + 1)
-	var ya = max(0, y0 - 1)
-	var yb = min(H - 1, y1 + 1)
-	if xa > xb or ya > yb:
-		return
-	var P := _cellp
-	var lw := PW
-	var lx := ox - PM
-	if xa - 1 < lx or xb + 1 >= lx + PW:
-		lw = xb - xa + 3
-		lx = xa - 1
-		P = _cells(lx, lw)
 	var front: Image = pair[0]
 	var aux: Image = pair[1]
-	for x in range(xa, xb + 1):
-		var s = surf_y(x)
-		var g0 = base_y(x)
-		var lc = x - lx
-		var inw = x >= ox and x < ox + W
-		for y in range(ya, yb + 1):
-			var r0 = y * lw + lc
-			var rm = r0 - lw if y > 0 else r0
-			var rp = r0 + lw if y < H - 1 else r0
-			var p0 = P[r0]
-			var acc = P[rm - 1] + 2 * P[rm] + P[rm + 1] + 2 * P[r0 - 1] + 4 * p0 + 2 * P[r0 + 1] + P[rp - 1] + 2 * P[rp] + P[rp + 1]
-			var u = 1.0 if y >= s else 0.0
-			var g = 1.0 if ((p0 & 1) == 1 and y <= s + 1 and y >= g0) else 0.0
-			var lk = 1.0 if (inw and (p0 & 0x101) == 0 and link[y * W + (x - ox)] == 1) else 0.0
-			front.set_pixel(x - cx0, y, Color((acc & 255) / 16.0, u, g, 1.0))
-			aux.set_pixel(x - cx0, y, Color(((acc >> 8) & 255) / 16.0, ((acc >> 16) & 255) / 16.0, lk, 1.0 - ((acc >> 24) & 255) / 16.0))
+	for y in range(max(0, y0 - 1), min(H - 1, y1 + 1) + 1):
+		for x in range(max(cx0, x0 - 1), min(cx0 + cw - 1, x1 + 1) + 1):
+			front.set_pixel(x - cx0, y, _pix(x, y))
+			aux.set_pixel(x - cx0, y, _pix_aux(x, y))
+
+
+func _pix(x: int, y: int) -> Color:
+	var acc := 0.0
+	for dy in [-1, 0, 1]:
+		for dx in [-1, 0, 1]:
+			var w = 4.0 if dx == 0 and dy == 0 else (2.0 if dx == 0 or dy == 0 else 1.0)
+			if is_solid(x + dx, int(clamp(y + dy, 0, H - 1))):
+				acc += w
+	var s = surf_y(x)
+	var sol = is_solid(x, y)
+	var u = 1.0 if y >= s else 0.0
+	var g = 1.0 if (sol and y <= s + 1 and y >= base_y(x)) else 0.0
+	return Color(acc / 16.0, u, g, 1.0)
+
+
+func _pix_aux(x: int, y: int) -> Color:
+	var accb := 0.0
+	var accs := 0.0
+	var accf := 0.0
+	for dy in [-1, 0, 1]:
+		for dx in [-1, 0, 1]:
+			var w = 4.0 if dx == 0 and dy == 0 else (2.0 if dx == 0 or dy == 0 else 1.0)
+			var yy = int(clamp(y + dy, 0, H - 1))
+			if is_solid(x + dx, yy, 1):
+				accb += w
+			var m = mat_at(x + dx, yy)
+			if m == M_STONE or m == M_FOSSIL:
+				accs += w
+				if m == M_FOSSIL:
+					accf += w
+	var lk = 1.0 if is_link(x, y) else 0.0
+	return Color(accb / 16.0, accs / 16.0, lk, 1.0 - accf / 16.0)
 
 
 # New shaft at column x down to chamber depth, then a gallery back toward the
 # main shaft until it meets existing tunnels.
 func add_entrance(x: int) -> void:
 	x = int(clamp(x, arena_l + 12, arena_r - 12))
+	ensure_cols(x - 8, x + 8)
 	var flat = true
 	for xx in range(x - 4, x + 5):
 		if _mound.get(xx, 0) > 0:

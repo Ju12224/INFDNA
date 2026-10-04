@@ -12,6 +12,7 @@ const Sim = preload("res://core/colony_sim.gd")
 const Day = preload("res://scene/day.gd")
 const BugReport = preload("res://core/bug_report.gd")
 const WorldGrid = preload("res://core/world_grid.gd")
+const Run = preload("res://scene/run.gd")
 
 const STEP = 0.1          # sim seconds per sim step
 const MAX_STEPS = 6       # sim steps per frame at most, so a slow frame never snowballs
@@ -31,12 +32,15 @@ const SKY_LAYER = -10
 const UI_LAYER = 10
 const SKY_VIEW = "res://scene/sky_view.gd"
 const HUD = "res://scene/hud.gd"
+const CONTROLS = "res://scene/controls.gd"       # selecting ants, orders and powers (on the interface layer, above the HUD)
+const RUN_END = "res://scene/run_end.tscn"       # the end-of-run screen; without it a collapse starts a new colony at once
 # the views in the world, back to front: [name, script, z_index]
 const WORLD_VIEWS = [
 	["surface", "res://scene/surface_view.gd", 10],
 	["soil", "res://scene/soil_view.gd", 20],
 	["nest", "res://scene/nest_view.gd", 30],
 	["units", "res://scene/units_view.gd", 40],
+	["creatures", "res://scene/creatures_view.gd", 45],
 	["effects", "res://scene/effects_view.gd", 50],
 ]
 
@@ -73,6 +77,7 @@ func _ready() -> void:
 	ui_layer.layer = UI_LAYER
 	add_child(ui_layer)
 	_add_view("hud", HUD, ui_layer, 0)
+	_add_view("controls", CONTROLS, ui_layer, 1)
 
 
 func _add_view(view_name: String, path: String, parent: Node, z: int) -> void:
@@ -89,7 +94,7 @@ func _add_view(view_name: String, path: String, parent: Node, z: int) -> void:
 
 func _new_colony() -> void:
 	colonies += 1
-	sim = Sim.new(randi() % 1000000, "well_rounded")
+	sim = Sim.new(randi() % 1000000, Run.queen_id, Run.heirloom, Run.kin)
 	grid = sim.grid
 	BugReport.colony_started()
 	var e = grid.center(int(grid.entrance.x), int(grid.entrance.y))
@@ -109,6 +114,10 @@ func _process(delta: float) -> void:
 			_acc -= STEP
 			n += 1
 	if sim.collapsed:
+		Run.last_sim = sim
+		if ResourceLoader.exists(RUN_END):
+			get_tree().change_scene_to_file(RUN_END)
+			return
 		_new_colony()
 	day.update(sim.time, sim.rain, sim.overcast, force_ph)
 	_move_camera(delta)
