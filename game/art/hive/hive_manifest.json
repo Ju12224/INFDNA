@@ -1,0 +1,117 @@
+{
+ "hive_whole": {
+  "file": "hive/hive_whole.png",
+  "w": 182,
+  "h": 227
+ },
+ "hive_drip": {
+  "file": "hive/hive_drip.png",
+  "w": 186,
+  "h": 230
+ },
+ "hive_damaged": {
+  "file": "hive/hive_damaged.png",
+  "w": 171,
+  "h": 248
+ },
+ "hive_cracked": {
+  "file": "hive/hive_cracked.png",
+  "w": 218,
+  "h": 178
+ },
+ "hive_trunk": {
+  "file": "hive/hive_trunk.png",
+  "w": 232,
+  "h": 178
+ },
+ "hive_fallen": {
+  "file": "hive/hive_fallen.png",
+  "w": 247,
+  "h": 132
+ },
+ "comb_big": {
+  "file": "hive/comb_big.png",
+  "w": 92,
+  "h": 89
+ },
+ "comb_one": {
+  "file": "hive/comb_one.png",
+  "w": 40,
+  "h": 46
+ },
+ "comb_three": {
+  "file": "hive/comb_three.png",
+  "w": 70,
+  "h": 71
+ },
+ "comb_cell": {
+  "file": "hive/comb_cell.png",
+  "w": 44,
+  "h": 53
+ },
+ "comb_drip": {
+  "file": "hive/comb_drip.png",
+  "w": 74,
+  "h": 84
+ },
+ "comb_chunk": {
+  "file": "hive/comb_chunk.png",
+  "w": 80,
+  "h": 69
+ },
+ "comb_bit": {
+  "file": "hive/comb_bit.png",
+  "w": 107,
+  "h": 62
+ },
+ "puddle_a": {
+  "file": "hive/puddle_a.png",
+  "w": 88,
+  "h": 68
+ },
+ "puddle_b": {
+  "file": "hive/puddle_b.png",
+  "w": 68,
+  "h": 32
+ },
+ "bee_0": {
+  "file": "hive/bee_0.png",
+  "w": 112,
+  "h": 98
+ },
+ "bee_1": {
+  "file": "hive/bee_1.png",
+  "w": 96,
+  "h": 98
+ },
+ "bee_2": {
+  "file": "hive/bee_2.png",
+  "w": 109,
+  "h": 82
+ },
+ "bee_3": {
+  "file": "hive/bee_3.png",
+  "w": 92,
+  "h": 98
+ },
+ "bee_4": {
+  "file": "hive/bee_4.png",
+  "w": 79,
+  "h": 87
+ },
+ "bee_5": {
+  "file": "hive/bee_5.png",
+  "w": 85,
+  "h": 102
+ },
+ "bee_6": {
+  "file": "hive/bee_6.png",
+  "w": 112,
+  "h": 102
+ },
+ "bee_7": {
+  "file": "hive/bee_7.png",
+  "w": 67,
+  "h": 80
+ }
+}

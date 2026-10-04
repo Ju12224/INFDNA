@@ -1,0 +1,1496 @@
+{
+ "trees": [
+  {
+   "name": "mossoak",
+   "w": 925,
+   "h": 670,
+   "leafy": true,
+   "looks": {
+    "summer": "tree_mossoak_summer.png",
+    "spring": "tree_mossoak_spring.png",
+    "orange": "tree_mossoak_orange.png",
+    "red": "tree_mossoak_red.png",
+    "gold": "tree_mossoak_gold.png"
+   },
+   "mist": {
+    "summer": "mist_mossoak_summer.png",
+    "spring": "mist_mossoak_spring.png",
+    "orange": "mist_mossoak_orange.png",
+    "red": "mist_mossoak_red.png",
+    "gold": "mist_mossoak_gold.png"
+   },
+   "file": "tree_mossoak_summer.png",
+   "ink": "tree_mossoak_ink.png",
+   "ink_close": "tree_mossoak_inkc.png",
+   "sil": "tree_mossoak_sil.png",
+   "shade": "tree_mossoak_shade.png",
+   "foot": [
+    0.3805,
+    0.7632
+   ],
+   "sway": [
+    [
+     0.0,
+     0.0,
+     0.67,
+     0.92,
+     0.15,
+     0.0,
+     0.0
+    ],
+    [
+     0.15,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     0.09,
+     0.0
+    ],
+    [
+     0.48,
+     1.0,
+     1.0,
+     0.86,
+     1.0,
+     1.0,
+     0.09
+    ],
+    [
+     0.45,
+     0.82,
+     0.56,
+     0.23,
+     0.37,
+     0.83,
+     0.83
+    ],
+    [
+     0.04,
+     0.07,
+     0.08,
+     0.0,
+     0.05,
+     0.09,
+     0.03
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ]
+   ],
+   "canopy": [
+    0.089,
+    0.078,
+    0.905,
+    0.725
+   ],
+   "leaf_rgb": {
+    "summer": [
+     87,
+     110,
+     76
+    ],
+    "spring": [
+     125,
+     137,
+     96
+    ],
+    "orange": [
+     161,
+     116,
+     75
+    ],
+    "red": [
+     133,
+     72,
+     65
+    ],
+    "gold": [
+     176,
+     162,
+     89
+    ]
+   },
+   "ink_rgb": [
+    7,
+    5,
+    10
+   ]
+  },
+  {
+   "name": "stump",
+   "w": 491,
+   "h": 508,
+   "leafy": false,
+   "looks": {
+    "summer": "tree_stump.png"
+   },
+   "mist": {
+    "summer": "mist_stump.png"
+   },
+   "file": "tree_stump.png",
+   "ink": "tree_stump_ink.png",
+   "ink_close": "tree_stump_inkc.png",
+   "sil": "tree_stump_sil.png",
+   "shade": "tree_stump_shade.png",
+   "foot": [
+    0.0061,
+    0.7291
+   ],
+   "canopy": [
+    0.222,
+    0.401,
+    0.868,
+    0.963
+   ],
+   "leaf_rgb": {
+    "summer": [
+     78,
+     68,
+     53
+    ]
+   },
+   "ink_rgb": [
+    8,
+    4,
+    10
+   ]
+  },
+  {
+   "name": "spruce",
+   "w": 379,
+   "h": 593,
+   "leafy": false,
+   "looks": {
+    "summer": "tree_spruce.png"
+   },
+   "mist": {
+    "summer": "mist_spruce.png"
+   },
+   "file": "tree_spruce.png",
+   "ink": "tree_spruce_ink.png",
+   "ink_close": "tree_spruce_inkc.png",
+   "sil": "tree_spruce_sil.png",
+   "shade": "tree_spruce_shade.png",
+   "foot": [
+    0.0633,
+    0.8549
+   ],
+   "sway": [
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.06,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.12,
+     0.63,
+     0.12,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.24,
+     0.47,
+     0.5,
+     0.01,
+     0.0
+    ],
+    [
+     0.0,
+     0.02,
+     0.43,
+     0.44,
+     0.55,
+     0.25,
+     0.0
+    ],
+    [
+     0.0,
+     0.08,
+     0.05,
+     0.08,
+     0.18,
+     0.14,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ]
+   ],
+   "canopy": [
+    0.23,
+    0.159,
+    0.831,
+    0.843
+   ],
+   "leaf_rgb": {
+    "summer": [
+     67,
+     67,
+     50
+    ]
+   },
+   "ink_rgb": [
+    7,
+    5,
+    10
+   ]
+  },
+  {
+   "name": "log",
+   "w": 913,
+   "h": 253,
+   "leafy": false,
+   "looks": {
+    "summer": "tree_log.png"
+   },
+   "mist": {
+    "summer": "mist_log.png"
+   },
+   "file": "tree_log.png",
+   "ink": "tree_log_ink.png",
+   "ink_close": "tree_log_inkc.png",
+   "sil": "tree_log_sil.png",
+   "shade": "tree_log_shade.png",
+   "foot": [
+    0.0,
+    0.9967
+   ],
+   "canopy": [
+    0.197,
+    0.138,
+    0.858,
+    0.862
+   ],
+   "leaf_rgb": {
+    "summer": [
+     70,
+     66,
+     50
+    ]
+   },
+   "ink_rgb": [
+    7,
+    5,
+    9
+   ]
+  },
+  {
+   "name": "acacia",
+   "w": 552,
+   "h": 317,
+   "leafy": true,
+   "looks": {
+    "summer": "tree_acacia_summer.png",
+    "spring": "tree_acacia_spring.png",
+    "orange": "tree_acacia_orange.png",
+    "red": "tree_acacia_red.png",
+    "gold": "tree_acacia_gold.png"
+   },
+   "mist": {
+    "summer": "mist_acacia_summer.png",
+    "spring": "mist_acacia_spring.png",
+    "orange": "mist_acacia_orange.png",
+    "red": "mist_acacia_red.png",
+    "gold": "mist_acacia_gold.png"
+   },
+   "file": "tree_acacia_summer.png",
+   "ink": "tree_acacia_ink.png",
+   "ink_close": "tree_acacia_inkc.png",
+   "sil": "tree_acacia_sil.png",
+   "shade": "tree_acacia_shade.png",
+   "foot": [
+    0.2101,
+    0.8877
+   ],
+   "sway": [
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.45,
+     0.45,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.32,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     0.15
+    ],
+    [
+     0.49,
+     0.75,
+     0.07,
+     0.05,
+     0.11,
+     0.67,
+     0.48
+    ],
+    [
+     0.0,
+     0.1,
+     0.03,
+     0.07,
+     0.03,
+     0.04,
+     0.01
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.01,
+     0.01,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ]
+   ],
+   "canopy": [
+    0.103,
+    0.076,
+    0.909,
+    0.811
+   ],
+   "leaf_rgb": {
+    "summer": [
+     78,
+     81,
+     62
+    ],
+    "spring": [
+     96,
+     87,
+     68
+    ],
+    "orange": [
+     100,
+     81,
+     61
+    ],
+    "red": [
+     96,
+     63,
+     57
+    ],
+    "gold": [
+     100,
+     86,
+     64
+    ]
+   },
+   "ink_rgb": [
+    8,
+    5,
+    10
+   ]
+  },
+  {
+   "name": "grove",
+   "w": 370,
+   "h": 295,
+   "leafy": true,
+   "looks": {
+    "summer": "tree_grove_summer.png",
+    "spring": "tree_grove_spring.png",
+    "orange": "tree_grove_orange.png",
+    "red": "tree_grove_red.png",
+    "gold": "tree_grove_gold.png"
+   },
+   "mist": {
+    "summer": "mist_grove_summer.png",
+    "spring": "mist_grove_spring.png",
+    "orange": "mist_grove_orange.png",
+    "red": "mist_grove_red.png",
+    "gold": "mist_grove_gold.png"
+   },
+   "file": "tree_grove_summer.png",
+   "ink": "tree_grove_ink.png",
+   "ink_close": "tree_grove_inkc.png",
+   "sil": "tree_grove_sil.png",
+   "shade": "tree_grove_shade.png",
+   "foot": [
+    0.0,
+    0.9919
+   ],
+   "sway": [
+    [
+     0.0,
+     0.01,
+     0.33,
+     0.01,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.74,
+     1.0,
+     1.0,
+     0.78,
+     0.16,
+     0.0
+    ],
+    [
+     0.24,
+     0.69,
+     0.03,
+     0.03,
+     1.0,
+     1.0,
+     0.17
+    ],
+    [
+     0.0,
+     0.1,
+     0.22,
+     0.04,
+     0.05,
+     0.32,
+     0.05
+    ],
+    [
+     0.03,
+     0.1,
+     0.22,
+     0.17,
+     0.04,
+     0.03,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ]
+   ],
+   "canopy": [
+    0.103,
+    0.115,
+    0.868,
+    0.861
+   ],
+   "leaf_rgb": {
+    "summer": [
+     81,
+     94,
+     68
+    ],
+    "spring": [
+     109,
+     112,
+     81
+    ],
+    "orange": [
+     118,
+     92,
+     66
+    ],
+    "red": [
+     107,
+     64,
+     59
+    ],
+    "gold": [
+     123,
+     111,
+     72
+    ]
+   },
+   "ink_rgb": [
+    7,
+    5,
+    9
+   ]
+  },
+  {
+   "name": "oak1",
+   "w": 746,
+   "h": 897,
+   "leafy": true,
+   "looks": {
+    "summer": "tree_oak1_summer.png",
+    "spring": "tree_oak1_spring.png",
+    "orange": "tree_oak1_orange.png",
+    "red": "tree_oak1_red.png",
+    "gold": "tree_oak1_gold.png"
+   },
+   "mist": {
+    "summer": "mist_oak1_summer.png",
+    "spring": "mist_oak1_spring.png",
+    "orange": "mist_oak1_orange.png",
+    "red": "mist_oak1_red.png",
+    "gold": "mist_oak1_gold.png"
+   },
+   "file": "tree_oak1_summer.png",
+   "ink": "tree_oak1_ink.png",
+   "ink_close": "tree_oak1_inkc.png",
+   "sil": "tree_oak1_sil.png",
+   "shade": "tree_oak1_shade.png",
+   "detail": "tree_oak1_detail.png",
+   "foot": [
+    0.3271,
+    0.7359
+   ],
+   "sway": [
+    [
+     0.0,
+     0.01,
+     0.09,
+     1.0,
+     0.29,
+     0.01,
+     0.0
+    ],
+    [
+     0.0,
+     0.79,
+     1.0,
+     1.0,
+     1.0,
+     0.59,
+     0.03
+    ],
+    [
+     0.9,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     0.77
+    ],
+    [
+     0.29,
+     0.83,
+     0.35,
+     0.35,
+     0.83,
+     0.83,
+     0.83
+    ],
+    [
+     0.0,
+     0.08,
+     0.17,
+     0.0,
+     0.11,
+     0.22,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ]
+   ],
+   "canopy": [
+    0.103,
+    0.088,
+    0.916,
+    0.623
+   ],
+   "leaf_rgb": {
+    "summer": [
+     47,
+     90,
+     40
+    ],
+    "spring": [
+     93,
+     112,
+     52
+    ],
+    "orange": [
+     143,
+     88,
+     48
+    ],
+    "red": [
+     116,
+     35,
+     34
+    ],
+    "gold": [
+     154,
+     134,
+     56
+    ]
+   },
+   "ink_rgb": [
+    3,
+    11,
+    17
+   ]
+  },
+  {
+   "name": "oak2",
+   "w": 881,
+   "h": 910,
+   "leafy": true,
+   "looks": {
+    "summer": "tree_oak2_summer.png",
+    "spring": "tree_oak2_spring.png",
+    "orange": "tree_oak2_orange.png",
+    "red": "tree_oak2_red.png",
+    "gold": "tree_oak2_gold.png"
+   },
+   "mist": {
+    "summer": "mist_oak2_summer.png",
+    "spring": "mist_oak2_spring.png",
+    "orange": "mist_oak2_orange.png",
+    "red": "mist_oak2_red.png",
+    "gold": "mist_oak2_gold.png"
+   },
+   "file": "tree_oak2_summer.png",
+   "ink": "tree_oak2_ink.png",
+   "ink_close": "tree_oak2_inkc.png",
+   "sil": "tree_oak2_sil.png",
+   "shade": "tree_oak2_shade.png",
+   "detail": "tree_oak2_detail.png",
+   "foot": [
+    0.4177,
+    0.6833
+   ],
+   "sway": [
+    [
+     0.0,
+     0.0,
+     0.88,
+     0.45,
+     1.0,
+     0.06,
+     0.0
+    ],
+    [
+     0.25,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     0.98,
+     0.02
+    ],
+    [
+     0.77,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     0.59
+    ],
+    [
+     0.83,
+     0.83,
+     0.83,
+     0.83,
+     0.83,
+     0.83,
+     0.65
+    ],
+    [
+     0.03,
+     0.14,
+     0.22,
+     0.01,
+     0.07,
+     0.22,
+     0.07
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ]
+   ],
+   "canopy": [
+    0.081,
+    0.075,
+    0.906,
+    0.642
+   ],
+   "leaf_rgb": {
+    "summer": [
+     46,
+     90,
+     38
+    ],
+    "spring": [
+     93,
+     112,
+     51
+    ],
+    "orange": [
+     143,
+     87,
+     46
+    ],
+    "red": [
+     116,
+     34,
+     32
+    ],
+    "gold": [
+     154,
+     134,
+     54
+    ]
+   },
+   "ink_rgb": [
+    3,
+    11,
+    18
+   ]
+  }
+ ],
+ "bird": {
+  "head": {
+   "file": "bird_head.png",
+   "w": 244,
+   "h": 247
+  },
+  "wing_a": {
+   "file": "bird_wing_a.png",
+   "w": 341,
+   "h": 289
+  },
+  "wing_b": {
+   "file": "bird_wing_b.png",
+   "w": 451,
+   "h": 328
+  },
+  "claw_1": {
+   "file": "bird_claw_1.png",
+   "w": 205,
+   "h": 175
+  },
+  "claw_2": {
+   "file": "bird_claw_2.png",
+   "w": 151,
+   "h": 118
+  }
+ },
+ "rocks": [
+  {
+   "file": "rock_0.png",
+   "w": 233,
+   "h": 249,
+   "tall": false
+  },
+  {
+   "file": "rock_1.png",
+   "w": 227,
+   "h": 194,
+   "tall": false
+  },
+  {
+   "file": "rock_2.png",
+   "w": 231,
+   "h": 165,
+   "tall": false
+  },
+  {
+   "file": "rock_3.png",
+   "w": 191,
+   "h": 118,
+   "tall": false
+  },
+  {
+   "file": "rock_4.png",
+   "w": 212,
+   "h": 92,
+   "tall": false
+  },
+  {
+   "file": "rock_5.png",
+   "w": 179,
+   "h": 57,
+   "tall": false
+  },
+  {
+   "file": "rock_6.png",
+   "w": 73,
+   "h": 70,
+   "tall": false
+  }
+ ],
+ "spider": {
+  "canvas": [
+   724,
+   543
+  ],
+  "order": [
+   "far",
+   "body",
+   "near"
+  ],
+  "parts": [
+   {
+    "layer": "far",
+    "file": "spider_far_0.png",
+    "x": 242,
+    "y": 172,
+    "pivot": [
+     276.0,
+     196.0
+    ],
+    "phase": 1
+   },
+   {
+    "layer": "far",
+    "file": "spider_far_1.png",
+    "x": 9,
+    "y": 248,
+    "pivot": [
+     133.0,
+     274.0
+    ],
+    "phase": 1
+   },
+   {
+    "layer": "far",
+    "file": "spider_far_2.png",
+    "x": 120,
+    "y": 157,
+    "pivot": [
+     257.5,
+     194.0
+    ],
+    "phase": 0
+   },
+   {
+    "layer": "far",
+    "file": "spider_far_3.png",
+    "x": 500,
+    "y": 165,
+    "pivot": [
+     567.5,
+     186.0
+    ],
+    "phase": 0
+   },
+   {
+    "layer": "near",
+    "file": "spider_near_0.png",
+    "x": 244,
+    "y": 172,
+    "pivot": [
+     276.0,
+     196.0
+    ],
+    "phase": 0
+   },
+   {
+    "layer": "near",
+    "file": "spider_near_1.png",
+    "x": 7,
+    "y": 248,
+    "pivot": [
+     133.0,
+     274.0
+    ],
+    "phase": 0
+   },
+   {
+    "layer": "near",
+    "file": "spider_near_2.png",
+    "x": 117,
+    "y": 157,
+    "pivot": [
+     257.5,
+     194.0
+    ],
+    "phase": 1
+   },
+   {
+    "layer": "near",
+    "file": "spider_near_3.png",
+    "x": 571,
+    "y": 235,
+    "pivot": [
+     632.5,
+     257.5
+    ],
+    "phase": 1
+   }
+  ],
+  "wave": false,
+  "body": {
+   "file": "spider_body.png",
+   "x": 45,
+   "y": 25
+  },
+  "jaws": [
+   {
+    "file": "spider_jaw_0.png",
+    "x": 465,
+    "y": 343,
+    "pivot": [
+     496.6,
+     349.0
+    ],
+    "open": 0.2
+   },
+   {
+    "file": "spider_jaw_1.png",
+    "x": 544,
+    "y": 332,
+    "pivot": [
+     577.4,
+     341.0
+    ],
+    "open": -0.16
+   },
+   {
+    "file": "spider_jaw_2.png",
+    "x": 566,
+    "y": 343,
+    "pivot": [
+     596.4,
+     354.0
+    ],
+    "open": -0.2
+   }
+  ],
+  "cavity": {
+   "file": "spider_cavity.png",
+   "x": 461,
+   "y": 328
+  },
+  "feet": [
+   365.5,
+   525.0
+  ],
+  "width": 717.0,
+  "height": 500.0,
+  "scale": 0.16736
+ },
+ "void": {
+  "canvas": [
+   1180,
+   590
+  ],
+  "order": [
+   "far",
+   "near",
+   "body"
+  ],
+  "parts": [
+   {
+    "layer": "far",
+    "file": "void_far_0.png",
+    "x": 554,
+    "y": 335,
+    "pivot": [
+     593.3,
+     372.5
+    ],
+    "phase": 1
+   },
+   {
+    "layer": "far",
+    "file": "void_far_1.png",
+    "x": 293,
+    "y": 191,
+    "pivot": [
+     362.5,
+     222.8
+    ],
+    "phase": 1
+   },
+   {
+    "layer": "far",
+    "file": "void_far_2.png",
+    "x": 419,
+    "y": 299,
+    "pivot": [
+     530.1,
+     342.6
+    ],
+    "phase": 0
+   },
+   {
+    "layer": "far",
+    "file": "void_far_3.png",
+    "x": 535,
+    "y": 231,
+    "pivot": [
+     603.3,
+     272.7
+    ],
+    "phase": 0
+   },
+   {
+    "layer": "far",
+    "file": "void_far_4.png",
+    "x": 611,
+    "y": 221,
+    "pivot": [
+     691.1,
+     255.4
+    ],
+    "phase": 1
+   },
+   {
+    "layer": "far",
+    "file": "void_far_5.png",
+    "x": 704,
+    "y": 274,
+    "pivot": [
+     734.3,
+     313.3
+    ],
+    "phase": 0
+   },
+   {
+    "layer": "far",
+    "file": "void_far_6.png",
+    "x": 750,
+    "y": 233,
+    "pivot": [
+     822.8,
+     270.1
+    ],
+    "phase": 1
+   },
+   {
+    "layer": "far",
+    "file": "void_far_7.png",
+    "x": 848,
+    "y": 263,
+    "pivot": [
+     876.7,
+     298.0
+    ],
+    "phase": 0
+   },
+   {
+    "layer": "far",
+    "file": "void_far_8.png",
+    "x": 942,
+    "y": 309,
+    "pivot": [
+     1013.7,
+     343.9
+    ],
+    "phase": 1
+   },
+   {
+    "layer": "near",
+    "file": "void_near_0.png",
+    "x": 644,
+    "y": 323,
+    "pivot": [
+     669.2,
+     368.5
+    ],
+    "phase": 0
+   },
+   {
+    "layer": "near",
+    "file": "void_near_1.png",
+    "x": 455,
+    "y": 219,
+    "pivot": [
+     535.5,
+     256.1
+    ],
+    "phase": 1
+   },
+   {
+    "layer": "near",
+    "file": "void_near_2.png",
+    "x": 536,
+    "y": 233,
+    "pivot": [
+     593.3,
+     272.1
+    ],
+    "phase": 0
+   },
+   {
+    "layer": "near",
+    "file": "void_near_3.png",
+    "x": 731,
+    "y": 423,
+    "pivot": [
+     772.9,
+     435.7
+    ],
+    "phase": 0
+   },
+   {
+    "layer": "near",
+    "file": "void_near_4.png",
+    "x": 291,
+    "y": 189,
+    "pivot": [
+     373.8,
+     224.8
+    ],
+    "phase": 0
+   },
+   {
+    "layer": "near",
+    "file": "void_near_5.png",
+    "x": 368,
+    "y": 306,
+    "pivot": [
+     441.0,
+     337.9
+    ],
+    "phase": 1
+   },
+   {
+    "layer": "near",
+    "file": "void_near_6.png",
+    "x": 411,
+    "y": 299,
+    "pivot": [
+     527.5,
+     343.9
+    ],
+    "phase": 0
+   },
+   {
+    "layer": "near",
+    "file": "void_near_7.png",
+    "x": 588,
+    "y": 211,
+    "pivot": [
+     656.5,
+     255.4
+    ],
+    "phase": 1
+   },
+   {
+    "layer": "near",
+    "file": "void_near_8.png",
+    "x": 666,
+    "y": 296,
+    "pivot": [
+     704.4,
+     339.2
+    ],
+    "phase": 1
+   },
+   {
+    "layer": "near",
+    "file": "void_near_9.png",
+    "x": 773,
+    "y": 272,
+    "pivot": [
+     872.0,
+     304.0
+    ],
+    "phase": 1
+   },
+   {
+    "layer": "near",
+    "file": "void_near_10.png",
+    "x": 956,
+    "y": 308,
+    "pivot": [
+     1062.9,
+     336.6
+    ],
+    "phase": 0
+   }
+  ],
+  "wave": true,
+  "body": {
+   "file": "void_body.png",
+   "x": 0,
+   "y": 0
+  },
+  "jaws": [
+   {
+    "file": "void_jaw_0.png",
+    "x": 846,
+    "y": 295,
+    "pivot": [
+     845,
+     318
+    ],
+    "open": 0.34
+   }
+  ],
+  "cavity": {
+   "file": "void_cavity.png",
+   "x": 829,
+   "y": 277
+  },
+  "glow": {
+   "file": "void_glow.png",
+   "x": 0,
+   "y": 0
+  },
+  "feet": [
+   590.0,
+   582.0
+  ],
+  "width": 1180.0,
+  "height": 582.0,
+  "scale": 0.35593
+ },
+ "scenery": {
+  "_about": "Meadow scenery cut from art_src/scenery_*.png by tools/art/scenery_art.py; game_h is the height in px at perspective 1, foot the texture px that stands on the ground.",
+  "ant_px": 40.0,
+  "items": {
+   "bush_round": {
+    "kind": "bush",
+    "files": {
+     "summer": "scenery/bush_round_summer.png",
+     "autumn": "scenery/bush_round_autumn.png"
+    },
+    "w": 382,
+    "h": 348,
+    "foot": [
+     171.0,
+     343.0
+    ],
+    "game_h": [
+     60.0,
+     120.0
+    ]
+   },
+   "bush_wide": {
+    "kind": "bush",
+    "files": {
+     "summer": "scenery/bush_wide_summer.png",
+     "autumn": "scenery/bush_wide_autumn.png"
+    },
+    "w": 527,
+    "h": 286,
+    "foot": [
+     288.6,
+     281.0
+    ],
+    "game_h": [
+     60.0,
+     120.0
+    ]
+   },
+   "bush_berry": {
+    "kind": "bush",
+    "files": {
+     "summer": "scenery/bush_berry_summer.png",
+     "summer_nb": "scenery/bush_berry_summer_nb.png",
+     "autumn": "scenery/bush_berry_autumn.png",
+     "autumn_nb": "scenery/bush_berry_autumn_nb.png"
+    },
+    "w": 445,
+    "h": 275,
+    "foot": [
+     211.3,
+     269.0
+    ],
+    "game_h": [
+     60.0,
+     120.0
+    ]
+   },
+   "fern_upright": {
+    "kind": "fern",
+    "files": {
+     "summer": "scenery/fern_upright_summer.png",
+     "autumn": "scenery/fern_upright_autumn.png"
+    },
+    "w": 426,
+    "h": 318,
+    "foot": [
+     235.7,
+     313.0
+    ],
+    "game_h": [
+     80.0,
+     120.0
+    ]
+   },
+   "fern_arching": {
+    "kind": "fern",
+    "files": {
+     "summer": "scenery/fern_arching_summer.png",
+     "autumn": "scenery/fern_arching_autumn.png"
+    },
+    "w": 476,
+    "h": 341,
+    "foot": [
+     414.0,
+     336.0
+    ],
+    "game_h": [
+     80.0,
+     120.0
+    ]
+   },
+   "fern_big": {
+    "kind": "fern",
+    "files": {
+     "summer": "scenery/fern_big_summer.png",
+     "autumn": "scenery/fern_big_autumn.png"
+    },
+    "w": 577,
+    "h": 348,
+    "foot": [
+     329.0,
+     342.0
+    ],
+    "game_h": [
+     80.0,
+     120.0
+    ]
+   },
+   "shroom_agaric": {
+    "kind": "shroom",
+    "files": {
+     "summer": "scenery/shroom_agaric_summer.png"
+    },
+    "w": 197,
+    "h": 179,
+    "foot": [
+     87.0,
+     176.0
+    ],
+    "game_h": [
+     40.0,
+     60.0
+    ]
+   },
+   "shroom_inkcap": {
+    "kind": "shroom",
+    "files": {
+     "summer": "scenery/shroom_inkcap_summer.png"
+    },
+    "w": 164,
+    "h": 214,
+    "foot": [
+     80.0,
+     211.0
+    ],
+    "game_h": [
+     40.0,
+     60.0
+    ]
+   },
+   "shroom_cep": {
+    "kind": "shroom",
+    "files": {
+     "summer": "scenery/shroom_cep_summer.png"
+    },
+    "w": 212,
+    "h": 130,
+    "foot": [
+     109.6,
+     127.0
+    ],
+    "game_h": [
+     40.0,
+     60.0
+    ]
+   }
+  }
+ }
+}

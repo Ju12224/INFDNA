@@ -1,0 +1,1076 @@
+{
+ "_about": "Walking rigs for the fauna, cut by tools/art/make_fauna_rig.py from art_src/fauna_bodies.png (bodies without legs) and fauna_legs_a.png / fauna_legs_b.png (far and near leg sets). Same format as the spider in art_manifest.json, read the same way as content/colony/rig_art.gd does: draw the layers in 'order'; every part at (x, y) of the canvas, swung about 'pivot' (canvas px) in its 'phase' (0/1; more than five legs a side = a wave from tail to head, by pivot x); 'body' at (x, y); 'feet' = the canvas point that stands on the world position (middle of the body, on the ground line under the feet); the pictures face RIGHT. 'scale' = game_len / length_px (length_px = the body's nose-to-tail span in canvas px, antennae excluded; game_len for a worker ant drawn about 40 px long). 'width'/'height' = size of the whole drawing (legs and antennae included). 'leg' names the leg (hind / mid / front ...). 'wings' (hornet, moth): the flight wings, drawn behind the body ('far') or in front of it ('near'), flapped about 'pivot' (suggested amplitude 'flap' radians, the far wing in the opposite phase); rig_art.gd does not draw them yet. The single-picture fallbacks are in fauna/ (fauna_manifest.json).",
+ "worker_ref_px": 40.0,
+ "queen": {
+  "canvas": [
+   388,
+   175
+  ],
+  "order": [
+   "far",
+   "body",
+   "near"
+  ],
+  "parts": [
+   {
+    "layer": "far",
+    "file": "queen_far_0.png",
+    "x": 44,
+    "y": 30,
+    "pivot": [
+     208.8,
+     98.1
+    ],
+    "phase": 1,
+    "leg": "hind"
+   },
+   {
+    "layer": "far",
+    "file": "queen_far_1.png",
+    "x": 218,
+    "y": 82,
+    "pivot": [
+     238.3,
+     100.8
+    ],
+    "phase": 0,
+    "leg": "mid"
+   },
+   {
+    "layer": "far",
+    "file": "queen_far_2.png",
+    "x": 255,
+    "y": 56,
+    "pivot": [
+     266.3,
+     100.8
+    ],
+    "phase": 1,
+    "leg": "front"
+   },
+   {
+    "layer": "near",
+    "file": "queen_near_0.png",
+    "x": 91,
+    "y": 64,
+    "pivot": [
+     200.7,
+     103.5
+    ],
+    "phase": 0,
+    "leg": "hind"
+   },
+   {
+    "layer": "near",
+    "file": "queen_near_1.png",
+    "x": 180,
+    "y": 90,
+    "pivot": [
+     230.3,
+     107.2
+    ],
+    "phase": 1,
+    "leg": "mid"
+   },
+   {
+    "layer": "near",
+    "file": "queen_near_2.png",
+    "x": 251,
+    "y": 84,
+    "pivot": [
+     259.8,
+     107.2
+    ],
+    "phase": 0,
+    "leg": "front"
+   }
+  ],
+  "wave": false,
+  "body": {
+   "file": "queen_body.png",
+   "x": 3,
+   "y": 3
+  },
+  "feet": [
+   193.5,
+   166.3
+  ],
+  "width": 382.0,
+  "height": 169.0,
+  "length_px": 369.0,
+  "game_len": 90.0,
+  "scale": 0.2439
+ },
+ "stagbeetle": {
+  "canvas": [
+   410,
+   252
+  ],
+  "order": [
+   "far",
+   "body",
+   "near"
+  ],
+  "parts": [
+   {
+    "layer": "far",
+    "file": "stagbeetle_far_0.png",
+    "x": 87,
+    "y": 173,
+    "pivot": [
+     163.7,
+     178.9
+    ],
+    "phase": 1,
+    "leg": "hind"
+   },
+   {
+    "layer": "far",
+    "file": "stagbeetle_far_1.png",
+    "x": 161,
+    "y": 153,
+    "pivot": [
+     233.0,
+     169.9
+    ],
+    "phase": 0,
+    "leg": "mid"
+   },
+   {
+    "layer": "far",
+    "file": "stagbeetle_far_2.png",
+    "x": 290,
+    "y": 152,
+    "pivot": [
+     299.5,
+     165.9
+    ],
+    "phase": 1,
+    "leg": "front"
+   },
+   {
+    "layer": "near",
+    "file": "stagbeetle_near_0.png",
+    "x": 78,
+    "y": 181,
+    "pivot": [
+     145.9,
+     187.0
+    ],
+    "phase": 0,
+    "leg": "hind"
+   },
+   {
+    "layer": "near",
+    "file": "stagbeetle_near_1.png",
+    "x": 149,
+    "y": 160,
+    "pivot": [
+     215.2,
+     176.0
+    ],
+    "phase": 1,
+    "leg": "mid"
+   },
+   {
+    "layer": "near",
+    "file": "stagbeetle_near_2.png",
+    "x": 276,
+    "y": 153,
+    "pivot": [
+     284.4,
+     167.0
+    ],
+    "phase": 0,
+    "leg": "front"
+   }
+  ],
+  "wave": false,
+  "body": {
+   "file": "stagbeetle_body.png",
+   "x": 3,
+   "y": 3
+  },
+  "feet": [
+   206.0,
+   244.5
+  ],
+  "width": 404.0,
+  "height": 246.0,
+  "length_px": 386.0,
+  "game_len": 90.0,
+  "scale": 0.23316
+ },
+ "centipede": {
+  "canvas": [
+   394,
+   189
+  ],
+  "order": [
+   "far",
+   "body",
+   "near"
+  ],
+  "parts": [
+   {
+    "layer": "far",
+    "file": "centipede_far_0.png",
+    "x": 24,
+    "y": 133,
+    "pivot": [
+     55.0,
+     140.0
+    ],
+    "phase": 1,
+    "leg": "f1"
+   },
+   {
+    "layer": "far",
+    "file": "centipede_far_1.png",
+    "x": 66,
+    "y": 125,
+    "pivot": [
+     94.0,
+     133.0
+    ],
+    "phase": 0,
+    "leg": "f2"
+   },
+   {
+    "layer": "far",
+    "file": "centipede_far_2.png",
+    "x": 111,
+    "y": 131,
+    "pivot": [
+     133.0,
+     137.0
+    ],
+    "phase": 1,
+    "leg": "f3"
+   },
+   {
+    "layer": "far",
+    "file": "centipede_far_3.png",
+    "x": 156,
+    "y": 142,
+    "pivot": [
+     172.0,
+     147.0
+    ],
+    "phase": 0,
+    "leg": "f4"
+   },
+   {
+    "layer": "far",
+    "file": "centipede_far_4.png",
+    "x": 197,
+    "y": 143,
+    "pivot": [
+     211.0,
+     148.0
+    ],
+    "phase": 1,
+    "leg": "f5"
+   },
+   {
+    "layer": "far",
+    "file": "centipede_far_5.png",
+    "x": 233,
+    "y": 131,
+    "pivot": [
+     250.0,
+     139.0
+    ],
+    "phase": 0,
+    "leg": "f6"
+   },
+   {
+    "layer": "far",
+    "file": "centipede_far_6.png",
+    "x": 266,
+    "y": 120,
+    "pivot": [
+     285.0,
+     129.0
+    ],
+    "phase": 1,
+    "leg": "f7"
+   },
+   {
+    "layer": "near",
+    "file": "centipede_near_0.png",
+    "x": 22,
+    "y": 144,
+    "pivot": [
+     39.0,
+     151.0
+    ],
+    "phase": 0,
+    "leg": "n1"
+   },
+   {
+    "layer": "near",
+    "file": "centipede_near_1.png",
+    "x": 52,
+    "y": 134,
+    "pivot": [
+     75.0,
+     141.0
+    ],
+    "phase": 1,
+    "leg": "n2"
+   },
+   {
+    "layer": "near",
+    "file": "centipede_near_2.png",
+    "x": 90,
+    "y": 133,
+    "pivot": [
+     111.0,
+     139.0
+    ],
+    "phase": 0,
+    "leg": "n3"
+   },
+   {
+    "layer": "near",
+    "file": "centipede_near_3.png",
+    "x": 131,
+    "y": 143,
+    "pivot": [
+     147.0,
+     149.0
+    ],
+    "phase": 1,
+    "leg": "n4"
+   },
+   {
+    "layer": "near",
+    "file": "centipede_near_4.png",
+    "x": 170,
+    "y": 152,
+    "pivot": [
+     183.0,
+     157.0
+    ],
+    "phase": 0,
+    "leg": "n5"
+   },
+   {
+    "layer": "near",
+    "file": "centipede_near_5.png",
+    "x": 208,
+    "y": 150,
+    "pivot": [
+     219.0,
+     155.0
+    ],
+    "phase": 1,
+    "leg": "n6"
+   },
+   {
+    "layer": "near",
+    "file": "centipede_near_6.png",
+    "x": 240,
+    "y": 138,
+    "pivot": [
+     255.0,
+     146.0
+    ],
+    "phase": 0,
+    "leg": "n7"
+   },
+   {
+    "layer": "near",
+    "file": "centipede_near_7.png",
+    "x": 272,
+    "y": 124,
+    "pivot": [
+     289.0,
+     136.0
+    ],
+    "phase": 1,
+    "leg": "n8"
+   }
+  ],
+  "wave": false,
+  "body": {
+   "file": "centipede_body.png",
+   "x": 3,
+   "y": 3
+  },
+  "feet": [
+   185.0,
+   182.0
+  ],
+  "width": 388.0,
+  "height": 183.0,
+  "length_px": 346.0,
+  "game_len": 120.0,
+  "scale": 0.34682
+ },
+ "scorpion": {
+  "canvas": [
+   416,
+   290
+  ],
+  "order": [
+   "far",
+   "body",
+   "near"
+  ],
+  "parts": [
+   {
+    "layer": "far",
+    "file": "scorpion_far_0.png",
+    "x": 48,
+    "y": 176,
+    "pivot": [
+     133.0,
+     208.0
+    ],
+    "phase": 1,
+    "leg": "rear"
+   },
+   {
+    "layer": "far",
+    "file": "scorpion_far_1.png",
+    "x": 127,
+    "y": 186,
+    "pivot": [
+     181.0,
+     214.0
+    ],
+    "phase": 0,
+    "leg": "mid"
+   },
+   {
+    "layer": "far",
+    "file": "scorpion_far_2.png",
+    "x": 212,
+    "y": 209,
+    "pivot": [
+     230.0,
+     219.0
+    ],
+    "phase": 1,
+    "leg": "front"
+   },
+   {
+    "layer": "far",
+    "file": "scorpion_far_3.png",
+    "x": 260,
+    "y": 158,
+    "pivot": [
+     283.0,
+     197.0
+    ],
+    "phase": 0,
+    "leg": "claw"
+   },
+   {
+    "layer": "near",
+    "file": "scorpion_near_0.png",
+    "x": 46,
+    "y": 170,
+    "pivot": [
+     155.0,
+     221.0
+    ],
+    "phase": 0,
+    "leg": "rear"
+   },
+   {
+    "layer": "near",
+    "file": "scorpion_near_1.png",
+    "x": 181,
+    "y": 210,
+    "pivot": [
+     213.0,
+     222.0
+    ],
+    "phase": 1,
+    "leg": "mid"
+   },
+   {
+    "layer": "near",
+    "file": "scorpion_near_2.png",
+    "x": 235,
+    "y": 127,
+    "pivot": [
+     273.0,
+     205.0
+    ],
+    "phase": 0,
+    "leg": "claw"
+   }
+  ],
+  "wave": false,
+  "body": {
+   "file": "scorpion_body.png",
+   "x": 3,
+   "y": 3
+  },
+  "feet": [
+   159.5,
+   275.0
+  ],
+  "width": 410.0,
+  "height": 284.0,
+  "length_px": 297.0,
+  "game_len": 110.0,
+  "scale": 0.37037
+ },
+ "moth": {
+  "canvas": [
+   344,
+   177
+  ],
+  "order": [
+   "far",
+   "body",
+   "near"
+  ],
+  "parts": [
+   {
+    "layer": "far",
+    "file": "moth_far_0.png",
+    "x": 156,
+    "y": 121,
+    "pivot": [
+     191.9,
+     130.1
+    ],
+    "phase": 1,
+    "leg": "hind"
+   },
+   {
+    "layer": "far",
+    "file": "moth_far_1.png",
+    "x": 211,
+    "y": 107,
+    "pivot": [
+     227.6,
+     122.1
+    ],
+    "phase": 0,
+    "leg": "mid"
+   },
+   {
+    "layer": "far",
+    "file": "moth_far_2.png",
+    "x": 247,
+    "y": 126,
+    "pivot": [
+     257.0,
+     131.1
+    ],
+    "phase": 1,
+    "leg": "front"
+   },
+   {
+    "layer": "near",
+    "file": "moth_near_0.png",
+    "x": 116,
+    "y": 114,
+    "pivot": [
+     180.0,
+     129.9
+    ],
+    "phase": 0,
+    "leg": "hind"
+   },
+   {
+    "layer": "near",
+    "file": "moth_near_1.png",
+    "x": 208,
+    "y": 124,
+    "pivot": [
+     215.7,
+     121.9
+    ],
+    "phase": 1,
+    "leg": "mid"
+   },
+   {
+    "layer": "near",
+    "file": "moth_near_2.png",
+    "x": 241,
+    "y": 120,
+    "pivot": [
+     249.0,
+     134.9
+    ],
+    "phase": 0,
+    "leg": "front"
+   }
+  ],
+  "wave": false,
+  "body": {
+   "file": "moth_body.png",
+   "x": 3,
+   "y": 31
+  },
+  "wings": [
+   {
+    "layer": "near",
+    "file": "moth_wing_near.png",
+    "x": 33,
+    "y": 5,
+    "pivot": [
+     207.8,
+     65.1
+    ],
+    "phase": 0,
+    "flap": 0.7
+   },
+   {
+    "layer": "far",
+    "file": "moth_wing_far.png",
+    "x": 48,
+    "y": 4,
+    "pivot": [
+     217.3,
+     58.8
+    ],
+    "phase": 1,
+    "flap": 0.7
+   }
+  ],
+  "feet": [
+   171.0,
+   166.7
+  ],
+  "width": 338.0,
+  "height": 171.0,
+  "length_px": 318.0,
+  "game_len": 60.0,
+  "scale": 0.18868
+ },
+ "hornet": {
+  "canvas": [
+   359,
+   203
+  ],
+  "order": [
+   "far",
+   "body",
+   "near"
+  ],
+  "parts": [
+   {
+    "layer": "far",
+    "file": "hornet_far_0.png",
+    "x": 139,
+    "y": 121,
+    "pivot": [
+     179.2,
+     130.4
+    ],
+    "phase": 1,
+    "leg": "hind"
+   },
+   {
+    "layer": "far",
+    "file": "hornet_far_1.png",
+    "x": 191,
+    "y": 132,
+    "pivot": [
+     212.3,
+     130.4
+    ],
+    "phase": 0,
+    "leg": "mid"
+   },
+   {
+    "layer": "far",
+    "file": "hornet_far_2.png",
+    "x": 232,
+    "y": 126,
+    "pivot": [
+     242.2,
+     137.4
+    ],
+    "phase": 1,
+    "leg": "front"
+   },
+   {
+    "layer": "near",
+    "file": "hornet_near_0.png",
+    "x": 128,
+    "y": 108,
+    "pivot": [
+     167.6,
+     136.4
+    ],
+    "phase": 0,
+    "leg": "hind"
+   },
+   {
+    "layer": "near",
+    "file": "hornet_near_1.png",
+    "x": 190,
+    "y": 97,
+    "pivot": [
+     200.7,
+     136.4
+    ],
+    "phase": 1,
+    "leg": "mid"
+   },
+   {
+    "layer": "near",
+    "file": "hornet_near_2.png",
+    "x": 227,
+    "y": 130,
+    "pivot": [
+     233.9,
+     140.4
+    ],
+    "phase": 0,
+    "leg": "front"
+   }
+  ],
+  "wave": false,
+  "body": {
+   "file": "hornet_body.png",
+   "x": 35,
+   "y": 46
+  },
+  "wings": [
+   {
+    "layer": "near",
+    "file": "hornet_wing_near.png",
+    "x": 10,
+    "y": 11,
+    "pivot": [
+     190.0,
+     73.3
+    ],
+    "phase": 0,
+    "flap": 0.9
+   },
+   {
+    "layer": "far",
+    "file": "hornet_wing_far.png",
+    "x": 3,
+    "y": 3,
+    "pivot": [
+     198.3,
+     70.0
+    ],
+    "phase": 1,
+    "flap": 0.9
+   }
+  ],
+  "feet": [
+   194.5,
+   192.7
+  ],
+  "width": 353.0,
+  "height": 197.0,
+  "length_px": 305.0,
+  "game_len": 70.0,
+  "scale": 0.22951
+ },
+ "redant_small": {
+  "canvas": [
+   257,
+   146
+  ],
+  "order": [
+   "far",
+   "body",
+   "near"
+  ],
+  "parts": [
+   {
+    "layer": "far",
+    "file": "redant_small_far_0.png",
+    "x": 52,
+    "y": 71,
+    "pivot": [
+     113.8,
+     81.9
+    ],
+    "phase": 1,
+    "leg": "hind"
+   },
+   {
+    "layer": "far",
+    "file": "redant_small_far_1.png",
+    "x": 116,
+    "y": 71,
+    "pivot": [
+     136.5,
+     78.9
+    ],
+    "phase": 0,
+    "leg": "mid"
+   },
+   {
+    "layer": "far",
+    "file": "redant_small_far_2.png",
+    "x": 144,
+    "y": 30,
+    "pivot": [
+     160.0,
+     86.9
+    ],
+    "phase": 1,
+    "leg": "front"
+   },
+   {
+    "layer": "near",
+    "file": "redant_small_near_0.png",
+    "x": 46,
+    "y": 77,
+    "pivot": [
+     105.4,
+     80.1
+    ],
+    "phase": 0,
+    "leg": "hind"
+   },
+   {
+    "layer": "near",
+    "file": "redant_small_near_1.png",
+    "x": 116,
+    "y": 83,
+    "pivot": [
+     128.1,
+     87.1
+    ],
+    "phase": 1,
+    "leg": "mid"
+   },
+   {
+    "layer": "near",
+    "file": "redant_small_near_2.png",
+    "x": 146,
+    "y": 51,
+    "pivot": [
+     153.3,
+     87.1
+    ],
+    "phase": 0,
+    "leg": "front"
+   }
+  ],
+  "wave": false,
+  "body": {
+   "file": "redant_small_body.png",
+   "x": 3,
+   "y": 3
+  },
+  "feet": [
+   127.5,
+   133.1
+  ],
+  "width": 251.0,
+  "height": 140.0,
+  "length_px": 235.0,
+  "game_len": 36.0,
+  "scale": 0.15319
+ },
+ "redant_soldier": {
+  "canvas": [
+   286,
+   144
+  ],
+  "order": [
+   "far",
+   "body",
+   "near"
+  ],
+  "parts": [
+   {
+    "layer": "far",
+    "file": "redant_soldier_far_0.png",
+    "x": 36,
+    "y": 53,
+    "pivot": [
+     112.6,
+     86.5
+    ],
+    "phase": 1,
+    "leg": "hind"
+   },
+   {
+    "layer": "far",
+    "file": "redant_soldier_far_1.png",
+    "x": 127,
+    "y": 52,
+    "pivot": [
+     137.4,
+     80.5
+    ],
+    "phase": 0,
+    "leg": "mid"
+   },
+   {
+    "layer": "far",
+    "file": "redant_soldier_far_2.png",
+    "x": 147,
+    "y": 4,
+    "pivot": [
+     162.2,
+     77.5
+    ],
+    "phase": 1,
+    "leg": "front"
+   },
+   {
+    "layer": "near",
+    "file": "redant_soldier_near_0.png",
+    "x": 20,
+    "y": 54,
+    "pivot": [
+     103.8,
+     90.2
+    ],
+    "phase": 0,
+    "leg": "hind"
+   },
+   {
+    "layer": "near",
+    "file": "redant_soldier_near_1.png",
+    "x": 112,
+    "y": 69,
+    "pivot": [
+     128.6,
+     79.2
+    ],
+    "phase": 1,
+    "leg": "mid"
+   },
+   {
+    "layer": "near",
+    "file": "redant_soldier_near_2.png",
+    "x": 143,
+    "y": 33,
+    "pivot": [
+     154.9,
+     85.2
+    ],
+    "phase": 0,
+    "leg": "front"
+   }
+  ],
+  "wave": false,
+  "body": {
+   "file": "redant_soldier_body.png",
+   "x": 3,
+   "y": 3
+  },
+  "feet": [
+   142.5,
+   135.2
+  ],
+  "width": 280.0,
+  "height": 138.0,
+  "length_px": 267.0,
+  "game_len": 48.0,
+  "scale": 0.17978
+ },
+ "redant_major": {
+  "canvas": [
+   373,
+   197
+  ],
+  "order": [
+   "far",
+   "body",
+   "near"
+  ],
+  "parts": [
+   {
+    "layer": "far",
+    "file": "redant_major_far_0.png",
+    "x": 33,
+    "y": 48,
+    "pivot": [
+     174.4,
+     104.3
+    ],
+    "phase": 1,
+    "leg": "hind"
+   },
+   {
+    "layer": "far",
+    "file": "redant_major_far_1.png",
+    "x": 175,
+    "y": 65,
+    "pivot": [
+     199.2,
+     118.3
+    ],
+    "phase": 0,
+    "leg": "mid"
+   },
+   {
+    "layer": "far",
+    "file": "redant_major_far_2.png",
+    "x": 216,
+    "y": 58,
+    "pivot": [
+     223.9,
+     109.3
+    ],
+    "phase": 1,
+    "leg": "front"
+   },
+   {
+    "layer": "near",
+    "file": "redant_major_near_0.png",
+    "x": 54,
+    "y": 106,
+    "pivot": [
+     165.4,
+     111.1
+    ],
+    "phase": 0,
+    "leg": "hind"
+   },
+   {
+    "layer": "near",
+    "file": "redant_major_near_1.png",
+    "x": 173,
+    "y": 107,
+    "pivot": [
+     190.9,
+     118.1
+    ],
+    "phase": 1,
+    "leg": "mid"
+   },
+   {
+    "layer": "near",
+    "file": "redant_major_near_2.png",
+    "x": 218,
+    "y": 71,
+    "pivot": [
+     215.7,
+     120.1
+    ],
+    "phase": 0,
+    "leg": "front"
+   }
+  ],
+  "wave": false,
+  "body": {
+   "file": "redant_major_body.png",
+   "x": 3,
+   "y": 3
+  },
+  "feet": [
+   181.0,
+   177.1
+  ],
+  "width": 367.0,
+  "height": 191.0,
+  "length_px": 346.0,
+  "game_len": 80.0,
+  "scale": 0.23121
+ }
+}

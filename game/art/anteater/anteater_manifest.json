@@ -1,0 +1,64 @@
+{
+ "version": 2,
+ "parts": [
+  {
+   "name": "tail",
+   "file": "anteater/tail.png",
+   "w": 738,
+   "h": 413,
+   "off": [
+    -640,
+    90
+   ],
+   "pivot": [
+    0.93,
+    0.42
+   ]
+  },
+  {
+   "name": "hind",
+   "file": "anteater/hind.png",
+   "w": 696,
+   "h": 453,
+   "off": [
+    -40,
+    250
+   ],
+   "pivot": [
+    0.48,
+    0.12
+   ]
+  },
+  {
+   "name": "front",
+   "file": "anteater/front.png",
+   "w": 586,
+   "h": 476,
+   "off": [
+    470,
+    230
+   ],
+   "pivot": [
+    0.28,
+    0.1
+   ]
+  },
+  {
+   "name": "body",
+   "file": "anteater/body.png",
+   "w": 922,
+   "h": 456,
+   "off": [
+    0,
+    0
+   ],
+   "pivot": [
+    0.5,
+    0.85
+   ]
+  }
+ ],
+ "x0": -640,
+ "x1": 1056,
+ "ground": 702
+}

@@ -9,3 +9,18 @@ The roadmap is the plan: https://claude.ai/artifact/Ed2J4qRfFKQ52b8TNLwwu5
 - Only the owner's hand-drawn art goes on screen. If a picture doesn't work in the game, ask for a redraw
   instead of patching around it. Anything with no picture yet is left out and goes on the art list.
 - Keep the roadmap's statuses current (`doing` / `next` / `done` / `waiting` / `later`) as steps move.
+
+## The game
+
+- `game/` is the game: a standalone Godot 4.7 project (Compatibility renderer). `src/mods-unpacked/Judah-InfDNA/` is the old
+  Brotato mod, kept only as a reference while the rebuild replaces it; don't add to it.
+- `game/core/` is the colony simulation (no drawing), `game/art/` the owner's art (cut by `tools/art/`), `game/main.gd` the screen.
+- Godot 4 shares packed arrays on assignment (Godot 3 copied them): write `x.duplicate()` whenever a copy is meant.
+- Checks (Godot 4.7.2 binary, `--headless`):
+  - compile everything: `godot --headless --path game --script res://tests/check.gd`
+  - run colonies with no screen: `godot --headless --path game --script res://tests/sim_run.gd -- seeds=11,22 t=1800`
+  - closing writes the report: `godot --headless --path game --script res://tests/close_test.gd`
+  - screenshot: `xvfb-run -a -s "-screen 0 1920x1080x24" godot --path game --rendering-driver opengl3 --script res://tests/shot.gd -- out=/tmp/s.png`
+- Build for the owner (Windows): `godot --headless --path game --export-release "Windows Desktop" ../build/InfDNA.exe`
+  (needs the 4.7.2 Windows export templates in `~/.local/share/godot/export_templates/4.7.2.stable/`), then zip `InfDNA.exe`
+  into `releases/` and send it. The owner unzips it and double-clicks InfDNA.exe (Windows asks once: More info, Run anyway).
