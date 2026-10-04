@@ -55,6 +55,18 @@ func _process(_delta: float) -> bool:
 		_node.debug_setup(_args)
 		if _args.has("nounits"):
 			_node.views["units"].queue_free()
+		if _args.has("fill"):
+			var sim = _node.sim
+			var src = sim.ants.duplicate()
+			var i = 0
+			while sim.ants.size() < int(_args["fill"]):
+				var o = src[i % src.size()]
+				var b = sim.Ant.new()
+				for k in ["genome", "ph", "x", "y", "tx", "ty", "t", "z", "tz", "rot", "facing", "caste", "carry", "lane", "task"]:
+					b.set(k, o.get(k))
+				b.id = 5000 + i
+				sim.ants.append(b)
+				i += 1
 		if _args.get("o", "0") == "1":
 			var o = Overlay.new()
 			o.colony = _node
