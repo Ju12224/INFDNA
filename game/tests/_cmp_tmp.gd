@@ -100,4 +100,16 @@ func _init():
 					if A[z * a.WH + y * a.W + x - a.ox] != B[z * b.WH + y * b.W + x - b.ox]:
 						bad += 1
 	print("nav fields: %d differences in the old range" % bad)
+	var mb = 0
+	for z in 2:
+		for y in range(1, a.H - 1):
+			for x in range(ex - 120, ex + 120):
+				var i = z * a.WH + y * a.W + x - a.ox
+				var m = 0
+				for d in 8:
+					if a.walk[i + int(a.N8[d].y) * a.W + int(a.N8[d].x)] == 1:
+						m |= 1 << d
+				if m != a._nbm[i]:
+					mb += 1
+	print("neighbour masks: %d wrong near the nest" % mb)
 	quit()

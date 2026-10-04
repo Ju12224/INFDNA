@@ -19,6 +19,7 @@ const Sim = preload("res://core/colony_sim.gd")
 const Orders = preload("res://core/orders.gd")
 const EnemyDefs = preload("res://core/enemy_defs.gd")
 const Art = preload("res://scene/art.gd")
+const Kit = preload("res://scene/menu_kit.gd")
 const Band = preload("res://scene/band.gd")
 const WorldGrid = preload("res://core/world_grid.gd")
 
@@ -30,14 +31,16 @@ const PILE_REACH = 5          # a right-click this many columns or fewer from a 
 const ATTN_EVERY = 0.25       # how often the sim is told what the player is looking at (the squads' stand-down: orders.gd)
 const MENU_EVERY = 0.2        # how often the open menu's numbers (Will, food, cooldowns) are brought up to date
 const MSG_T = 3.5             # seconds a message stays on the status line
-const INK = Color("#f1e6cf")
-const DIM = Color("#b9a98c")
-const GOLD = Color("#f2c14e")
+const INK = Kit.INK
+const DIM = Kit.DIM
+const GOLD = Kit.GOLD
 const OFF = 0.38              # alpha of a menu row that cannot be used now
-const ROW_W = 420.0
+const ROW_W = 470.0
 const ROW_H = 34.0
-const FRAME_WIDE = ["ui/frame_wide.png", 30, 26, 30, 26]      # [picture, nine-patch margins left, top, right, bottom]
-const FRAME_SMALL = ["ui/frame_small.png", 14, 12, 14, 12]
+const MENU_K = 0.85           # the owner's frames, shrunk to this for the menu (menu_kit.box) ...
+const ROW_K = 0.55            # ... for the row under the mouse
+const BOX_K = 0.6             # ... for the drag-box
+const STATUS_K = 0.8          # ... for the line at the bottom
 const WILL_ICON = "ui/hivemind.png"
 const FOOD_ICON = "ui/food.png"
 const BROOD_ICON = "ui/queen.png"
@@ -79,7 +82,7 @@ var _msg := ""
 var _msg_t := 0.0
 var _status_text := ""
 
-var _box: NinePatchRect
+var _box: Panel
 var _menu: PanelContainer
 var _rows := {}               # menu row id -> {btn, line, name, key, will, will_i, food, food_i}
 var _will_lbl: Label
@@ -89,22 +92,19 @@ var _gap_orders: Control
 var _caste_btns := []
 var _status: PanelContainer
 var _status_lbl: Label
-var _hover_sb: StyleBoxTexture
+var _hover_sb: StyleBox
+var _tip := ""                # the tip of the menu row under the mouse (shown on the bottom line)
 
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_hover_sb = _frame(FRAME_SMALL, 4)
-	_box = NinePatchRect.new()
-	_box.texture = Art.tex(FRAME_SMALL[0])
-	_box.patch_margin_left = FRAME_SMALL[1]
-	_box.patch_margin_top = FRAME_SMALL[2]
-	_box.patch_margin_right = FRAME_SMALL[3]
-	_box.patch_margin_bottom = FRAME_SMALL[4]
-	_box.axis_stretch_horizontal = NinePatchRect.AXIS_STRETCH_MODE_TILE_FIT
-	_box.axis_stretch_vertical = NinePatchRect.AXIS_STRETCH_MODE_TILE_FIT
-	_box.draw_center = false                  # only the frame: the ants inside show through
+	_hover_sb = Kit.box("frame_small", ROW_K, Vector2.ZERO)
+	_box = Panel.new()
+	var bsb = Kit.box("frame_small", BOX_K, Vector2.ZERO)
+	if bsb is StyleBoxTexture:
+		bsb.draw_center = false               # only the frame: the ants inside show through
+	_box.add_theme_stylebox_override("panel", bsb)
 	_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_box.visible = false
 	add_child(_box)
@@ -253,7 +253,8 @@ func _place_box() -> void:
 	_box.visible = _boxing
 	if _boxing:
 		var r = Rect2(_box_a, _box_b - _box_a).abs()
-		var m = Vector2(FRAME_SMALL[1] + FRAME_SMALL[3], FRAME_SMALL[2] + FRAME_SMALL[4])
+		var sb = _box.get_theme_stylebox("panel")
+		var m = Vector2(sb.content_margin_left + sb.content_margin_right, sb.content_margin_top + sb.content_margin_bottom)
 		_box.position = r.position
 		_box.size = Vector2(max(r.size.x, m.x), max(r.size.y, m.y))
 
@@ -426,7 +427,11 @@ func _target(wp: Vector2) -> Dictionary:
 		t["row"] = foe.y
 		t["z"] = foe.z
 		return t
-	if wp.y < g.surf_y(col) * C + C * 1.5:
+	var row = int(floor(wp.y / C))
+	var top = g.surf_y(col)
+	# the meadow band above the ground line, and the crust under it (too near the top to dig: world_grid.diggable) unless it is a
+	# tunnel mouth, are the surface
+	if wp.y < top * C + C * 1.5 or (row < top + 3 and g.is_solid(col, row, 0)):
 		var best = null
 		for p in sim.piles:
 			if p["amount"] > 4.0 and abs(p["x"] - col) <= PILE_REACH and (best == null or abs(p["x"] - col) < abs(best["x"] - col)):
@@ -435,7 +440,6 @@ func _target(wp: Vector2) -> Dictionary:
 			t["kind"] = "pile"
 			t["pile"] = best
 		return t
-	var row = int(floor(wp.y / C))
 	var z = 0 if (g.can_walk(col, row, 0) or not g.can_walk(col, row, 1)) else 1
 	t["row"] = row
 	t["z"] = z
@@ -544,12 +548,7 @@ func _say(text: String) -> void:
 # ================================================================== the menu
 func _build_menu() -> void:
 	_menu = PanelContainer.new()
-	var sb = _frame(FRAME_WIDE, 0)
-	sb.content_margin_left = 24
-	sb.content_margin_right = 24
-	sb.content_margin_top = 20
-	sb.content_margin_bottom = 22
-	_menu.add_theme_stylebox_override("panel", sb)
+	_menu.add_theme_stylebox_override("panel", Kit.box("frame_wide", MENU_K, Vector2(0, 0)))
 	_menu.mouse_filter = Control.MOUSE_FILTER_STOP
 	_menu.visible = false
 	add_child(_menu)
@@ -832,12 +831,7 @@ func _sel_summary(sel: Array) -> String:
 # ================================================================== the status line (bottom middle): messages and the selection
 func _build_status() -> void:
 	_status = PanelContainer.new()
-	var sb = _frame(FRAME_SMALL, 0)
-	sb.content_margin_left = 22
-	sb.content_margin_right = 22
-	sb.content_margin_top = 10
-	sb.content_margin_bottom = 12
-	_status.add_theme_stylebox_override("panel", sb)
+	_status.add_theme_stylebox_override("panel", Kit.box("frame_small", STATUS_K, Vector2(10, 2)))
 	_status.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_status_lbl = _label("", 15, INK)
 	_status.add_child(_status_lbl)
@@ -864,23 +858,7 @@ func _update_status() -> void:
 		_status.position = Vector2(round((vs.x - size.x) * 0.5), vs.y - size.y - 14.0)
 
 
-# ================================================================== building blocks (the owner's frames and icons)
-static func _frame(f: Array, content: int) -> StyleBoxTexture:
-	var sb := StyleBoxTexture.new()
-	sb.texture = Art.tex(f[0])
-	sb.texture_margin_left = f[1]
-	sb.texture_margin_top = f[2]
-	sb.texture_margin_right = f[3]
-	sb.texture_margin_bottom = f[4]
-	sb.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_TILE_FIT
-	sb.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_TILE_FIT
-	sb.content_margin_left = content
-	sb.content_margin_right = content
-	sb.content_margin_top = content
-	sb.content_margin_bottom = content
-	return sb
-
-
+# ================================================================== building blocks (the owner's frames come from menu_kit.gd)
 # A picture at `px` tall (aspect kept); with no picture, a blank of the same size so the columns still line up.
 static func _icon(path: String, px: float) -> TextureRect:
 	var r := TextureRect.new()
@@ -894,14 +872,8 @@ static func _icon(path: String, px: float) -> TextureRect:
 
 
 static func _label(text: String, size: int, color: Color) -> Label:
-	var l := Label.new()
-	l.text = text
-	l.add_theme_font_size_override("font_size", size)
-	l.add_theme_color_override("font_color", color)
-	l.add_theme_color_override("font_outline_color", Color(0.08, 0.05, 0.03))
-	l.add_theme_constant_override("outline_size", 4)
+	var l = Kit.label(text, size, color)
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return l
 
 

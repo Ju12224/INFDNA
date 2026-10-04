@@ -40,6 +40,7 @@ var _arc_icon: TextureRect
 var _pause_btn: Button
 var _speed_btns := []
 var _paused_note: Label
+var _msg_panel: PanelContainer
 var _msg_box: HBoxContainer
 var _msg_icon: TextureRect
 var _msg_label: Label
@@ -141,21 +142,22 @@ func _bar_button(parent: Node, text: String, tip: String) -> Button:
 
 
 func _build_message() -> void:
+	_msg_panel = Kit.panel("frame_small", 0.6, Vector2(10, 0))
+	_msg_panel.position = Vector2(0, 64)
+	_msg_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_msg_panel)
 	_msg_box = Kit.hbox(8)
-	_msg_box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	_msg_box.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_msg_box.offset_top = 70
 	_msg_box.alignment = BoxContainer.ALIGNMENT_CENTER
-	add_child(_msg_box)
+	_msg_panel.add_child(_msg_box)
 	_msg_icon = TextureRect.new()
 	_msg_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_msg_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_msg_icon.custom_minimum_size = Vector2(30, 30)
 	_msg_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_msg_box.add_child(_msg_icon)
-	_msg_label = Kit.label("", 20, Kit.INK, 5)
+	_msg_label = Kit.label("", 18, Kit.INK, 4)
 	_msg_box.add_child(_msg_label)
-	_msg_box.modulate.a = 0.0
+	_msg_panel.modulate.a = 0.0
 
 
 func _build_menu() -> void:
@@ -267,11 +269,16 @@ func _read_events(sim) -> void:
 		_last_banner = sim.banner
 		_push(sim.banner, sim.banner_t + 1.0, true)
 	_last_banner_t = sim.banner_t
+	var said = ""                                  # what controls.gd just put on its own line (answers to orders and powers)
+	var ctl = colony.views.get("controls") if "views" in colony else null
+	if ctl != null and float(ctl.get("_msg_t") if ctl.get("_msg_t") != null else 0.0) > 0.0:
+		said = str(ctl.get("_msg"))
 	for t in sim.toasts:
 		if t.has("_hud"):
 			continue
 		t["_hud"] = true
-		_push(str(t.get("text", "")), float(t.get("t", 4.0)), false)
+		if str(t.get("text", "")) != said:
+			_push(str(t.get("text", "")), float(t.get("t", 4.0)), false)
 
 
 func _push(text: String, t: float, urgent: bool) -> void:
@@ -296,6 +303,7 @@ func _step_message(delta: float) -> void:
 		_msg_cur = _msg_queue.pop_front()
 		_msg_age = 0.0
 		_msg_label.text = _msg_cur["text"]
+		_msg_panel.reset_size()
 		var tex = Kit.Art.tex(_msg_cur["icon"]) if _msg_cur["icon"] != "" else null
 		_msg_icon.texture = tex
 		_msg_icon.visible = tex != null
@@ -304,7 +312,10 @@ func _step_message(delta: float) -> void:
 	var a := 0.0
 	if not _msg_cur.is_empty():
 		a = clamp(_msg_age / 0.2, 0.0, 1.0) * clamp((_msg_cur["t"] - _msg_age) / 0.5, 0.0, 1.0) if _msg_queue.is_empty() else clamp(_msg_age / 0.2, 0.0, 1.0)
-	_msg_box.modulate.a = a
+	_msg_panel.modulate.a = a
+	_msg_panel.visible = a > 0.0
+	if _msg_panel.visible:
+		_msg_panel.position.x = round((size.x - _msg_panel.size.x) * 0.5)
 
 
 func _icon_for(text: String) -> String:

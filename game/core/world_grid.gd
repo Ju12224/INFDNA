@@ -94,6 +94,8 @@ var _cellp := PackedInt32Array()    # PW * H, columns ox - PM ..: solid front | 
 var PW := 0                         # W + 2 * PM
 var _dug_lo := PackedInt32Array()   # per sim column: first row dug open (either plane), H if none
 var _dug_hi := PackedInt32Array()   # per sim column: last row dug open, -1 if none
+var _nbm := PackedByteArray()      # PLANES * WH: bit d set = the N8[d] neighbour can be walked (kept with walk, read by _bfs)
+var _nb_off := PackedInt32Array()  # bit value (1, 2, 4 .. 128) -> index offset of that neighbour
 var _lut_v := PackedByteArray()     # byte that Image.set_pixel stores for v / 16.0 (v = 0..16)
 var _lut_a := PackedByteArray()     # ... and for 1.0 - v / 16.0
 var _nest_x := 130
@@ -429,6 +431,15 @@ func _alloc_fresh() -> void:
 	back.resize(WH)
 	back.fill(0)
 	walk.append_array(back)
+	_nb_off.resize(129)
+	for d in 8:
+		_nb_off[1 << d] = int(N8[d].y) * W + int(N8[d].x)
+	_nbm.resize(PLANES * WH)
+	_nbm.fill(0)
+	var wi = walk.find(1)
+	while wi >= 0:
+		_nb_flip(wi, true)
+		wi = walk.find(1, wi + 1)
 	_cellp = img_p.get_data().to_int32_array()
 	for i in PM:
 		for x in [ox - PM + i, ox + W + i]:
@@ -748,8 +759,22 @@ func _refresh_walk(x0: int, y0: int, x1: int, y1: int) -> void:
 	for y in range(max(0, y0), min(H - 1, y1) + 1):
 		for x in range(max(ox, x0), min(ox + W - 1, x1) + 1):
 			var j = y * W + (x - ox)
-			walk[j] = _walk_rule(x, y, 0)
-			walk[WH + j] = _walk_rule(x, y, 1)
+			var v = _walk_rule(x, y, 0)
+			if walk[j] != v:
+				walk[j] = v
+				_nb_flip(j, v == 1)
+			v = _walk_rule(x, y, 1)
+			if walk[WH + j] != v:
+				walk[WH + j] = v
+				_nb_flip(WH + j, v == 1)
+
+
+# Cell i (never on the border: _walk_rule) became walkable or stopped being: tell its eight neighbours' masks.
+func _nb_flip(i: int, on: bool) -> void:
+	for d in 8:
+		var n = i + _nb_off[1 << d]
+		var b = 1 << (7 - d)          # N8 is symmetric: the way back from neighbour d is 7 - d
+		_nbm[n] = (_nbm[n] | b) if on else (_nbm[n] & ~b)
 
 
 func solid_count(x: int, y: int, z: int = 0) -> int:
@@ -1106,42 +1131,36 @@ func rebuild_nav() -> void:
 			for y in range(s - 2, s + 1):
 				if can_walk(x, y) and not is_under(x, y):
 					exits.append(Vector2(x, y))
-	dist_home = _bfs(home)
-	dist_exit = _bfs(exits)
+	dist_home = _bfs(home, -1, dist_home)     # rebuilt in place: a fresh 5 MB array each time costs page faults
+	dist_exit = _bfs(exits, -1, dist_exit)
 	nav_dirty = false
 
 
 # Breadth-first distance over both planes. Sources are Vector2 (front plane) or
 # Vector3 (x, y, plane). Planes connect only through holes (link).
-func _bfs(sources: Array, max_d: int = -1) -> PackedInt32Array:
-	var dist: PackedInt32Array = _neg.duplicate()     # Godot 4 shares packed arrays on assignment: copy, never write into _neg
+# into: an old field to write over (it is changed for whoever else holds it); empty = a new array.
+func _bfs(sources: Array, max_d: int = -1, into: PackedInt32Array = PackedInt32Array()) -> PackedInt32Array:
+	var dist: PackedInt32Array
+	if into.size() == PLANES * WH:
+		dist = into
+		dist.fill(-1)
+	else:
+		dist = _neg.duplicate()     # Godot 4 shares packed arrays on assignment: copy, never write into _neg
 	var queue := PackedInt32Array()
-	var edge := []          # sources on the arrays' border: their neighbours go in next, at distance 1
 	for s in sources:
 		var sz = int(s.z) if typeof(s) == TYPE_VECTOR3 else 0
-		var sx = int(s.x)
-		var sy = int(s.y)
-		if not inb(sx, sy):
+		if not inb(int(s.x), int(s.y)):
 			continue
-		var si = _i(sx, sy, sz)
+		var si = _i(int(s.x), int(s.y), sz)
 		if dist[si] != 0:
 			dist[si] = 0
-			if sx > ox and sx < ox + W - 1 and sy > 0 and sy < H - 1:
-				queue.append(si)
-			else:
-				edge.append(Vector3i(sx, sy, sz))
-	for e in edge:
-		for d in N8:
-			if can_walk(e.x + int(d.x), e.y + int(d.y), e.z):
-				var ei = _i(e.x + int(d.x), e.y + int(d.y), e.z)
-				if dist[ei] == -1:
-					dist[ei] = 1
-					queue.append(ei)
-	# (typed and unrolled: on the 3072-column world the surface alone is thousands of cells, and this runs every
-	# NAV_INTERVAL while the colony digs)
+			queue.append(si)
+	# Each cell's walkable neighbours are bits of _nbm, so a step looks only at the cells it can enter (on the surface,
+	# thousands of cells long on the 3072-column world, that is two of the eight). Typed: this runs every NAV_INTERVAL.
+	var nb: PackedByteArray = _nbm
+	var ob: PackedInt32Array = _nb_off
 	var wk: PackedByteArray = walk
 	var lk: PackedByteArray = link
-	var w: int = W
 	var wh: int = WH
 	var cap: int = max_d if max_d >= 0 else (1 << 30)
 	var head: int = 0
@@ -1152,51 +1171,18 @@ func _bfs(sources: Array, max_d: int = -1) -> PackedInt32Array:
 		var nd: int = dist[i] + 1
 		if nd > cap:
 			continue        # depth cap: cells past it stay -1
-		# every walkable cell is off the arrays' border (_walk_rule), so all eight neighbours exist
-		var z: int = 1 if i >= wh else 0
-		var r: int = i - z * wh
-		var j: int = i - w - 1
-		if wk[j] == 1 and dist[j] == -1:
-			dist[j] = nd
-			queue.append(j)
-			tail += 1
-		j += 1
-		if wk[j] == 1 and dist[j] == -1:
-			dist[j] = nd
-			queue.append(j)
-			tail += 1
-		j += 1
-		if wk[j] == 1 and dist[j] == -1:
-			dist[j] = nd
-			queue.append(j)
-			tail += 1
-		j = i - 1
-		if wk[j] == 1 and dist[j] == -1:
-			dist[j] = nd
-			queue.append(j)
-			tail += 1
-		j = i + 1
-		if wk[j] == 1 and dist[j] == -1:
-			dist[j] = nd
-			queue.append(j)
-			tail += 1
-		j = i + w - 1
-		if wk[j] == 1 and dist[j] == -1:
-			dist[j] = nd
-			queue.append(j)
-			tail += 1
-		j += 1
-		if wk[j] == 1 and dist[j] == -1:
-			dist[j] = nd
-			queue.append(j)
-			tail += 1
-		j += 1
-		if wk[j] == 1 and dist[j] == -1:
-			dist[j] = nd
-			queue.append(j)
-			tail += 1
+		var m: int = nb[i]
+		while m != 0:
+			var b: int = m & -m
+			m ^= b
+			var j: int = i + ob[b]
+			if dist[j] == -1:
+				dist[j] = nd
+				queue.append(j)
+				tail += 1
+		var r: int = i - wh if i >= wh else i
 		if lk[r] == 1:
-			var j3: int = (1 - z) * wh + r
+			var j3: int = r if i >= wh else wh + r
 			if wk[j3] == 1 and dist[j3] == -1:
 				dist[j3] = nd
 				queue.append(j3)

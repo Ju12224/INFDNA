@@ -38,8 +38,8 @@ const TURN_RATE = 6.0
 const TURN_MIN = 0.3
 const FAR_ZOOM = 0.45                # zoomed out past this, creatures grow (up to FAR_MAX), as the ants do
 const FAR_MAX = 1.6
-const BOSS_MIN_PX = 120.0            # a boss is never shorter than this on screen, at any zoom
-const BOSS_ART = ["voidmaw", "anteater", "spider", "scorpion"]   # (the Emperor Scorpion is the butcher boss)
+const BOSS_MIN_PX = 72.0             # a boss is never shorter than this on screen, at any zoom
+const BOSS_ART = ["voidmaw", "anteater", "spider"]   # bosses besides the roster's "boss" class (the Emperor Scorpion, the Void Maw)
 const RETREAT_ALPHA = 0.75
 const HURT_FLASH = true
 # the roster's art names -> rig names (anything else is its own name)
@@ -425,7 +425,7 @@ func _draw() -> void:
 
 
 func _is_boss(e) -> bool:
-	return e.cls == "boss" or (e.def.get("art", "") in BOSS_ART and e.cls != "small")
+	return e.cls == "boss" or e.def.get("art", "") in BOSS_ART
 
 
 # Draws one raider; returns what the death fall needs to redraw it as it was: [raider, pos, state].

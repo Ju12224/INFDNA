@@ -7,6 +7,7 @@ extends SceneTree
 #   bird   1 = a bird over the spawned row; fall = 1 a bird falling there; carcass = 1 a carcass pile
 #   fx     1 = one of every fight effect over the row; piles = 1 = one pile of every kind; stun = 1 snares every raider
 #   under  kinds put in the tunnels instead (at the queen chamber)
+#   hive   0..3: look at the hive nearest the nest at that stage (whole, dripping, torn open, fallen); lift = camera height over its tree
 
 var _frames := 0
 var _node
@@ -85,6 +86,18 @@ func _setup() -> void:
 		sim.rival.x = mid
 	if _args.has("look"):
 		_node.cam.position = g.center(mid, g.surf_y(mid)) + Vector2(0, float(_args.get("lift", "-60")))
+	if _args.has("hive"):
+		# the hive nearest the nest, at stage hive=0..3 (whole, dripping, torn, fallen), in the middle of the view
+		var best = null
+		for id in sim.hives:
+			if best == null or abs(sim.hives[id]["x"] - ex) < abs(best["x"] - ex):
+				best = sim.hives[id]
+		if best != null:
+			var stg = int(_args["hive"])
+			best["taken"] = [0.0, 80.0, 160.0, 230.0][stg]
+			best["fallen"] = stg == 3
+			_node.cam.position = g.center(int(best["x"]), g.surf_y(int(best["x"]))) + Vector2(0, float(_args.get("lift", "-300")))
+			print("hive at ", best["x"], " (nest ", ex, ")")
 	if _args.has("paused"):
 		_node.paused = true
 
@@ -97,13 +110,15 @@ func _fx() -> void:
 	var p = g.center(x, g.surf_y(x) - 1)
 	var step = Vector2(gap * g.CELL, 0)
 	var kinds = ["puff", "spark", "burst", "wave", "arc", "web", "acid"]
+	var life = [1.0, 0.45, 0.8, 0.6, 0.28, 1.4, 0.9]
+	var k = float(_args.get("fxk", "0.3"))     # how far through its life each effect is (a paused shot holds it there)
 	for i in kinds.size():
-		var f = {"kind": kinds[i], "pos": p + step * i + Vector2(0, -16), "t": 0.0, "color": Color("#ffe08a"), "r": 40.0}
+		var f = {"kind": kinds[i], "pos": p + step * i + Vector2(0, -16), "t": k * life[i], "color": Color("#ffe08a"), "r": 40.0}
 		if kinds[i] == "arc":
 			f["to"] = f["pos"] + Vector2(70, -10)
 		sim.fx.append(f)
-	sim.fx.append({"kind": "text", "pos": p + Vector2(0, -70), "t": 0.0, "text": "+24", "color": Color("#a8ec74")})
+	sim.fx.append({"kind": "text", "pos": p + Vector2(0, -70), "t": k * 1.2, "text": "+24", "color": Color("#a8ec74")})
 	if not sim.ants.is_empty():
 		var a = sim.ants[0]
-		sim.fx.append({"kind": "corpse", "pos": p + step * 3.5, "t": 0.0, "color": Color(1, 1, 1), "genome": a.genome, "id": a.id, "lane": 0.75,
+		sim.fx.append({"kind": "corpse", "pos": p + step * 3.5, "t": k * 0.9, "color": Color(1, 1, 1), "genome": a.genome, "id": a.id, "lane": 0.75,
 			"caste": a.caste, "face": 1, "rot": 0.0, "old": false, "carry": false})
