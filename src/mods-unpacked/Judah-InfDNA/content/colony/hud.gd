@@ -818,10 +818,13 @@ func _draw_strip() -> void:
 	var best_r = Rect2()
 	if not sim.apex.empty():
 		var bt = "%d" % int(sim.ms_of(sim.apex[0]))
+		var bx0 = x2
+		ops2.append(["icon", x2, "apex"])       # the owner's red crown: the most mutated ant
+		x2 += 26.0
 		ops2.append(["text", x2, "best", Color(1, 1, 1, 0.55)])
 		var bx = x2 + f.get_string_size("best ").x
 		ops2.append(["text", bx, bt, APEX_COL])
-		best_r = Rect2(x2 - 5.0, STRIP2_Y, bx - x2 + f.get_string_size(bt).x + 10.0, 26.0)
+		best_r = Rect2(bx0 - 5.0, STRIP2_Y, bx - bx0 + f.get_string_size(bt).x + 10.0, 26.0)
 		x2 = bx + f.get_string_size(bt).x + 12.0
 	else:
 		x2 -= 6.0
