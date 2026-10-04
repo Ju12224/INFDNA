@@ -4,6 +4,8 @@ extends Node2D
 # ground like rain does. Purely visual.
 
 const Seasons = preload("res://mods-unpacked/Judah-InfDNA/core/seasons.gd")
+const AL = preload("res://mods-unpacked/Judah-InfDNA/content/colony/art_lib.gd")
+const LEAF_N = 10             # the owner's falling leaves: content/art/leaves/leaf_<n>.png (tools/art/make_ui_sheet2.py)
 const LEAF_COLORS = [Color("#d9822b"), Color("#c8461e"), Color("#e2b632"), Color("#a82f22"), Color("#e8892b")]
 const PETAL_COLORS = [Color("#fbd1de"), Color("#ffffff"), Color("#f7b6cb")]
 
@@ -14,6 +16,7 @@ var day
 var perf
 var _t := 0.0
 var _was := false
+var _leaf_tex := []           # loaded on first use; empty entries fall back to the drawn leaf
 
 
 static func _h(a: float, b: float = 0.0) -> float:
@@ -69,14 +72,28 @@ func _leaves(tl: Vector2, vp: Vector2, z: float, k: float) -> void:
 		var p = tl + Vector2(x * vp.x, y * vp.y) * z
 		if ground != null and p.y > ground.smooth_px(int(floor(p.x / C))) - 4.0:
 			continue
-		var col = LEAF_COLORS[int(_h(i, 23.0) * 4.99)]
 		var rot = _t * (0.8 + hx) + i * 2.1
 		var w = (6.0 + 5.0 * hy) * size
-		var flip = 0.35 + 0.65 * abs(sin(_t * (1.2 + hx * 1.5) + i))
+		var flip = 0.35 + 0.65 * abs(sin(_t * (1.2 + hx * 1.5) + i))      # it tumbles: seen edge-on, then flat
+		var tex = _leaf(int(_h(i, 24.0) * (LEAF_N - 0.01)))
 		draw_set_transform(p, rot, Vector2(1.0, flip))
-		draw_colored_polygon(PoolVector2Array([Vector2(-w, 0), Vector2(-w * 0.3, -w * 0.5), Vector2(w * 0.5, -w * 0.38), Vector2(w, 0), Vector2(w * 0.4, w * 0.4), Vector2(-w * 0.3, w * 0.48)]), col)
-		draw_line(Vector2(-w, 0), Vector2(w * 0.8, 0), Color(0.25, 0.1, 0.05, 0.55), max(1.0, size * 0.8))
+		if tex != null:
+			var ts = tex.get_size()
+			var lw = w * 2.6
+			var lh = lw * ts.y / max(1.0, ts.x)
+			draw_texture_rect(tex, Rect2(-lw * 0.5, -lh * 0.5, lw, lh), false)
+		else:
+			var col = LEAF_COLORS[int(_h(i, 23.0) * 4.99)]
+			draw_colored_polygon(PoolVector2Array([Vector2(-w, 0), Vector2(-w * 0.3, -w * 0.5), Vector2(w * 0.5, -w * 0.38), Vector2(w, 0), Vector2(w * 0.4, w * 0.4), Vector2(-w * 0.3, w * 0.48)]), col)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+func _leaf(n: int):
+	if _leaf_tex.empty():
+		var lib = AL.get_lib()
+		for k in LEAF_N:
+			_leaf_tex.append(lib.tex("leaves/leaf_%d.png" % k))
+	return _leaf_tex[n]
 
 
 func _petals(tl: Vector2, vp: Vector2, z: float, k: float) -> void:

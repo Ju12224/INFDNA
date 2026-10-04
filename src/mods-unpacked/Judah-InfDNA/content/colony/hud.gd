@@ -857,7 +857,7 @@ func _on_strip_best(ev: InputEvent) -> void:
 
 
 # ---- Monstrosity and the Apex ants (colony_sim: monstrosity, apex; arc.gd)
-const ARC_ICONS = ["acid", "dominion", "tremors", "void"]     # the owner's icons for Growing, Dominion, Tremors, The Void
+const ARC_ICONS = ["monstrosity", "dominion", "tremors", "void"]     # the owner's icons for Growing, Dominion, Tremors, The Void
 func _mono_pct(sim) -> int:
 	return int(round(clamp(sim.monstrosity, 0.0, 100.0)))
 
@@ -905,7 +905,7 @@ func _draw_apex() -> void:
 	var w = c.rect_size.x
 	var mp = _mono_pct(sim)
 	var arc = _arc_line(sim)
-	var ic = Kit.icon("acid")
+	var ic = Kit.icon("monstrosity")
 	if ic != null:
 		c.draw_texture_rect(ic, Rect2(0, 0, 24, 24), false)
 	c.draw_string(_f_m, Vector2(30, 22), "Monstrosity %d%%" % mp, Color.white)

@@ -58,10 +58,17 @@ func set_layer(key: String, on: bool) -> void:
 func _process(delta: float) -> void:
 	_t += delta
 	if not (show_fights or show_tasks or show_health):
-		# a boss is pointed at whatever layers are on: redraw while one is about (and once more after, to clear its arrow)
+		# a boss is pointed at whatever layers are on: redraw while one is about (and once more after, to clear its arrow); the chamber
+		# badges keep a steady size on screen, so a change of zoom while they show redraws too (and once a second for new rooms)
 		var boss = _boss_out()
-		if boss or _boss_was:
+		var z = _zoom()
+		_badge_t -= delta
+		var badges = (z > BADGE_Z0 or _badge_z > BADGE_Z0) and (abs(z - _badge_z) > 0.004 or _badge_t <= 0.0)
+		if boss or _boss_was or badges:
 			update()
+			if badges:
+				_badge_z = z
+				_badge_t = 1.0
 		_boss_was = boss
 		return
 	if show_fights:
@@ -166,6 +173,7 @@ func _raider_pts(e) -> Array:
 
 
 func _draw() -> void:
+	_draw_chamber_badges()
 	if not (show_fights or show_tasks or show_health):
 		_draw_edge_arrows(true)
 		return
@@ -236,6 +244,35 @@ func _draw_ant_marks(z: float, vr: Rect2) -> void:
 
 
 var _boss_was := false
+# Chamber badges: zoomed out, each room of the nest shows what it is (the owner's chamber icons), at a steady size on screen.
+const CHAMBER_ICONS = {"brood": "chamber_brood", "food": "chamber_food", "farm": "chamber_farm", "armory": "chamber_armory", "midden": "chamber_midden"}
+const BADGE_Z0 = 0.8          # the badges fade in from this camera zoom ...
+const BADGE_Z1 = 1.2          # ... and are full from this one out
+const BADGE_PX = 46.0         # their size on screen
+var _badge_z := -1.0
+var _badge_t := 0.0
+
+
+func _draw_chamber_badges() -> void:
+	var z = _zoom()
+	var a = smoothstep(BADGE_Z0, BADGE_Z1, z)
+	if a <= 0.01:
+		return
+	var C = sim.grid.CELL
+	var vr = ant_view._view_rect()
+	var sz = BADGE_PX * z
+	var items = [["chamber_queen", (sim.grid.chamber + Vector2(0.5, 0.5)) * C]]
+	for c in sim.planner.chambers:
+		var key = CHAMBER_ICONS.get(c["purpose"], "")
+		if key != "" and c.get("z", 0) == 0:
+			items.append([key, (c["center"] + Vector2(0.5, 0.5)) * C])
+	for it in items:
+		var p: Vector2 = it[1]
+		if not vr.has_point(p):
+			continue
+		var tex = Kit.icon(it[0])
+		if tex != null:
+			draw_texture_rect(tex, Rect2(p - Vector2(sz, sz) * 0.5, Vector2(sz, sz)), false, Color(1, 1, 1, a))
 
 
 func _boss_out() -> bool:

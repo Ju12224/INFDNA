@@ -34,6 +34,7 @@ const ROOMS = {
 	"battery": ["Sting Battery", Color("#ff9a73")],
 	"architects": ["Architects' Hall", Color("#fff2bd")],
 }
+const ROOM_ICONS = {"brood": "chamber_brood", "food": "chamber_food", "farm": "chamber_farm", "armory": "chamber_armory", "midden": "chamber_midden"}
 const ROOM_ORDER = ["food", "brood", "farm", "midden", "armory", "cistern", "venom", "battery", "architects"]
 
 var scene
@@ -240,13 +241,17 @@ func _vignette(sz: Vector2) -> void:
 	_ui.draw_polygon(PoolVector2Array([Vector2(sz.x, 0), Vector2(sz.x, sz.y), Vector2(sz.x - m, sz.y - m), Vector2(sz.x - m, m)]), cols)
 
 
-func _label_pill(p: Vector2, txt: String, tint: Color, a: float) -> void:
+func _label_pill(p: Vector2, txt: String, tint: Color, a: float, icon = null) -> void:
 	var tw = _f_s.get_string_size(txt).x
-	var r = Rect2(p.x - tw * 0.5 - 12.0, p.y - 24.0, tw + 24.0, 24.0)
+	var iw = 30.0 if icon != null else 0.0
+	var r = Rect2(p.x - (tw + iw) * 0.5 - 12.0, p.y - 24.0, tw + iw + 24.0, 24.0)
 	_ui.draw_rect(r.grow(2.0), Color(INK.r, INK.g, INK.b, a))
 	_ui.draw_rect(r, Color(0.13, 0.11, 0.18, 0.9 * a))
 	_ui.draw_rect(Rect2(r.position.x, r.position.y, 5.0, r.size.y), Color(tint.r, tint.g, tint.b, a))
-	_ui.draw_string(_f_s, Vector2(r.position.x + 12.0, r.position.y + 18.0), txt, Color(1, 1, 1, a))
+	if icon != null:
+		# the owner's chamber icon, a little bigger than the pill so it reads
+		_ui.draw_texture_rect(icon, Rect2(r.position.x + 7.0, r.position.y - 7.0, 34.0, 34.0), false, Color(1, 1, 1, a))
+	_ui.draw_string(_f_s, Vector2(r.position.x + 12.0 + iw, r.position.y + 18.0), txt, Color(1, 1, 1, a))
 
 
 # Names over the chambers, fading in as you zoom toward them.
@@ -275,7 +280,7 @@ func _room_labels(sz: Vector2) -> void:
 				if abs(e["pos"].x - c["center"].x) <= c["rx"] + 1.0 and abs(e["pos"].y - c["center"].y) <= c["ry"] + 1.5:
 					eggs += 1
 			txt += "  %d egg%s" % [eggs, "" if eggs == 1 else "s"]
-		_label_pill(p, txt, info[1], a)
+		_label_pill(p, txt, info[1], a, Kit.icon(ROOM_ICONS[c["purpose"]]) if ROOM_ICONS.has(c["purpose"]) else null)
 
 
 # The gauge: how deep, which soil, which nest level, where the queen and the ants are.
@@ -328,7 +333,11 @@ func _gauge(sz: Vector2) -> void:
 	var cy = clamp(y0 + dep * k, y0 - 12.0, y1)
 	_ui.draw_line(Vector2(x0 - 3.0, cy), Vector2(x0 + GAUGE_W + 3.0, cy), Color.white, 2.0)
 	_ui.draw_colored_polygon(PoolVector2Array([Vector2(x0 - 4.0, cy), Vector2(x0 - 16.0, cy - 7.0), Vector2(x0 - 16.0, cy + 7.0)]), Color.white)
-	# header + reading
+	# header + reading, under the owner's depth gauge picture
+	var gp = Kit.icon("depth_gauge")
+	if gp != null:
+		var gs = gp.get_size() * (46.0 / max(1.0, gp.get_size().y))
+		_ui.draw_texture_rect(gp, Rect2(Vector2(x0 + GAUGE_W - gs.x, y0 - 104.0), gs), false)
 	_ui.draw_string(_f_m, Vector2(x0 - 60.0, y0 - 34.0), "DEPTH", GOLD)
 	var reading = "surface" if dep < 1.0 else "%d cm" % int(dep * 0.5)
 	_ui.draw_string(_f_s, Vector2(x0 - 60.0, y0 - 14.0), reading, Color(1, 1, 1, 0.9))
