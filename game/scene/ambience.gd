@@ -52,9 +52,12 @@ var _vg := PackedFloat32Array()
 var _cool := {}                    # sfx name -> seconds until it may sound again
 
 
-func _ready() -> void:
+func _init() -> void:
 	for a in [_vlen, _vage, _vf0, _vf1, _vph, _vnz, _vh, _vg]:
 		a.resize(MAXV)
+
+
+func _ready() -> void:
 	var gen := AudioStreamGenerator.new()
 	gen.mix_rate = RATE
 	gen.buffer_length = 0.15
