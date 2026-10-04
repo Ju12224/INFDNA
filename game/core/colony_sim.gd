@@ -689,9 +689,7 @@ func step(dt: float) -> void:
 	_grow_timer -= dt
 	if _grow_timer <= 0.0:
 		_grow_timer = 1.0
-		_pb()
-		_grow_world()
-		_pe("grow")
+		_keep_inside()
 
 	_nav_timer -= dt
 	if grid.nav_dirty and _nav_timer <= 0.0:
@@ -1334,18 +1332,20 @@ func bless(a) -> bool:
 	return true
 
 
-# The world is infinite: keep the simulated columns ahead of every unit.
-func _grow_world() -> void:
-	var lo = grid.sim_r()
-	var hi = grid.sim_l()
-	for a in ants:
-		lo = min(lo, min(a.x, a.tx))
-		hi = max(hi, max(a.x, a.tx))
-	for e in enemies:
-		lo = min(lo, min(e.x, e.tx))
-		hi = max(hi, max(e.x, e.tx))
-	if lo <= hi:
-		grid.ensure_cols(lo, hi)
+# The world is a fixed width (WorldGrid.WORLD_W) and nothing can step past its edges (there is no footing outside it).
+# A unit put down outside it by some spawn rule is set back onto the ground at the edge.
+func _keep_inside() -> void:
+	var lo = grid.sim_l() + 2
+	var hi = grid.sim_r() - 2
+	for u in ants + enemies:
+		if u.x < lo or u.x > hi or u.tx < lo or u.tx > hi:
+			u.x = clampi(u.x, lo, hi)
+			u.y = grid.surf_y(u.x) - 1
+			u.z = 0
+			u.tx = u.x
+			u.ty = u.y
+			u.tz = 0
+			u.t = 0.0
 
 
 func _update_stimuli() -> void:
