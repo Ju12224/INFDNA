@@ -19,6 +19,7 @@ OUT = os.path.join(ROOT, "game", "art", "anthill")
 NAMES = ["mound_small", "mound_medium", "mound_large"]
 SPECK = 200
 MARGIN = 3
+EDGE = 14            # pixels in from the mound's edge where the hole is looked for
 
 
 def main():
@@ -41,8 +42,9 @@ def main():
         crop[MARGIN:MARGIN + h, MARGIN:MARGIN + w][mask] = rgba[sy, sx][mask]
         Image.fromarray(crop).save(os.path.join(OUT, name + ".png"))
         lum = crop[..., :3].astype(float).mean(axis=2)
-        dark = (crop[..., 3] > 200) & (lum < np.percentile(lum[crop[..., 3] > 200], 12))
-        dark = ndimage.binary_opening(dark, iterations=2)
+        inside = ndimage.binary_erosion(crop[..., 3] > 200, iterations=EDGE)      # away from the ink outline round the mound
+        dark = inside & (lum < np.percentile(lum[inside], 15))
+        dark = ndimage.binary_opening(dark, iterations=3)
         lab2, n2 = ndimage.label(dark)
         if n2:
             biggest = 1 + int(np.argmax(ndimage.sum(dark, lab2, range(1, n2 + 1))))
