@@ -23,7 +23,8 @@ var snow := 0.0
 var cloud := 0.0         # 0..1 how overcast
 
 
-func update(t: float, rain: float, overcast: float) -> void:
+# force_ph >= 0 pins the time of day (screenshots and tests).
+func update(t: float, rain: float, overcast: float, force_ph: float = -1.0) -> void:
 	season = Seasons.index(t)
 	autumn = Seasons.autumn(t)
 	leaf = Seasons.leaf(t)
@@ -31,7 +32,7 @@ func update(t: float, rain: float, overcast: float) -> void:
 	cloud = max(rain, overcast * 0.85)
 	var d = t / DAY_LEN + START
 	day_n = 1 + int(floor(d))
-	ph = fposmod(d, 1.0)
+	ph = force_ph if force_ph >= 0.0 else fposmod(d, 1.0)
 	elev = -cos(ph * TAU)
 	night = smoothstep(0.12, -0.28, elev)
 	var h = (elev - 0.02) / 0.22

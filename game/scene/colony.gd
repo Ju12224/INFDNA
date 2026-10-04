@@ -102,11 +102,7 @@ func _process(delta: float) -> void:
 			n += 1
 	if sim.collapsed:
 		_new_colony()
-	day.update(sim.time, sim.rain, sim.overcast)
-	if force_ph >= 0.0:
-		day.ph = force_ph
-		day.elev = -cos(force_ph * TAU)
-		day.night = smoothstep(0.12, -0.28, day.elev)
+	day.update(sim.time, sim.rain, sim.overcast, force_ph)
 	_pan_keys(delta)
 	_report_t += delta
 	if _report_t >= REPORT_EVERY:
