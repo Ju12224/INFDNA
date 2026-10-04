@@ -1,0 +1,61 @@
+{
+ "_about": "The owner's sky art, cut by tools/art/make_clouds.py (and later sky tools). Sizes in pixels.",
+ "clouds": [
+  {
+   "name": "cloud_big_0",
+   "file": "sky/cloud_big_0.png",
+   "kind": "big",
+   "w": 755,
+   "h": 394
+  },
+  {
+   "name": "cloud_big_1",
+   "file": "sky/cloud_big_1.png",
+   "kind": "big",
+   "w": 720,
+   "h": 363
+  },
+  {
+   "name": "cloud_big_2",
+   "file": "sky/cloud_big_2.png",
+   "kind": "big",
+   "w": 704,
+   "h": 342
+  },
+  {
+   "name": "cloud_flat_0",
+   "file": "sky/cloud_flat_0.png",
+   "kind": "flat",
+   "w": 781,
+   "h": 170
+  },
+  {
+   "name": "cloud_flat_1",
+   "file": "sky/cloud_flat_1.png",
+   "kind": "flat",
+   "w": 723,
+   "h": 122
+  },
+  {
+   "name": "cloud_wisp_0",
+   "file": "sky/cloud_wisp_0.png",
+   "kind": "wisp",
+   "w": 526,
+   "h": 186
+  },
+  {
+   "name": "cloud_wisp_1",
+   "file": "sky/cloud_wisp_1.png",
+   "kind": "wisp",
+   "w": 374,
+   "h": 148
+  },
+  {
+   "name": "cloud_wisp_2",
+   "file": "sky/cloud_wisp_2.png",
+   "kind": "wisp",
+   "w": 305,
+   "h": 144
+  }
+ ]
+}
