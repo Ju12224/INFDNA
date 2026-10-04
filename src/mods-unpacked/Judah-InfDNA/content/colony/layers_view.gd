@@ -78,27 +78,37 @@ func _rebuild_pairs() -> void:
 		return
 	var vr = ant_view._view_rect()
 	var C = sim.grid.CELL
-	var ants = sim.ants
-	var apos := PoolVector2Array()
-	var max_k2 := 1.0
-	for a in ants:
-		apos.append(sim.ant_pos(a))
-		max_k2 = max(max_k2, a.ph.get("reach2", 1.0))
+	# the raiders in view first: with none of them there (the usual case) no ant needs looking at
+	var foes := []
 	for e in sim.enemies:
 		if e.state == 2:
 			continue
 		var ep = sim.enemy_pos(e)
 		if ep.x < vr.position.x or ep.x > vr.end.x or ep.y < vr.position.y or ep.y > vr.end.y:
 			continue
+		foes.append([e, ep])
+	if foes.empty():
+		return
+	var ants = sim.ants
+	var max_k2 := 1.0
+	for a in ants:
+		max_k2 = max(max_k2, a.ph.get("reach2", 1.0))
+	for fe in foes:
+		var e = fe[0]
+		var ep: Vector2 = fe[1]
 		var ar = EnemyDefs.REACH[e.cls] * C * sim._r_reach
 		var ar2 = ar * ar
 		var far = ar * sqrt(max_k2) + 0.01
+		# an ant is drawn between the centres of its cell and its next cell: rule out the far ones from the cells alone
+		var cx0 = (ep.x - far) / C - 1.0
+		var cx1 = (ep.x + far) / C
 		var links := 0
-		for ai in ants.size():
-			var a2 = ants[ai]
+		for a2 in ants:
 			if a2.z != e.z:
 				continue          # a wall of dirt between them
-			var p = apos[ai]
+			if (a2.x < cx0 and a2.tx < cx0) or (a2.x > cx1 and a2.tx > cx1):
+				continue
+			var p = sim.ant_pos(a2)
 			if abs(p.x - ep.x) > far:
 				continue
 			if p.distance_squared_to(ep) <= ar2 * a2.ph.get("reach2", 1.0):
@@ -164,7 +174,11 @@ func _draw_ring(e, z: float, vr: Rect2) -> void:
 # Halos (tasks) and health bars, one pass over the ants that are on screen.
 func _draw_ant_marks(z: float, vr: Rect2) -> void:
 	var C = sim.grid.CELL
+	var fights_only = not show_tasks and not show_health
 	for a in sim.ants:
+		# with only the fight marks on, an ant gets one just after a hit or while it has a raider in reach
+		if fights_only and a.hurt <= 0.0 and not _fighting.has(a.id):
+			continue
 		var px = (a.x + 0.5) * C
 		var py = (a.y + 0.5) * C
 		if px < vr.position.x or px > vr.end.x or py < vr.position.y or py > vr.end.y:

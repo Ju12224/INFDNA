@@ -107,7 +107,7 @@ func _fall_pose(f: Dictionary) -> Dictionary:
 	var u = clamp(float(f["t"]) / FALL_T, 0.0, 1.0)
 	var face = int(f["face"])
 	var spin = float(f["spin"])
-	var landx = int(clamp(float(f["x"]), g.arena_l + 3, g.arena_r - 3))      # where the sim puts the carcass
+	var landx = int(clamp(float(f["x"]), g.sim_l() + 3, g.sim_r() - 3))      # where the sim puts the carcass
 	var ps = GroundView.persp(LANE)
 	var sc = bird_scale(ps)
 	var base = carcass_base(g, landx)                                        # the carcass pile's own foot (world_view draws it from here)

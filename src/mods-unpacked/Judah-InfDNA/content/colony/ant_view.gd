@@ -272,7 +272,7 @@ func _draw() -> void:
 		if selected != null and sim.apex_ids.has(selected.id) and sim.apex[0] != selected:
 			order = [selected] + sim.apex
 		for ap in order:
-			if ap == selected or z < APEX_TAG_ZOOM:
+			if (ap == selected or z < APEX_TAG_ZOOM) and ap.genome.mutation_score() >= MS_PLAIN:
 				var ax = (ap.x + 0.5) * C0
 				var ay = (ap.y + 0.5) * C0
 				if ax >= vr.position.x and ax <= vr.end.x and ay >= vr.position.y and ay <= vr.end.y:
@@ -789,7 +789,7 @@ func _draw_ant(a) -> void:
 	if a.squad != 0 or sel_ids.has(a.id):
 		_draw_order_ring(a, feet, d[1])
 	var rank = int(sim.apex_ids.get(a.id, -1))
-	if rank >= 0 and detail >= 1:
+	if rank >= 0 and detail >= 1 and not plain:           # (an Apex ant that is still a plain ant, early on, gets no aura)
 		_draw_apex_aura(a, feet, n, d, rank)
 	var frame = int(fposmod(_gait_ph.get(a.id, 0.0), 1.0) * baker.FRAMES) % baker.FRAMES if moving else 0
 	var tex = baker.get_texture(a.genome, 1.0, frame, plain and cam != null and cam.zoom.x > 0.6)     # a plain ant seen from afar: half the walk frames

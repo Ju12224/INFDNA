@@ -58,6 +58,8 @@ var _debt := 0.0
 var _ug_view           # ug_view.gd: draws the underground structures
 var _fast_k := 4               # how many cells an unwatched ant covers per decision at 10x (raised when the machine lags)
 var _lag_t := 0.0
+var _ok_t := 0.0
+var _budget_hit := false
 var _since_speed := 99.0
 var _prune_timer := 10.0
 var _overlay: Node2D
@@ -276,13 +278,20 @@ func _process(delta: float) -> void:
 	if speed < 10.0:
 		_fast_k = 4
 		_lag_t = 0.0
-	elif not shop_open and not sim.collapsed and eff_speed < speed * 0.9 and _since_speed > 2.0:
+	elif not shop_open and not sim.collapsed and _budget_hit and _since_speed > 2.0:
+		# the sim used its whole time budget this frame (not just a long frame capping the backlog): longer hops
 		_lag_t += delta
+		_ok_t = 0.0
 		if _lag_t > 1.5 and _fast_k < 8:
 			_fast_k += 2
 			_lag_t = 0.0
 	else:
 		_lag_t = 0.0
+		_ok_t += delta
+		if _ok_t > 8.0 and _fast_k > 4:
+			_fast_k -= 2          # room to spare for a while: back to shorter hops (and a shorter step)
+			_ok_t = 0.0
+	_budget_hit = false
 	_since_speed += delta
 	sim.hop_k = 1 if speed <= 2.0 else (2 if speed <= 4.0 else _fast_k)
 	sim.rot_every = 1 if speed <= 2.0 else (2 if speed <= 4.0 else 3 + (_fast_k - 4) / 2)
@@ -299,6 +308,7 @@ func _process(delta: float) -> void:
 			_debt -= dt
 			done += dt
 			if OS.get_ticks_usec() - t0 > perf.budget:
+				_budget_hit = true
 				break
 		_debt = min(_debt, 0.25)     # give up on a backlog instead of chasing it
 	eff_speed = lerp(eff_speed, done / max(delta, 0.001), 0.1) if speed > 0.0 else 0.0
@@ -804,3 +814,23 @@ func go_to_menu() -> void:
 		var _e = get_tree().change_scene(TITLE_SCENE)
 	else:
 		get_tree().quit()
+
+
+# The art library caches textures in Engine metadata; metadata outlives the script engine at quit and crashed the game on exit,
+# so it is dropped when the colony scene goes away (and on a window close).
+func _exit_tree() -> void:
+	_drop_caches()
+
+
+func _notification(what: int) -> void:
+	if what == MainLoop.NOTIFICATION_WM_QUIT_REQUEST:
+		_drop_caches()
+
+
+func _drop_caches() -> void:
+	for k in ["infdna_art", "infdna_ug"]:
+		if Engine.has_meta(k):
+			var lib = Engine.get_meta(k)
+			if lib != null and lib.has_method("shutdown"):
+				lib.shutdown()
+			Engine.remove_meta(k)

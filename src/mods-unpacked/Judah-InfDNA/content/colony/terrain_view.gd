@@ -269,6 +269,8 @@ var _back: Node2D
 var _front: Node2D
 var _chunks := {}     # k -> {"tex", "stex", "back", "front"}
 var _layout := -1
+var _camc := Vector2(INF, INF)
+var _new_chunk := true
 
 
 # perf.gd: quality 1 swaps in a cheaper shader (two noise octaves instead of four, no rear-wall cracks).
@@ -327,8 +329,11 @@ func _process(_delta: float) -> void:
 			ch["stex"].set_data(g.chunk_surf_image(k))
 	g.dirty_chunks.clear()
 	var camc = c / g.CELL
-	for k in _chunks.keys():
-		_chunks[k]["back"].material.set_shader_param("cam", camc)
+	if camc != _camc or _new_chunk:      # (a still camera leaves the rear-wall parallax where it is)
+		_camc = camc
+		_new_chunk = false
+		for k in _chunks.keys():
+			_chunks[k]["back"].material.set_shader_param("cam", camc)
 
 
 func _make_chunk(k: int) -> void:
@@ -360,6 +365,7 @@ func _make_chunk(k: int) -> void:
 		(_back if which == "back" else _front).add_child(sp)
 		ch[which] = sp
 	_chunks[k] = ch
+	_new_chunk = true
 
 
 func _drop_chunk(k: int) -> void:

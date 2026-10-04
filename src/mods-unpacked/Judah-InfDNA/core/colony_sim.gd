@@ -1204,7 +1204,7 @@ func _step_bird_fall(dt: float) -> void:
 	bird_fall["t"] += dt
 	if bird_fall["t"] < 1.3:
 		return
-	var x = int(clamp(bird_fall["x"], grid.arena_l + 3, grid.arena_r - 3))
+	var x = int(clamp(bird_fall["x"], grid.sim_l() + 3, grid.sim_r() - 3))     # where it fell (the bird hunts far beyond the arena)
 	for p in piles:
 		if p.get("kind", "") == "carcass" and abs(p["x"] - x) <= 2:
 			p["amount"] += CARCASS_FOOD
@@ -1301,7 +1301,8 @@ func _step_director(dt: float) -> void:
 	_step_bird(dt)
 	_step_apex(dt)
 	Arc.step(self, dt)
-	UG.get_reg().step(self, dt)
+	if grid.ug != null:
+		grid.ug.step(self, dt)
 	_step_anteater_spawn(dt)
 	strike_t = max(0.0, strike_t - dt)
 	will = min(will_max(), will + WILL_REGEN * (1.0 + mod("will_regen")) * dt)
@@ -1502,6 +1503,9 @@ func _spawn_ant(g, gen: int, cell: Vector2, caste: int = -1):
 func kill(a, reason: String = "") -> void:
 	ants.erase(a)
 	died += 1
+	if apex_ids.has(a.id):
+		apex_ids.erase(a.id)
+		apex.erase(a)
 	deaths[reason if deaths.has(reason) else "other"] += 1
 	# the view plays a fall animation from this (ant_view._draw_corpses)
 	fx.append({"kind": "corpse", "pos": ant_pos(a) + Vector2(-sin(a.rot), cos(a.rot)) * grid.CELL * 0.5, "t": 0.0,
@@ -1606,8 +1610,10 @@ func _rescue(u) -> void:
 
 
 # ---- gait: how an ant walks (the rules of where it may step are locomotion.gd's). It pauses now and then, sets off slowly and gets up to speed
-# (the ramp is kept in the gait word, see Loco.DIR_MASK), slows for a sharp turn, carries a load a little slower than it walks out light, turns its body
-# smoothly, and takes its time squeezing through to the other tunnel plane.
+# (the ramp is kept in the gait word, see Loco.DIR_MASK), slows for a sharp turn or behind another ant, carries a load a little slower than it walks
+# out light, turns its body smoothly, and takes its time squeezing through to the other tunnel plane. None of it costs the colony anything: a working
+# ant (anything but a nurse) keeps count of the ground it lost and walks CATCH_K faster until it has made it up, so a forager's round trip takes as
+# long as it did before the gait existed.
 const ROT_RATE = 7.0           # rad/s: the fastest a body turns (a quarter turn takes about a quarter of a second)
 const RAMP_T = 0.3             # s from standing to full speed
 const RAMP_MIN = 0.3           # share of full speed it sets off at
@@ -1615,6 +1621,7 @@ const RAMP_CAP = [255, 235, 175, 110, 70]   # speed kept through a turn of 0..4 
 const LADEN_K = 0.93           # on open ground a forager with a load walks this much slower ...
 const OUT_K = 1.08             # ... and one going out light this much faster, so a round trip takes as long as before
 const SPOIL_K = 0.95           # a digger with a dirt pellet
+const CATCH_K = 0.2            # how much faster a working ant walks while it makes up lost ground
 var _pause_req := 0.0          # a pause the deciding ant's task asked for (_on_arrive applies it once the task has chosen where to go)
 var occ := PoolIntArray()      # tunnel cells (both planes) an ant is about to enter or stands in: (taken until, in tenths of a sim second) << 12 | id & 4095
 
@@ -1674,18 +1681,30 @@ func _step_ant(a, dt: float) -> void:
 			sp *= LADEN_K if a.carry > 0.0 else OUT_K
 		elif a.spoil > 0.0:
 			sp *= SPOIL_K
-		# getting up to speed: the mean of the ramp over this tick, so the step size does not change how far an ant gets
+		# getting up to speed: the mean of the ramp over this tick, so the step size does not change how far an ant gets. The ground lost is owed
+		# (not by nurses, whose walking gets nothing done) and made up at full speed.
 		var gait = a.scout
-		var r0 = ((gait >> Loco.RAMP_SHIFT) & 255) / 255.0
-		if r0 < 1.0:
+		var r0i = (gait >> Loco.RAMP_SHIFT) & 255
+		if r0i < 255:
+			var r0 = r0i / 255.0
 			var r1 = r0 + dt / RAMP_T
 			var avg = (r0 + r1) * 0.5
 			if r1 >= 1.0:
 				var tr = (1.0 - r0) * RAMP_T
 				avg = ((r0 + 1.0) * 0.5 * tr + (dt - tr)) / dt
 				r1 = 1.0
-			sp *= RAMP_MIN + (1.0 - RAMP_MIN) * avg
-			a.scout = (gait & Loco.DIR_MASK) | (int(r1 * 255.0) << Loco.RAMP_SHIFT)
+			var fac = RAMP_MIN + (1.0 - RAMP_MIN) * avg
+			var debt = (gait >> Loco.DEBT_SHIFT) & 4095
+			if a.task != Task.NURSE:
+				debt = int(min(4095, debt + int(sp * dt * (1.0 - fac) * 64.0 + 0.5)))
+			sp *= fac
+			a.scout = (gait & Loco.DIR_MASK) | (int(r1 * 255.0) << Loco.RAMP_SHIFT) | (debt << Loco.DEBT_SHIFT)
+		elif gait >= (1 << Loco.DEBT_SHIFT):
+			var extra = sp * CATCH_K
+			var debt2 = (gait >> Loco.DEBT_SHIFT) & 4095
+			debt2 = int(max(0, debt2 - max(1, int(extra * dt * 64.0 + 0.5))))
+			sp += extra
+			a.scout = (gait & 4095) | (debt2 << Loco.DEBT_SHIFT)
 		a.t += sp * dt / dist
 	# Arrival carries the overshoot into the next hop (v0.22). Before, the remainder was thrown
 	# away, so ants walked 9% slower than their speed at 1x and 19% slower at 4x-sized steps.
@@ -1709,14 +1728,14 @@ func _step_ant(a, dt: float) -> void:
 		if moved:
 			_orient(a)
 		elif a.tz != a.z:
-			a.scout = Loco.PLANE_STEP | (int(min((a.scout >> Loco.RAMP_SHIFT) & 255, 60)) << Loco.RAMP_SHIFT)   # through the hole at a crawl
+			a.scout = (a.scout & Loco.DEBT_MASK) | Loco.PLANE_STEP | (int(min((a.scout >> Loco.RAMP_SHIFT) & 255, 60)) << Loco.RAMP_SHIFT)   # through the hole at a crawl
 		if (moved or a.tz != a.z) and a.dig_timer <= 0.0:
 			dist = a.hop if a.hop > 0.0 else (1.4142 if (a.tx != a.x and a.ty != a.y) else 1.0)
 			a.t = min(over / dist, 1.6)
 			if occ.size() == grid.PLANES * grid.WH:
 				_mark_step(a)
 		else:
-			a.scout = a.scout & Loco.DIR_MASK     # standing: it will set off slowly
+			a.scout = a.scout & Loco.NO_RAMP      # standing: it will set off slowly
 			break
 
 
@@ -1757,7 +1776,7 @@ func _orient(a) -> void:
 	var last = gait & Loco.DIR_MASK
 	if last != 0 and last != Loco.PLANE_STEP:
 		r = int(min(r, RAMP_CAP[Loco.TURN[last * 9 + code]]))
-	a.scout = code | (r << Loco.RAMP_SHIFT)
+	a.scout = (gait & Loco.DEBT_MASK) | code | (r << Loco.RAMP_SHIFT)
 
 
 # Solid cells round (x, y) in plane z: (sum of their offsets x, y; how many) - the raw ground normal and how boxed in the cell is.
@@ -1799,7 +1818,7 @@ func _mark_step(a) -> void:
 	var me = a.id & 4095
 	if (o >> 12) > q and (o & 4095) != me:
 		var gait = a.scout
-		a.scout = (gait & Loco.DIR_MASK) | (int(min((gait >> Loco.RAMP_SHIFT) & 255, 115)) << Loco.RAMP_SHIFT)
+		a.scout = (gait & Loco.NO_RAMP) | (int(min((gait >> Loco.RAMP_SHIFT) & 255, 115)) << Loco.RAMP_SHIFT)
 	occ[i] = ((q + 3) << 12) | me
 
 
@@ -1826,7 +1845,14 @@ func _pause(a, secs: float) -> void:
 	a.ty = a.y
 	a.tz = a.z
 	a.t = -secs
-	a.scout = a.scout & Loco.DIR_MASK
+	var gait = a.scout & Loco.NO_RAMP
+	if a.task != Task.NURSE:
+		# a working ant makes up the time afterwards
+		var und = grid.is_under(a.x, a.y)
+		var sp = a.ph["speed"] * (a.ph["tunnel_mult"] if und else SURFACE_K * _s_walk)
+		var debt = ((gait >> Loco.DEBT_SHIFT) & 4095) + int(sp * secs * 64.0)
+		gait = (gait & 4095) | (int(min(4095, debt)) << Loco.DEBT_SHIFT)
+	a.scout = gait
 	_occupy(a, int(secs * 10.0) + 1)
 
 
@@ -2219,7 +2245,8 @@ func _finish_dig(a) -> void:
 	var r = planner.radius_for(job) if job != null else 1.25
 	var n = grid.carve(a.dig_cell.x, a.dig_cell.y, r, a.dig_z)
 	if n > 0:
-		UG.get_reg().on_carve(self, int(a.dig_cell.x), int(a.dig_cell.y), a.dig_z)
+		if grid.ug != null:
+			grid.ug.on_carve(self, int(a.dig_cell.x), int(a.dig_cell.y), a.dig_z)
 	if job != null:
 		planner.note_dug(job, n)
 		planner.after_carve(job, a.dig_cell)
@@ -2308,7 +2335,7 @@ func _nurse(a) -> void:
 			return
 	a.leg -= 1
 	if a.leg == 0:
-		a.scout = (a.scout & Loco.DIR_MASK) | (int(min((a.scout >> Loco.RAMP_SHIFT) & 255, 120)) << Loco.RAMP_SHIFT)   # the last step of a walk slows into the stop
+		a.scout = (a.scout & Loco.NO_RAMP) | (int(min((a.scout >> Loco.RAMP_SHIFT) & 255, 120)) << Loco.RAMP_SHIFT)   # the last step of a walk slows into the stop
 	if Loco.shuffle_home(self, a):
 		return
 	var nb := []
@@ -3089,7 +3116,7 @@ func _enemy_arrive(e) -> void:
 	if e.state == 0 and abs(e.x - ex) <= 4:
 		e.state = 1
 		e.timer = 0.0
-	if e.state == 1 and e.timer > SIEGE_TIME:
+	if e.state == 1 and e.timer > SIEGE_TIME and not e.void_born:      # a Void Maw from the pit never gives up: the pit seals only when it dies
 		e.state = 2
 		banner = "The %s retreats" % e.def["name"]
 		banner_t = 3.0
@@ -3517,7 +3544,8 @@ func _step_zap(dt: float) -> void:
 
 func _enemy_die(e) -> void:
 	enemies.erase(e)
-	kills += 1
+	if e.cls != "prey":
+		kills += 1          # critters and other prey are not raiders slain
 	if e.kind == "anteater":
 		anteaters_slain += 1
 		var xtra = ""
@@ -3987,16 +4015,26 @@ func _step_critters(dt: float) -> void:
 		if e.def.has("critter"):
 			n += 1
 	var winter = Seasons.snow(time) > 0.5
-	var width = grid.arena_r - grid.arena_l
-	var want = 0 if winter else int(clamp(width / 70, 3, 14))
+	if winter or rain > 0.5:
+		# winter sends every critter to ground, rain the fliers: one leaves now and then (never one that is being fought)
+		for e in enemies:
+			if e.def.has("critter") and not e.engaged and (winter or e.def.get("fly", false)):
+				enemies.erase(e)
+				break
+	var width = 0
+	for a in ants:
+		if not grid.is_under(a.x, a.y):
+			width = max(width, abs(a.x - int(grid.entrance.x)))
+	var want = 0 if winter else int(clamp((width * 2 + 260) / 70, 3, 14))
 	if n >= want:
 		return
 	var w = [3.0, 1.0 + 6.0 * rain, 2.0, 2.5, 2.0 * (1.0 - rain), 1.5 * (1.0 - rain)]
 	var kind = _weighted(EnemyDefs.CRITTERS, w)
 	var ex = int(grid.entrance.x)
 	var x = ex
+	var reach = max(130, width + 40)          # where the colony goes: critters live along its trails, not only by the nest
 	for tries in 6:
-		x = rng.randi_range(grid.arena_l + 6, grid.arena_r - 6)
+		x = int(clamp(ex + rng.randi_range(-reach, reach), grid.sim_l() + 6, grid.sim_r() - 6))
 		if abs(x - ex) > 18:
 			break
 	_spawn_enemy(kind, -1 if rng.randf() < 0.5 else 1, x)

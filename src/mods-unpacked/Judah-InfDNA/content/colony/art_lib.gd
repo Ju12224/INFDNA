@@ -119,3 +119,11 @@ func creature(name: String) -> Dictionary:
 func has_creature(name: String) -> bool:
 	var e = creature(name)
 	return not e.empty() and tex(str(e.get("body", {}).get("file", ""))) != null
+
+
+# Before the library is dropped (scene change, quit): finish any background read so no thread outlives it.
+func shutdown() -> void:
+	if _thread != null:
+		_thread.wait_to_finish()
+		_thread = null
+	_queue.clear()

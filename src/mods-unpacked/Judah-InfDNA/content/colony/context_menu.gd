@@ -67,7 +67,7 @@ func build(target: Dictionary) -> Array:
 	var under = target.get("ant")
 	if under != null and not sim.ants.has(under):
 		under = null
-	var apex_under = under != null and sim.is_apex(under)
+	var apex_under = under != null and sim.is_apex(under) and sim.ms_of(under) >= 12.0     # (ant_view.MS_PLAIN: not while the best are still plain ants)
 	if apex_under:
 		out.append(head("Apex ant #%d      mutation %d" % [int(sim.apex_ids[under.id]) + 1, int(sim.ms_of(under))]))
 		var hb = _power("breed", "Breed from this ant", col)
@@ -86,7 +86,14 @@ func build(target: Dictionary) -> Array:
 		match kind:
 			"foe":
 				var e = target["foe"]
-				out.append(_ord("Attack the %s" % str(e.def["name"]).to_lower(), {"t": "order", "kind": "attack", "x": e.x, "y": e.y, "z": e.z, "ref": e.id}, true, sel.size()))
+				var reach_ok = true
+				if e.def.get("fly", false) and e.cls == "prey":
+					reach_ok = false          # a butterfly or a bee is only reached by winged ants
+					for a in sel:
+						if a.ph["wings"] > 0:
+							reach_ok = true
+							break
+				out.append(_ord("Attack the %s%s" % [str(e.def["name"]).to_lower(), "" if reach_ok else "  (needs winged ants)"], {"t": "order", "kind": "attack", "x": e.x, "y": e.y, "z": e.z, "ref": e.id}, reach_ok, sel.size()))
 				out.append(_ord("Guard here", {"t": "order", "kind": "move", "x": e.x, "y": e.y, "z": e.z}, true, sel.size()))
 			"pile":
 				var p = target["pile"]

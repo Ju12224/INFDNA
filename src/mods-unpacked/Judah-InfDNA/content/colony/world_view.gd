@@ -223,11 +223,15 @@ func _make_cracks() -> void:
 		var dir = side if _hash(i * 9.13 + 0.4) > 0.3 else -side          # most run outward from the nest
 		var ln = 14.0 + 24.0 * _hash(i * 2.93 + 4.1)
 		var lane = 0.16 + 0.74 * _hash(i * 5.37 + 2.2)
-		var drift = (_hash(i * 6.1 + 7.0) - 0.5) * 0.05
-		var n = int(ln / 2.0)
+		var drift = (_hash(i * 6.1 + 7.0) - 0.5) * 0.07                # it wanders across the depth of the meadow...
+		var n = int(ln / 2.4)
 		var pts := []
+		var sgn = 1.0
 		for k in n + 1:
-			pts.append(Vector2(x0 + dir * k * ln / n, clamp(lane + (_hash(i * 13.0 + k * 1.77) - 0.5) * 0.07, 0.04, 0.98)))
+			if _hash(i * 7.9 + k * 2.3) < 0.7:
+				sgn = -sgn                                              # ...in jagged, uneven kinks
+			var zig = (0.008 + 0.034 * _hash(i * 13.0 + k * 1.77)) * sgn
+			pts.append(Vector2(x0 + dir * (k + 0.5 * (_hash(i * 3.3 + k) - 0.5)) * ln / n, clamp(lane + zig, 0.04, 0.98)))
 			lane += drift
 		# one short fork off the middle
 		var bk = int(n * (0.35 + 0.3 * _hash(i * 4.4 + 9.0)))
@@ -236,7 +240,7 @@ func _make_cracks() -> void:
 		var br := []
 		for k in 5:
 			br.append(Vector2(bp.x + dir * k * 1.6, clamp(bp.y + bl * k + (_hash(i * 17.0 + k) - 0.5) * 0.03, 0.03, 0.99)))
-		_cracks.append({"pts": pts, "br": br, "bk": float(bk) / n, "thr": 0.55 + i * 0.66, "w": 2.6 + 2.8 * _hash(i * 7.7 + 5.0)})
+		_cracks.append({"pts": pts, "br": br, "bk": float(bk) / n, "thr": 0.55 + i * 0.66, "w": 3.4 + 3.6 * _hash(i * 7.7 + 5.0)})
 
 
 func _draw_cracks(ci: CanvasItem) -> void:
@@ -247,13 +251,13 @@ func _draw_cracks(ci: CanvasItem) -> void:
 	var vc = _view_cols(g)
 	if ex + 70.0 < vc[0] or ex - 70.0 > vc[1]:
 		return
-	var glow = smoothstep(4.5, 7.0, _crack_k) * (0.6 + 0.4 * sin(_t * 1.4))
+	var glow = smoothstep(3.5, 6.5, _crack_k) * (0.65 + 0.35 * sin(_t * 1.4))
 	for c in _cracks:
 		var age = _crack_k - float(c["thr"])
 		if age <= 0.0:
 			continue
 		var grow = clamp(age / 1.6, 0.0, 1.0)                    # it runs out to its full length over a tremor or two...
-		var w = float(c["w"]) * clamp(0.45 + 0.22 * age, 0.45, 1.6)  # ...and gapes wider with every one after
+		var w = float(c["w"]) * clamp(0.5 + 0.2 * age, 0.5, 1.6)  # ...and gapes wider with every one after
 		_crack_line(ci, c["pts"], grow, w, ex, glow)
 		if grow > c["bk"] + 0.1:
 			_crack_line(ci, c["br"], clamp((grow - c["bk"]) * 2.0, 0.0, 1.0), w * 0.55, ex, 0.0)
@@ -271,13 +275,14 @@ func _crack_line(ci: CanvasItem, pts: Array, grow: float, w: float, ex: float, g
 		var p: Vector2 = pts[k]
 		var col = int(round(ex + p.x))
 		sp.append(Vector2((ex + p.x + 0.5) * C, GroundView.lane_y(ground.smooth_px(col), p.y)))
-	var dark = Color(0.09, 0.055, 0.04, 0.9)
-	var lip = Color(0.9, 0.78, 0.55, 0.45)
+	var dark = Color(0.06, 0.035, 0.03, 0.95)
+	var lip = Color(0.9, 0.78, 0.55, 0.5)
+	var torn = Color(0.5, 0.36, 0.24, 0.45)        # broken earth along both sides of the gap
 	var prev_a := Vector2.ZERO
 	var prev_b := Vector2.ZERO
 	for k in m + 1:
 		var u = float(k) / m
-		var taper = pow(sin(PI * clamp(u * 0.92 + 0.04, 0.0, 1.0)), 0.6)
+		var taper = pow(sin(PI * clamp(u * 0.92 + 0.04, 0.0, 1.0)), 0.5) * (0.65 + 0.7 * _hash(k * 2.71 + pts[0].x))
 		var lanek = GroundView.persp(pts[k].y)
 		var half = w * taper * lanek * 0.5
 		var d = (sp[min(k + 1, m)] - sp[max(k - 1, 0)]).normalized()
@@ -285,10 +290,11 @@ func _crack_line(ci: CanvasItem, pts: Array, grow: float, w: float, ex: float, g
 		var a = sp[k] - nrm
 		var b = sp[k] + nrm
 		if k > 0:
+			ci.draw_colored_polygon(PoolVector2Array([sp[k - 1] + (prev_a - sp[k - 1]) * 1.9, sp[k] - nrm * 1.9, sp[k] + nrm * 1.9, sp[k - 1] + (prev_b - sp[k - 1]) * 1.9]), torn)
 			ci.draw_colored_polygon(PoolVector2Array([prev_a, a, b, prev_b]), dark)
-			ci.draw_line(prev_b + Vector2(0, 1.0), b + Vector2(0, 1.0), lip, 1.0)
-			if glow > 0.02 and taper > 0.5:
-				ci.draw_line(sp[k - 1], sp[k], Color(VOID_VIOLET.r, VOID_VIOLET.g, VOID_VIOLET.b, 0.5 * glow * taper), max(1.0, half * 0.6))
+			ci.draw_line(prev_b + Vector2(0, 1.0), b + Vector2(0, 1.0), lip, 1.2)
+			if glow > 0.02 and taper > 0.45:
+				ci.draw_line(sp[k - 1], sp[k], Color(0.82, 0.58, 1.0, min(1.0, 0.9 * glow * taper)), max(1.5, half * 0.6))
 		prev_a = a
 		prev_b = b
 

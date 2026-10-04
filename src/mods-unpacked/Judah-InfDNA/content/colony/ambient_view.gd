@@ -17,6 +17,7 @@ var perf
 var live_critters := true   # the sim spawns the meadow's critters as prey (colony_sim._step_critters); the old drawn-only ones stay off
 var day              # day_cycle.gd (optional): at night fireflies replace the bees and butterflies
 var _t := 0.0
+var _was := true
 
 
 static func _h(a: float, b: float = 0.0) -> float:
@@ -25,7 +26,12 @@ static func _h(a: float, b: float = 0.0) -> float:
 
 func _process(delta: float) -> void:
 	_t += delta
-	update()
+	# by day, with the meadow's critters living in the sim, there is nothing to draw here: no redraw (but the frame after the
+	# last glow or firefly goes is drawn once more, empty, or it would stay frozen on screen)
+	var on = not live_critters or (day != null and day.night > 0.05)
+	if on or _was:
+		update()
+	_was = on
 
 
 func _draw() -> void:

@@ -14,7 +14,7 @@ const GROWING = 0
 const DOMINION = 1
 const TREMORS = 2
 const VOID = 3
-const NAMES = ["Growing", "Dominion", "Tremors", "Collapse", "The Void"]
+const NAMES = ["Growing", "Dominion", "Tremors", "The Void"]
 
 const ENTER_AT = 95.0            # meter needed to take the meadow
 const ENTER_HOLD = 20.0          # seconds it must hold

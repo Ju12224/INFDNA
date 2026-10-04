@@ -13,27 +13,57 @@ var ground
 var perf
 var baker            # sprite_baker.gd (set by the scene): a kin rival's own ants are drawn from its genome
 var _t := 0.0
+var _mound: Node2D       # the still part (shadow, heap, pebbles, hole): drawn behind this node, redrawn only when it changes
+var _mound_key = null
+var _was_on := false
 
 
 static func _h(a: float, b: float = 0.0) -> float:
 	return fmod(abs(sin(a * 12.9898 + b * 78.233) * 43758.5453), 1.0)
 
 
+func _ready() -> void:
+	_mound = Node2D.new()
+	_mound.show_behind_parent = true
+	_mound.connect("draw", self, "_draw_mound")
+	add_child(_mound)
+
+
+# Is any of it (mound, flag, smoke, wandering ants, health bar) in or near the view?
+func _on_screen() -> bool:
+	var r = sim.rival
+	if cam == null or ground == null or r == null:
+		return false
+	var C = sim.grid.CELL
+	var z = cam.zoom.x
+	var vs = get_viewport_rect().size * z
+	var c = cam.get_camera_screen_center()
+	var px = (r.x + 0.5) * C
+	if abs(px - c.x) > vs.x * 0.5 + 320.0:
+		return false
+	var gy = GroundView.lane_y(ground.smooth_px(int(r.x)), 0.5)
+	# tallest: the health bar, ~200 px over the heap's foot; lowest: a front-lane ant ~50 px under it (wide margins for slopes)
+	return gy + 140.0 > c.y - vs.y * 0.5 and gy - 420.0 < c.y + vs.y * 0.5
+
+
 func _process(delta: float) -> void:
 	_t += delta
-	update()
+	var on = _on_screen()
+	# (a canvas keeps its last drawing until update() is called again: the frame it leaves the view is drawn once more, empty)
+	if on or _was_on:
+		update()
+	_was_on = on
+	if _mound != null:
+		_mound.visible = on
 
 
-func _draw() -> void:
+# The heap only changes when the ground under it does or the nest is broken: its drawing is kept between frames.
+func _draw_mound() -> void:
 	var r = sim.rival
 	if cam == null or ground == null or r == null:
 		return
 	var C = sim.grid.CELL
-	var z = cam.zoom.x
-	var half = get_viewport_rect().size.x * z * 0.5
 	var px = (r.x + 0.5) * C
-	if abs(px - cam.get_camera_screen_center().x) > half + 320.0:
-		return
 	var sy = ground.smooth_px(int(r.x))
 	var lane = 0.5
 	var gy = GroundView.lane_y(sy, lane)
@@ -42,9 +72,9 @@ func _draw() -> void:
 	var W = 290.0 * ps
 	var H = (140.0 if alive else 56.0) * ps
 	# soft shadow on the ground
-	draw_set_transform(Vector2(px - W * 0.1, gy + 3.0), 0.0, Vector2(1.0, 0.18))
-	draw_circle(Vector2.ZERO, W * 0.68, Color(0.05, 0.08, 0.03, 0.22))
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	_mound.draw_set_transform(Vector2(px - W * 0.1, gy + 3.0), 0.0, Vector2(1.0, 0.18))
+	_mound.draw_circle(Vector2.ZERO, W * 0.68, Color(0.05, 0.08, 0.03, 0.22))
+	_mound.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	# the heap: a bump of dark soil with an ink edge, a lit upper right and loose pebbles
 	var top := PoolVector2Array()
 	var steps = 16
@@ -61,26 +91,45 @@ func _draw() -> void:
 	ink_poly.append(Vector2(px - W * 0.5 - 3.5, gy + 3.5))
 	fill.append(Vector2(px + W * 0.5, gy + 1.0))
 	fill.append(Vector2(px - W * 0.5, gy + 1.0))
-	draw_colored_polygon(ink_poly, INK)
-	draw_colored_polygon(fill, Color("#4f3b2d") if alive else Color("#5a4a3e"))
+	_mound.draw_colored_polygon(ink_poly, INK)
+	_mound.draw_colored_polygon(fill, Color("#4f3b2d") if alive else Color("#5a4a3e"))
 	var lit := PoolVector2Array()
 	for i in range(steps / 2, steps + 1):
 		lit.append(top[i] + Vector2(0, 2.0))
 	for i in range(steps, steps / 2 - 1, -1):
 		lit.append(top[i] + Vector2(-W * 0.07, H * 0.34 * (1.0 - float(i - steps / 2) / (steps / 2.0)) + 6.0))
-	draw_colored_polygon(lit, Color(0.78, 0.6, 0.42, 0.34))
+	_mound.draw_colored_polygon(lit, Color(0.78, 0.6, 0.42, 0.34))
 	for k in 34:
 		var ux = (_h(k, 5.0) * 2.0 - 1.0) * 0.46
 		var pp = Vector2(px + ux * W, gy - _h(k, 6.0) * H * pow(max(0.0, 1.0 - (ux * 2.0) * (ux * 2.0)), 0.7) * 0.9)
 		var rr = (1.6 + 2.6 * _h(k, 7.0)) * ps
-		draw_circle(pp, rr + 0.8, Color(0.1, 0.07, 0.05, 0.7))
-		draw_circle(pp, rr, Color("#8d7358") if _h(k, 8.0) > 0.5 else Color("#6a5543"))
+		_mound.draw_circle(pp, rr + 0.8, Color(0.1, 0.07, 0.05, 0.7))
+		_mound.draw_circle(pp, rr, Color("#8d7358") if _h(k, 8.0) > 0.5 else Color("#6a5543"))
 	# its hole
 	if alive:
-		draw_set_transform(Vector2(px, gy - H * 0.2), 0.0, Vector2(1.0, 0.5))
-		draw_circle(Vector2.ZERO, 26.0 * ps, INK)
-		draw_circle(Vector2.ZERO, 19.0 * ps, Color("#0d0806"))
-		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		_mound.draw_set_transform(Vector2(px, gy - H * 0.2), 0.0, Vector2(1.0, 0.5))
+		_mound.draw_circle(Vector2.ZERO, 26.0 * ps, INK)
+		_mound.draw_circle(Vector2.ZERO, 19.0 * ps, Color("#0d0806"))
+		_mound.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+func _draw() -> void:
+	var r = sim.rival
+	if not _on_screen():
+		return
+	var C = sim.grid.CELL
+	var px = (r.x + 0.5) * C
+	var sy = ground.smooth_px(int(r.x))
+	var lane = 0.5
+	var gy = GroundView.lane_y(sy, lane)
+	var ps = GroundView.persp(lane)
+	var alive = r.alive()
+	var W = 290.0 * ps
+	var H = (140.0 if alive else 56.0) * ps
+	var key = [px, sy, alive]
+	if key != _mound_key:
+		_mound_key = key
+		_mound.update()
 	# the flag on a pole (a stump and some smoke once it is broken)
 	var pole = Vector2(px + W * 0.3, gy - H * 0.55)
 	if alive:

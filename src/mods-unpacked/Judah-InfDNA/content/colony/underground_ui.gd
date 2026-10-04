@@ -52,6 +52,9 @@ var _dark := 0.0
 var _goal = null
 var _goal_zoom := 0.0
 var bare := false            # view mode: no depth gauge and no room labels (the nest panel, U, still opens)
+var _drawn_key = null        # what the last drawing showed (see _process): no redraw while it holds
+var _dark_drawn := -1.0
+var _dirty := true
 
 
 func _ready() -> void:
@@ -73,6 +76,7 @@ func _process(delta: float) -> void:
 	if _slow <= 0.0:
 		_slow = 0.5
 		_refresh()
+		_dirty = true
 	var target = clamp(_cam_depth() / 120.0, 0.0, 1.0) * 0.42
 	_dark = lerp(_dark, target, 1.0 - exp(-3.0 * delta))
 	if _goal != null:
@@ -86,7 +90,15 @@ func _process(delta: float) -> void:
 				cam.zoom = cam.zoom.linear_interpolate(Vector2.ONE * _goal_zoom, 1.0 - exp(-5.0 * delta))
 			if cam.position.distance_to(_goal) < 4.0:
 				_goal = null
-	_ui.update()
+	# Redraw only when something on it moved: the camera (labels, gauge marker), the vignette's depth, the twice-a-second counts,
+	# the larder or the brood the labels show; the open nest panel shows live numbers and is redrawn every frame.
+	var sim = scene.sim
+	var key = [get_viewport().get_canvas_transform(), scene.cam.position, int(clamp(sim.food / max(1.0, sim.food_cap), 0.0, 1.0) * 100.0), sim.eggs.size()]
+	if panel_open or _dirty or key != _drawn_key or abs(_dark - _dark_drawn) > 0.002 or (_dark < 0.01) != (_dark_drawn < 0.01):
+		_drawn_key = key
+		_dark_drawn = _dark
+		_dirty = false
+		_ui.update()
 
 
 # Called by the HUD when the screen mode changes.
@@ -105,6 +117,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if scene == null or not (event is InputEventKey and event.pressed and not event.echo):
 		return
 	var g = scene.sim.grid
+	_dirty = true
 	match event.scancode:
 		KEY_U:
 			panel_open = not panel_open

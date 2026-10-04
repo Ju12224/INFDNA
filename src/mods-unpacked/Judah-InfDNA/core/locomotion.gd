@@ -24,10 +24,14 @@ const LEDGE_REACH = 4
 const OX = [-1, 0, 1, -1, 1, -1, 0, 1]
 const OY = [-1, -1, -1, 0, 0, 1, 1, 1]
 # Gait memory, packed into Ant.scout (an int nothing else uses): bits 0-3 the last step (0 none, 1-8 a neighbour index + 1, 9 a crossing to the
-# other plane), bits 4-11 how far the ant has got up to speed since it last stood still (0 standing .. 255 full speed).
+# other plane), bits 4-11 how far the ant has got up to speed since it last stood still (0 standing .. 255 full speed), bits 12-23 the ground it has
+# lost to pauses, setting off and slowing down, in 1/64 cells (it makes it up by walking a little faster afterwards: colony_sim._step_ant).
 const DIR_MASK = 15
 const PLANE_STEP = 9
 const RAMP_SHIFT = 4
+const NO_RAMP = ~(255 << 4)
+const DEBT_SHIFT = 12
+const DEBT_MASK = 4095 << 12
 # DIR_OF[(sy + 1) * 3 + (sx + 1)]: the step code of a unit step
 const DIR_OF = [1, 2, 3, 4, 0, 5, 6, 7, 8]
 # TURN[a * 9 + b]: how sharply step b turns from step a, in eighths of a circle (0 straight on .. 4 straight back; 0 when either is unknown)

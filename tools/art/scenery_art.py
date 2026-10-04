@@ -28,7 +28,7 @@ NAMES = {"bush": ["bush_round", "bush_wide", "bush_berry"], "fern": ["fern_uprig
          "shroom": ["shroom_agaric", "shroom_inkcap", "shroom_cep"]}
 GAME_H = {"bush": (1.5, 3.0), "fern": (2.0, 3.0), "shroom": (1.0, 1.5)}     # how tall an item stands in the game, in ant lengths (each one picks its own)
 TEX_H = {"bush": 340, "fern": 340, "shroom": 210}                            # texture height of the tallest item of a kind (the others in proportion)
-AUTUMN = {"bush": (0.09, 1.15, 1.32, 0.03, 0.5), "fern": (0.072, 1.0, 0.88, 0.0, 0.6)}   # recolour: hue, sat x, value x, value +, least saturation
+AUTUMN = {"bush": (0.085, 1.05, 1.2, 0.02, 0.38), "fern": (0.072, 1.0, 0.88, 0.0, 0.6)}   # recolour: hue, sat x, value x, value +, least saturation
 
 
 def clean_alpha(a):

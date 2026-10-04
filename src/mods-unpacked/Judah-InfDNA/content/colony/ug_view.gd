@@ -31,7 +31,9 @@ func _view_rect() -> Rect2:
 func _draw() -> void:
 	if sim == null or cam == null:
 		return
-	var reg = UG.get_reg()
+	var reg = sim.grid.ug
+	if reg == null or reg.views().empty():
+		return
 	var C = sim.grid.CELL
 	var r = _last_rect if _last_rect.size != Vector2.ZERO else _view_rect()
 	var xa = int(floor(r.position.x / C))

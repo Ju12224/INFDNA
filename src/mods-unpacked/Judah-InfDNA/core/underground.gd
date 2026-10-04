@@ -34,12 +34,11 @@ var _cache := {}         # "name:chunk" -> features overlapping that chunk
 var _step_t := 0.0
 
 
-static func get_reg():
-	if Engine.has_meta("infdna_ug"):
-		return Engine.get_meta("infdna_ug")
+# One registry per world: the grid owns it (world_grid.ug), so it is freed with the world. (A registry kept in Engine metadata
+# outlived the script engine at quit and crashed the game on exit.)
+static func make():
 	var r = load("res://mods-unpacked/Judah-InfDNA/core/underground.gd").new()
 	r._load()
-	Engine.set_meta("infdna_ug", r)
 	return r
 
 

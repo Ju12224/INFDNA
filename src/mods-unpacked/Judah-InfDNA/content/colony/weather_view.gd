@@ -89,12 +89,15 @@ func _snowfall(r: float, tl: Vector2, vp: Vector2, z: float) -> void:
 		draw_circle(p, sz, Color(1, 1, 1, a))
 
 
+var _unit := PoolVector2Array()     # 18 points round the unit circle, scaled into each ellipse in one call
+
+
 func _ellipse(c: Vector2, rx: float, ry: float, col: Color) -> void:
-	var pts := PoolVector2Array()
-	for k in 18:
-		var a = TAU * k / 18.0
-		pts.append(c + Vector2(cos(a) * rx, sin(a) * ry))
-	draw_colored_polygon(pts, col)
+	if _unit.empty():
+		for k in 18:
+			var a = TAU * k / 18.0
+			_unit.append(Vector2(cos(a), sin(a)))
+	draw_colored_polygon(Transform2D(Vector2(rx, 0.0), Vector2(0.0, ry), c).xform(_unit), col)
 
 
 func _draw() -> void:
@@ -120,6 +123,7 @@ func _draw() -> void:
 	var lite = perf != null and perf.backdrop < 2
 	var n = int((60 if lite else 170) * r)
 	var slant = Vector2(-0.2, 1.0).normalized()
+	var C0 = sim.grid.CELL
 	for k in n:
 		var hx = _h(k * 1.71, 3.0)
 		var hy = _h(k * 2.33, 4.0)
@@ -127,7 +131,7 @@ func _draw() -> void:
 		var x = fposmod(hx * 1.37 + y * 0.1, 1.0)
 		var p = tl + Vector2(x * vp.x, y * vp.y) * z
 		var ln = (16.0 + 26.0 * hx) * z
-		if ground != null and p.y + ln * slant.y > ground.smooth_px(int(floor(p.x / sim.grid.CELL))) + 4.0:
+		if ground != null and p.y + ln * slant.y > ground.smooth_px(int(floor(p.x / C0))) + 4.0:
 			continue          # the rain stops at the ground
 		draw_line(p, p + slant * ln, Color(0.86, 0.93, 1.0, (0.3 + 0.4 * hx) * r), max(1.2, 1.7 * z * (0.6 + 0.6 * hx)), false)
 	if ground == null or z > 2.6:

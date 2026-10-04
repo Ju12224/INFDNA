@@ -15,14 +15,14 @@ const Seasons = preload("res://mods-unpacked/Judah-InfDNA/core/seasons.gd")
 
 const INK = Color("#15121a")
 # How a drawn tree changes with the camera zoom (the camera's zoom is below 1 when the view is magnified)
-const CLOSE_INK_LO = 0.42     # the owner's outline as drawn is on the tree at and beyond CLOSE_INK_HI and fades out over the thin crisp close-up line by CLOSE_INK_LO
-const CLOSE_INK_HI = 0.85
-const CLOSE_DETAIL_LO = 0.45  # bark furrows, moss and rim leaves are full strength at and below CLOSE_DETAIL_LO and gone at CLOSE_DETAIL_HI
-const CLOSE_DETAIL_HI = 1.1
+const CLOSE_INK_LO = 0.3      # the owner's outline as drawn is on the tree at and beyond CLOSE_INK_HI and fades out over the thin crisp close-up line by CLOSE_INK_LO
+const CLOSE_INK_HI = 0.62
+const CLOSE_DETAIL_LO = 0.42  # bark furrows, moss and rim leaves are full strength at and below CLOSE_DETAIL_LO and gone at CLOSE_DETAIL_HI
+const CLOSE_DETAIL_HI = 0.95
 const SHADE_FAR = 0.4         # the share of the soft light and shadow that stays on a tree seen from afar
 const SWAY_Z = 0.95           # at and below this zoom the clumps of a canopy move each their own way (beyond it the whole tree bends as one)
 const SWAY_N = 8              # the canopy moves on a (SWAY_N + 1)^2 grid of points (the manifest's `sway` says how much each one is leaf)
-const FOG_K = 0.24            # depth fog on the trees of the back lanes: the share of haze at lane 0
+const FOG_K = 0.16            # depth fog on the trees of the back lanes: the share of haze at lane 0 (less close up, where it would only wash out the detail)
 const FOG_COL = Color(0.8, 0.87, 0.91)
 const LEAF_Z = 1.3            # falling leaves are drawn at and below this zoom
 const DEPTH = 128.0          # thickness of the walkable band, px
@@ -71,6 +71,7 @@ var _grid_idx := PoolIntArray()     # the triangles of the canopy sway grid (the
 var _grid_uv := PoolVector2Array()
 var _pit_x := -999999 # the column of the open Void pit (arc.gd, drawn by world_view): no grass or scenery grows in it
 const PIT_COLS = 28
+const PIT_SWALLOW = 125.0     # px: scenery whose middle is this near the pit's falls into it
 
 
 func _init(sim_) -> void:
@@ -227,6 +228,8 @@ func _prepare_features(cols: Array, chunk_budget: int) -> void:
 				continue
 		if e["x1"] < px0 or e["x0"] > px1:
 			continue
+		if _pit_x != -999999 and abs((e["x0"] + e["x1"]) * 0.5 - (_pit_x + 0.5) * C) < PIT_SWALLOW:
+			continue                    # a rock or tree standing where the ground gave way went down with it (while the pit is open)
 		_vis_f[e["slice"]].append(e)
 		if e["shade"] != null:
 			_vis_shade.append(e)
@@ -377,7 +380,7 @@ func _draw_tree(ci: CanvasItem, sp: Dictionary, by: float, z: float, sway: float
 		layers.append([sp["ink"], Color(mod.r, mod.g, mod.b, ia)])
 	if tc != null and z < CLOSE_INK_HI:
 		layers.append([tc, mod])
-	var fog = float(sp["fog"]) * (0.55 + 0.45 * smoothstep(0.4, 1.0, z))
+	var fog = float(sp["fog"]) * (0.3 + 0.7 * smoothstep(0.5, 1.1, z))
 	if fog > 0.01 and sp["sil"] != null:
 		layers.append([sp["sil"], Color(FOG_COL.r, FOG_COL.g, FOG_COL.b, fog)])
 	if z < SWAY_Z and sp.has("g_p0"):
@@ -482,8 +485,9 @@ func _draw_leaves(ci: CanvasItem, sp: Dictionary, by: float, z: float, gust: flo
 		var tip = Color(min(1.0, col.r * 1.25), min(1.0, col.g * 1.2), min(1.0, col.b * 1.1), a)
 		ci.draw_set_transform(Vector2(x, y), spin, Vector2(1.0, 0.25 + 0.75 * abs(flip)))
 		var L = sz * (0.8 + 0.4 * h2)
-		ci.draw_primitive(PoolVector2Array([Vector2(-L, 0), Vector2(0, -L * 0.42), Vector2(L, 0), Vector2(0, L * 0.42)]),
-			PoolColorArray([col, col, tip, col.darkened(0.25)]), PoolVector2Array())
+		ci.draw_polygon(PoolVector2Array([Vector2(-L * 1.25, 0), Vector2(-L * 0.5, -L * 0.36), Vector2(L * 0.25, -L * 0.42), Vector2(L, 0),
+			Vector2(L * 0.25, L * 0.42), Vector2(-L * 0.5, L * 0.36)]), PoolColorArray([col.darkened(0.3), col, tip, tip, col, col.darkened(0.2)]))
+		ci.draw_line(Vector2(-L * 1.25, 0), Vector2(L * 0.8, 0), Color(col.r * 0.6, col.g * 0.55, col.b * 0.5, a), max(0.6, L * 0.09))
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
@@ -1022,6 +1026,13 @@ func _scenery_add(spr: Array, shade, kind: String, col: int, c0: int, sy: PoolRe
 	for o in spr:
 		if abs(o["x"] - px) < (o["size"].x + size.x) * 0.32:
 			return false                               # never two in a heap
+	var reach = int(ceil(size.x * 0.5 / C)) + 2
+	for en in g.entrances:
+		if abs(col - int(en.x)) < reach + 8:
+			return false                               # clear of the nest mouths
+	for xx in range(col - reach, col + reach + 1, 2):
+		if g.mound_h(xx) > 0.2:
+			return false                               # and of the bare spoil heaps
 	var by = lane_y(_sy_at(sy, c0, px, C), lane) + 2.0 * ps
 	var foot = Vector2(float(def["foot"][0]), float(def["foot"][1])) * k
 	var flip = MK.hash1(col * 2.23 + 9.0) > 0.5

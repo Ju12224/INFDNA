@@ -93,6 +93,7 @@ var _nest_x := 130
 var _nest_y := 70
 var _block_cache := {}
 var _smap = null                # stone cells of the chunk being built (outside the sim range)
+var ug = null                   # core/underground.gd registry: this world's underground structures
 
 const N8 = [Vector2(-1, -1), Vector2(0, -1), Vector2(1, -1), Vector2(-1, 0),
 	Vector2(1, 0), Vector2(-1, 1), Vector2(0, 1), Vector2(1, 1)]
@@ -324,7 +325,9 @@ func _stamp_stones(xa: int, xb: int) -> void:
 
 # Underground structures (core/underground.gd: roots, caverns, buried things, veins, ruins) written into new sim columns.
 func _stamp_features(xa: int, xb: int) -> void:
-	UG.get_reg().stamp_range(self, xa, xb)
+	if ug == null:
+		ug = UG.make()
+	ug.stamp_range(self, xa, xb)
 
 
 # Material anywhere (outside the sim range it is computed from the generators).

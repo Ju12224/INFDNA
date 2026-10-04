@@ -227,7 +227,9 @@ def split_lines(im, kind):
     d_out = ndi.distance_transform_edt(~outside2)
     sil = d_out <= hw + 1.5                                    # the outline band round the silhouette: no colour beyond it, only the outside
     full_w = np.where(sil, hw, 2.0 * hw)
-    target = np.clip(full_w * 0.4, 3.0 * S / 2.0, 3.4 * S)     # the close line: 40% of the drawn width, between 1.5 and 3.4 picture px
+    # the close line: half the drawn width on the plain oaks (between 1.6 and 3.4 picture px); the textured drawings keep more of their bold outline
+    ratio = 0.5 if kind == "oak" else 0.7
+    target = np.clip(full_w * ratio, 1.6 * S, 3.4 * S)
     thr = np.where(sil, hw - target, hw - target * 0.5)
     a2 = np.clip(d_col - thr + 0.5, 0.0, 1.0) * line2
     a2 = np.where(sil, np.minimum(a2, smooth(A2, 0.3, 0.7)), a2)

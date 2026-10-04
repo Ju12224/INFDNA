@@ -43,19 +43,60 @@ func _cloud_shadows(vp: Vector2, z: float, c: Vector2) -> void:
 			continue
 		var d = Color(1.0 - 0.17 * strength, 1.0 - 0.14 * strength, 1.0 - 0.1 * strength)
 		var n = 20
-		var ring := []
+		# a fan of n triangles around the centre (dark in the middle, white at the rim), handed over as ONE triangle list
+		# (the same triangles that used to go out as n separate polygons)
+		var pts := PoolVector2Array()
+		var cols := PoolColorArray()
+		pts.resize(n + 1)
+		cols.resize(n + 1)
+		pts[0] = Vector2(bx, ground.smooth_px(int(floor(bx / C))) - 66.0)
+		cols[0] = d
 		for k in n:
 			var a = TAU * k / n
 			var px = bx + cos(a) * rx
 			var sy = ground.smooth_px(int(floor(px / C)))
-			ring.append(Vector2(px, sy - 66.0 + sin(a) * 52.0))
-		var cy = ground.smooth_px(int(floor(bx / C))) - 66.0
-		for k in n:
-			draw_polygon(PoolVector2Array([Vector2(bx, cy), ring[k], ring[(k + 1) % n]]), PoolColorArray([d, Color.white, Color.white]))
+			pts[k + 1] = Vector2(px, sy - 66.0 + sin(a) * 52.0)
+			cols[k + 1] = Color.white
+		VisualServer.canvas_item_add_triangle_array(get_canvas_item(), _fan_idx(n), pts, cols)
 
 
 static func _hh(a: float, b: float) -> float:
 	return fmod(abs(sin(a * 12.9898 + b * 78.233) * 43758.5453), 1.0)
+
+
+var _fan := {}      # n -> PoolIntArray: centre 0, rim 1..n, triangle k = (0, k, k+1) wrapping round
+var _strip := {}    # n -> PoolIntArray: quads between two rows of n+1 points (row a = 0..n, row b = n+1..2n+1)
+
+
+func _fan_idx(n: int) -> PoolIntArray:
+	if not _fan.has(n):
+		var idx := PoolIntArray()
+		for k in n:
+			idx.append(0)
+			idx.append(k + 1)
+			idx.append((k + 1) % n + 1)
+		_fan[n] = idx
+	return _fan[n]
+
+
+# Quad i is (a[i-1], a[i], b[i], b[i-1]) split along a[i-1]-b[i]; with a colour that only changes from row to row (or not at all)
+# the split does not show, so this is what the old one-polygon-per-quad drawing gave.
+func _strip_idx(n: int) -> PoolIntArray:
+	if not _strip.has(n):
+		var idx := PoolIntArray()
+		for i in range(1, n + 1):
+			var a0 = i - 1
+			var a1 = i
+			var b1 = n + 1 + i
+			var b0 = n + i
+			idx.append(a0)
+			idx.append(a1)
+			idx.append(b1)
+			idx.append(a0)
+			idx.append(b1)
+			idx.append(b0)
+		_strip[n] = idx
+	return _strip[n]
 
 
 func _draw() -> void:
@@ -78,13 +119,47 @@ func _draw() -> void:
 	var lip = 9.0                 # the turf lip hangs a little below the height line: tint it too
 	var fade = 16.0               # a soft edge where the lit air meets the dirt
 	var white = Color.white
-	var px = x0
-	var py = ground.smooth_px(int(floor(px / C)))
-	for i in range(1, n + 1):
+	# the same quads as one polygon each used to give, sent as two triangle lists: the tinted air down to the turf lip (a row
+	# along the top edge over a row along the lip), then the soft edge under it (lip row over the row `fade` lower)
+	var band := PoolVector2Array()
+	var edge := PoolVector2Array()
+	band.resize(2 * n + 2)
+	edge.resize(2 * n + 2)
+	var all_low = true
+	var ys := []
+	ys.resize(n + 1)
+	for i in n + 1:
 		var x = x0 + step * i
 		var y = ground.smooth_px(int(floor(x / C)))
-		if py > top and y > top:
-			draw_polygon(PoolVector2Array([Vector2(px, top), Vector2(x, top), Vector2(x, y + lip), Vector2(px, py + lip)]), PoolColorArray([t, t, t, t]))
-		draw_polygon(PoolVector2Array([Vector2(px, py + lip), Vector2(x, y + lip), Vector2(x, y + lip + fade), Vector2(px, py + lip + fade)]), PoolColorArray([t, t, white, white]))
-		px = x
-		py = y
+		ys[i] = y
+		if y <= top:
+			all_low = false
+		band[i] = Vector2(x, top)
+		band[n + 1 + i] = Vector2(x, y + lip)
+		edge[i] = Vector2(x, y + lip)
+		edge[n + 1 + i] = Vector2(x, y + lip + fade)
+	var tint_cols := PoolColorArray()
+	var edge_cols := PoolColorArray()
+	tint_cols.resize(2 * n + 2)
+	edge_cols.resize(2 * n + 2)
+	for i in n + 1:
+		tint_cols[i] = t
+		tint_cols[n + 1 + i] = t
+		edge_cols[i] = t
+		edge_cols[n + 1 + i] = white
+	var ci = get_canvas_item()
+	var idx = _strip_idx(n)
+	if not all_low:
+		# where the ground rises above the top of the view a quad is left out, as before
+		idx = PoolIntArray()
+		for i in range(1, n + 1):
+			if ys[i - 1] > top and ys[i] > top:
+				idx.append(i - 1)
+				idx.append(i)
+				idx.append(n + 1 + i)
+				idx.append(i - 1)
+				idx.append(n + 1 + i)
+				idx.append(n + i)
+	if idx.size() > 0:
+		VisualServer.canvas_item_add_triangle_array(ci, idx, band, tint_cols)
+	VisualServer.canvas_item_add_triangle_array(ci, _strip_idx(n), edge, edge_cols)
