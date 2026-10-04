@@ -40,6 +40,12 @@ func manifest() -> Dictionary:
 					continue
 				_fix_paths(e, extra[1])
 				_man[k] = e
+		# the anteater: a body and two clawed legs, animated by creature_art.gd (not the spider format, so under its own key)
+		if f.open(DIR + "anteater/anteater_manifest.json", File.READ) == OK:
+			var r3 = JSON.parse(f.get_as_text())
+			f.close()
+			if r3.error == OK and r3.result is Dictionary:
+				_man["anteater_art"] = r3.result
 	return _man
 
 

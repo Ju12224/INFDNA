@@ -80,9 +80,9 @@ static func write(reason: String, clean: bool = false) -> void:
 		st["clean"] = true
 	var text = _compose(st, reason)
 	var desk = OS.get_system_dir(OS.SYSTEM_DIR_DESKTOP)
-	if desk != "":
-		_save(desk.plus_file(FILE_NAME), text)
 	var d = Directory.new()
+	if desk != "" and d.dir_exists(desk):
+		_save(desk.plus_file(FILE_NAME), text)
 	if not d.dir_exists("user://infdna_reports"):
 		d.make_dir_recursive("user://infdna_reports")
 	_save("user://infdna_reports/" + FILE_NAME, text)
