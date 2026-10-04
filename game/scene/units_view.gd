@@ -35,7 +35,7 @@ const BACK_SHADE = 0.5
 const HIDDEN_SHADE = 0.7                   # ... and where front dirt stands in front of it, darker still and see-through
 const HIDDEN_ALPHA = 0.55
 const HAZE = Color(0.88, 0.92, 0.97)       # the back of the meadow band, as surface_view.gd tints it
-const ENTRANCE_LANE = 0.62                 # near a nest mouth ants are drawn onto its lane, at a pile onto the pile's
+const ENTRANCE_LANE = 1.0                  # near a nest mouth ants are drawn onto its lane (the front lip), at a pile onto the pile's
 const PILE_LANE = 0.5
 const ENTRANCE_REACH = 30.0                # cells
 const PILE_REACH = 10.0
@@ -127,6 +127,7 @@ var _gc_t := 0.0
 var _dir := []              # DIRS unit vectors (16 = straight down)
 var _foes := PackedVector2Array()
 var _q_eggs := 0
+var _q_egg_tex: Texture2D    # the cream eggs in queen_full, cut out at load and drawn untinted over her tinted body
 var _q_lay := 0.0
 var _q_face := 1.0
 var _q_x := 0.0
@@ -160,6 +161,9 @@ func _ready() -> void:
 		var nose = Vector2(p["nose"][0], p["nose"][1]) - feet
 		_bodies[name] = {"tex": _premul(tex), "feet": feet, "length": float(p["length"]),
 			"jaw": nose + Vector2(0, JAW_DOWN * float(p["length"])), "mid": (nose.x + float(p["tail"][0]) - feet.x) * 0.5}
+	var qp = pieces.get("queen_full")
+	if qp != null and Art.tex(qp["file"]) != null:
+		_q_egg_tex = _cream(Art.tex(qp["file"]))
 	var fauna = Art.manifest("fauna_manifest.json").get("items", {})
 	for name in FOODS:
 		var f = fauna.get(name)
@@ -177,6 +181,33 @@ static func _premul(tex: Texture2D) -> Texture2D:
 	if img.is_compressed():
 		img.decompress()
 	img.convert(Image.FORMAT_RGBA8)
+	img.premultiply_alpha()
+	img.generate_mipmaps()
+	return ImageTexture.create_from_image(img)
+
+
+# Only the cream pixels of a picture (the eggs in the queen's gaster), premultiplied and mipmapped; null if there are none.
+static func _cream(tex: Texture2D) -> Texture2D:
+	var img = tex.get_image()
+	if img == null or img.is_empty():
+		return null
+	img = img.duplicate()
+	if img.is_compressed():
+		img.decompress()
+	img.convert(Image.FORMAT_RGBA8)
+	var d = img.get_data()
+	var n := 0
+	for i in range(0, d.size(), 4):
+		var r = d[i]
+		var gg = d[i + 1]
+		var b = d[i + 2]
+		if not (r > 175 and gg > 150 and b > 105 and r - b < 110 and r >= gg):
+			d[i + 3] = 0
+		elif d[i + 3] > 0:
+			n += 1
+	if n < 20:
+		return null
+	img.set_data(img.get_width(), img.get_height(), false, Image.FORMAT_RGBA8, d)
 	img.premultiply_alpha()
 	img.generate_mipmaps()
 	return ImageTexture.create_from_image(img)
@@ -779,3 +810,5 @@ func _draw_queen(vr: Rect2, far: float) -> void:
 	var face = _q_face if abs(_q_face) > TURN_MIN else TURN_MIN * (1.0 if _q_face >= 0.0 else -1.0)
 	draw_set_transform(feet, tilt, Vector2(s * face * (1.0 + 0.05 * hurt + lay * 0.6), s * (1.0 + breath - 0.06 * hurt - lay)))
 	draw_texture(b["tex"], -b["feet"], _pm(_tint(sim.queen_genome) * Color.WHITE.lerp(HURT, hurt)))
+	if _q_egg_tex != null:
+		draw_texture(_q_egg_tex, -b["feet"], _pm(Color.WHITE.lerp(HURT, hurt)))
