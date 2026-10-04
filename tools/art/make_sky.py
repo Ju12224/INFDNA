@@ -4,7 +4,8 @@
 art_src/clouds.png: every separate shape is one cloud, named by shape: big (puffy cumulus, tall), flat (long stratus, more than
 3x wider than tall) and wisp (small). art_src/sun_moon_stars.png: the three biggest shapes are the sun (the yellow one), the full
 moon and the crescent (the one that fills least of its box); the rest are stars, biggest first. On both sheets small specks join
-the shape whose nearest pixel is closest. The sky layer uses them.
+the shape whose nearest pixel is closest. art_src/hills_far.png: the far landscape strip, trimmed of the frame line ChatGPT drew
+round it and laid next to a mirrored copy of itself, so it repeats with no seam. The sky layer uses them all.
 Needs Pillow, numpy and scipy:  python3 tools/art/make_sky.py
 """
 import json
@@ -17,6 +18,8 @@ from scipy import ndimage
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 SRC = os.path.join(ROOT, "art_src", "clouds.png")
 SRC_SUN = os.path.join(ROOT, "art_src", "sun_moon_stars.png")
+SRC_HILLS = os.path.join(ROOT, "art_src", "hills_far.png")
+HILLS_TRIM = (2, 2, 4)   # frame line on the sheet: columns off the left and right, rows off the bottom
 OUT = os.path.join(ROOT, "game", "art", "sky")
 SPECK = 400          # shapes smaller than this (pixels) are bits of a bigger cloud
 MARGIN = 3
@@ -88,6 +91,16 @@ def cut_sun_moon_stars():
     return out
 
 
+def cut_hills():
+    rgba = np.asarray(Image.open(SRC_HILLS).convert("RGBA"))
+    ys, xs = np.nonzero(rgba[..., 3] > 8)
+    l, r, b = HILLS_TRIM
+    strip = rgba[ys.min():ys.max() + 1 - b, xs.min() + l:xs.max() + 1 - r]
+    pair = np.concatenate([strip, strip[:, ::-1]], axis=1)     # the copy mirrored: the seams meet the same column
+    Image.fromarray(pair).save(os.path.join(OUT, "hills_far.png"))
+    return {"far": {"file": "sky/hills_far.png", "w": int(pair.shape[1]), "h": int(pair.shape[0])}}
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     for f in os.listdir(OUT):
@@ -96,6 +109,7 @@ def main():
     man = {"_about": "The owner's sky art, cut by tools/art/make_sky.py. Sizes in pixels."}
     man["clouds"] = cut_clouds()
     man.update(cut_sun_moon_stars())
+    man["hills"] = cut_hills()
     json.dump(man, open(os.path.join(OUT, "sky_manifest.json"), "w"), indent=1)
     print("%d clouds, sun, two moons, %d stars" % (len(man["clouds"]), len(man["stars"])))
 
