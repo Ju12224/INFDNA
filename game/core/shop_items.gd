@@ -202,17 +202,17 @@ static func lab_price(id: String, have: int) -> int:
 static func earnings(sim, arc_best: int = 0) -> Array:
 	var out := []
 	var days = int(sim.time / 420.0 + 0.30) + 1
-	out.append(["%d day%s lived" % [days, "" if days == 1 else "s"], 6 * days])
+	out.append(["%d day%s lived" % [days, "" if days == 1 else "s"], 5 * days])
 	if sim.raids_repelled > 0:
-		out.append(["%d raid%s repelled" % [sim.raids_repelled, "" if sim.raids_repelled == 1 else "s"], 12 * sim.raids_repelled])
-	var hauled = int(sim.delivered_total / 100.0)
+		out.append(["%d raid%s repelled" % [sim.raids_repelled, "" if sim.raids_repelled == 1 else "s"], 6 * sim.raids_repelled])
+	var hauled = int(sim.delivered_total / 200.0)
 	if hauled > 0:
 		out.append(["%d food hauled" % int(sim.delivered_total), hauled])
-	var crowd = int(sim.peak_ants / 4)
+	var crowd = int(sim.peak_ants / 8)
 	if crowd > 0:
 		out.append(["a peak of %d ants" % sim.peak_ants, crowd])
 	if sim.winters > 0:
-		out.append(["%d winter%s lived through" % [sim.winters, "" if sim.winters == 1 else "s"], 30 * sim.winters])
+		out.append(["%d winter%s lived through" % [sim.winters, "" if sim.winters == 1 else "s"], 25 * sim.winters])
 	var arc = max(arc_best, int(sim.arc_stage))
 	if arc > 0:
 		out.append(["the arc reached %s" % ["Growing", "Dominion", "Tremors", "The Void"][clamp(arc, 0, 3)], 40 * arc])
