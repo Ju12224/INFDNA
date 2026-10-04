@@ -3134,8 +3134,8 @@ func _enemy_arrive(e) -> void:
 		var near = _nearest_surface_ant(e.x, 4 if e.def.has("critter") else 6)
 		if near != null:
 			_set_heading(e, -1 if near.x > e.x else 1)
-		elif rng.randf() < (0.02 if e.def.has("critter") else 0.04):
-			e.heading = -e.heading
+		elif rng.randf() < (0.16 if e.def.get("critter", "") == "dragonfly" else (0.02 if e.def.has("critter") else 0.04)):
+			e.heading = -e.heading        # (a dragonfly darts: fast, and it doubles back often)
 		if e.x <= grid.arena_l + 3 or e.x >= grid.arena_r - 3:
 			e.heading = 1 if e.x <= grid.arena_l + 3 else -1
 		_walk_surface(e)

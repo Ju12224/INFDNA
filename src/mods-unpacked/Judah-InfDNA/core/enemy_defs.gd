@@ -11,7 +11,7 @@ extends Reference
 const DEFS = {
 	"baby": {"name": "Ladybug", "hp": 30.0, "dmg": 2.0, "speed": 3.4, "art": "ladybug", "art_scale": 1.6, "cls": "small", "food": 6.0, "cost": 1,
 		"tex": ["res://entities/units/enemies/baby_alien/baby_alien.png"]},
-	"fly": {"name": "Dragonfly", "hp": 20.0, "dmg": 1.6, "speed": 5.2, "art": "dragonfly", "art_scale": 0.8, "cls": "small", "food": 4.0, "cost": 1,
+	"fly": {"name": "Dragonfly", "hp": 20.0, "dmg": 1.6, "speed": 8.5, "art": "dragonfly", "art_scale": 0.8, "cls": "small", "food": 4.0, "cost": 1,
 		"tex": ["res://entities/units/enemies/fly/fly.png"]},
 	"shrimp": {"name": "Moth", "hp": 36.0, "dmg": 2.2, "speed": 4.2, "art": "moth", "art_scale": 0.55, "fly": true, "cls": "small", "food": 7.0, "cost": 1,
 		"tex": ["res://dlcs/dlc_1/enemies/shrimp/shrimp.png", "res://entities/units/enemies/chaser/chaser.png"]},
@@ -55,7 +55,7 @@ const DEFS = {
 	"snail": {"name": "Snail", "hp": 26.0, "dmg": 0.0, "speed": 0.55, "cls": "prey", "food": 8.0, "cost": 0, "tex": [], "critter": "snail", "h": 22.0},
 	"caterpillar": {"name": "Caterpillar", "hp": 20.0, "dmg": 0.0, "speed": 0.8, "cls": "prey", "food": 7.0, "cost": 0, "tex": [], "critter": "caterpillar", "h": 16.0},
 	"grasshopper": {"name": "Grasshopper", "hp": 16.0, "dmg": 0.0, "speed": 3.4, "cls": "prey", "food": 6.0, "cost": 0, "tex": [], "critter": "grasshopper", "h": 22.0},
-	"dragonfly": {"name": "Dragonfly", "hp": 8.0, "dmg": 0.0, "speed": 3.2, "cls": "prey", "food": 4.0, "cost": 0, "tex": [], "critter": "dragonfly", "fly": true, "h": 20.0},
+	"dragonfly": {"name": "Dragonfly", "hp": 8.0, "dmg": 0.0, "speed": 11.0, "cls": "prey", "food": 4.0, "cost": 0, "tex": [], "critter": "dragonfly", "fly": true, "h": 20.0},
 	"honeybee": {"name": "Honeybee", "hp": 7.0, "dmg": 0.0, "speed": 2.8, "cls": "prey", "food": 3.0, "cost": 0, "tex": [], "critter": "bee", "fly": true, "h": 16.0},
 	"butterfly": {"name": "Butterfly", "hp": 6.0, "dmg": 0.0, "speed": 2.6, "cls": "prey", "food": 3.0, "cost": 0, "tex": [], "critter": "butterfly", "fly": true, "h": 20.0},
 }

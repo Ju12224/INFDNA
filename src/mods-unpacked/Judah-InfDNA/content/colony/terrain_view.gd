@@ -3,8 +3,9 @@ extends Node2D
 #   back  - the recessed rear wall of every tunnel and room: darker dirt that drifts
 #           slightly with the camera (parallax), receding side walls lit from above,
 #           and the drop shadow the front dirt casts into the tunnel;
-#   front - the cut face of the soil: strata (humus, clay, sand/gravel, red clay,
-#           bedrock), roots, pebbles, fossils, bevelled tunnel rims, ink outline.
+#   front - the cut face of the soil: the owner's dirt (content/art/terrain/dirt_soil.png, from the seamless dirt
+#           tiles; tools/art/make_dirt_atlas.py) tinted by stratum (humus, clay, sand/gravel, red clay, limestone,
+#           shale, bedrock), the sim's stones and fossils, bevelled tunnel rims, ink outline.
 #           Open cells are transparent so the back layer shows through.
 # Anything placed between the two (see world_view.gd) reads as "inside" the nest.
 #
@@ -22,6 +23,12 @@ uniform sampler2D surf_tex;
 uniform sampler2D aux_tex;
 uniform vec2 cam;
 uniform vec4 ink : hint_color = vec4(0.082, 0.071, 0.102, 1.0);
+uniform sampler2D dirt_tex;
+uniform vec3 dirt_avg = vec3(0.29, 0.235, 0.2);
+const vec2 SOIL = vec2(80.0, 64.0);      // cells the dirt picture covers before it repeats (5 x 5 of the owner's tiles, 96 x 77 px each)
+
+// the owner's dirt, tinted to a stratum's colour (the top soil is the tile as drawn)
+vec3 dirt(vec2 wc, vec3 tint) { return texture(dirt_tex, wc / SOIL).rgb * tint / dirt_avg; }
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float vnoise(vec2 p) {
@@ -53,7 +60,7 @@ float wave_off(vec2 uv) { return surf_at(uv.x).b * 16.0 - 8.0; }
 float base_y(vec2 uv) { return surf_at(uv.x).g * 255.0; }
 float layer_depth(float d, float off) { return d + off; }
 vec3 strata(float dd) {
-	vec3 c = vec3(0.36, 0.23, 0.14);                                  // humus
+	vec3 c = vec3(0.30, 0.24, 0.205);                                 // humus (the owner's dirt as drawn)
 	c = mix(c, vec3(0.62, 0.40, 0.22), smoothstep(9.0, 11.0, dd));      // subsoil clay
 	c = mix(c, vec3(0.74, 0.57, 0.36), smoothstep(30.0, 32.5, dd));     // sand + gravel
 	c = mix(c, vec3(0.55, 0.31, 0.22), smoothstep(55.0, 58.0, dd));     // red clay
@@ -81,42 +88,7 @@ void fragment() {
 	vec4 ax = texture(aux_tex, UV);
 	float d = wc.y - base_y(UV);
 	float dd = layer_depth(d, wave_off(UV));
-	vec3 col = strata(dd);
-	col *= 0.84 + 0.3 * fbm(wc * 0.33);
-	col = mix(col, col * 1.13, smoothstep(0.7, 0.8, vnoise(wc * 0.9 + 13.0)));
-	vec2 gp = wc * 3.0;
-	vec2 gid = floor(gp);
-	vec2 gf = fract(gp) - 0.5 - (vec2(hash(gid + 2.3), hash(gid + 5.9)) - 0.5) * 0.5;
-	float grain = 1.0 - smoothstep(0.12, 0.3, length(gf));
-	float g1 = hash(gid);
-	if (g1 > 0.93) { col *= 1.0 - 0.17 * grain; } else if (g1 < 0.05) { col *= 1.0 + 0.11 * grain; }
-	// roots hanging through the humus
-	if (dd < 17.0) {
-		float rn = vnoise(vec2(wc.x * 0.75, wc.y * 0.17));
-		float root = (1.0 - smoothstep(0.012, 0.03, abs(rn - 0.5))) * (1.0 - smoothstep(5.0, 17.0, dd));
-		col = mix(col, vec3(0.23, 0.14, 0.09), root * 0.9);
-	}
-	// pebbles: sparse in soil, dense in the gravel band, big in bedrock. Each kind sits on its own fixed grid and fades out
-	// pebble by pebble (a grid whose scale changes with depth gets sheared into thin streaks where two kinds meet)
-	float sandy = smoothstep(30.0, 33.0, dd) * (1.0 - smoothstep(55.0, 58.0, dd));
-	float rocky = smoothstep(156.0, 160.0, dd);
-	float soily = (1.0 - sandy) * (1.0 - rocky);
-	for (int pk = 0; pk < 3; pk++) {
-		float wgt = pk == 0 ? soily : (pk == 1 ? sandy : rocky);
-		if (wgt <= 0.001) { continue; }
-		float gs = pk == 0 ? 0.5 : (pk == 1 ? 1.0 : 0.275);
-		float thr = pk == 0 ? 0.972 : (pk == 1 ? 0.9 : 0.93);
-		float rad = pk == 1 ? 0.26 : 0.33;
-		vec2 sc = wc * gs + float(pk) * 17.3;
-		vec2 cid = floor(sc);
-		vec2 f = fract(sc) - 0.5 - (vec2(hash(cid + 3.1), hash(cid + 7.7)) - 0.5) * 0.3;
-		float r = length(f * vec2(1.0, 1.25));
-		if (hash(cid + 1.3) > thr && hash(cid + 5.5) < wgt && r < rad) {
-			vec3 stone = mix(vec3(0.58, 0.55, 0.53), vec3(0.76, 0.66, 0.52), hash(cid + 9.1));
-			stone = r < rad - 0.08 ? mix(stone, stone * 1.28, step(f.y, -0.06) * step(f.x, 0.05)) : ink.rgb;
-			col = stone;
-		}
-	}
+	vec3 col = dirt(wc, strata(dd));
 	// stones and fossils: real obstacles, drawn from the sim's own map
 	float st = smoothstep(0.42, 0.58, ax.g);
 	if (st > 0.0) {
@@ -135,29 +107,9 @@ void fragment() {
 		col = mix(col, stone, st);
 		col = mix(col, ink.rgb, (1.0 - smoothstep(0.03, 0.08, abs(ax.g - 0.5))) * 0.9);
 	}
-	// the spoil mound: loose pellets piled above the original ground
-	// (jittered cells: each pellet gets its own centre, size, and tint, so no grid shows)
+	// the spoil mound: dug-out earth piled above the original ground, the owner's dirt a little lighter and warmer
 	if (d < 0.0) {
-		vec2 pc = wc * 1.35;
-		vec2 pid = floor(pc);
-		float best = 9.0;
-		vec2 bid = pid;
-		vec2 bf = vec2(0.0);
-		for (int i = -1; i <= 1; i++) {
-			for (int j = -1; j <= 1; j++) {
-				vec2 c = pid + vec2(float(i), float(j));
-				vec2 o = vec2(hash(c + 1.7), hash(c + 4.3)) * 0.8 + 0.1;
-				float rr = 0.42 + 0.26 * hash(c + 8.1);
-				vec2 q = (pc - c - o) * vec2(1.0, 1.25);
-				float dist = length(q) / rr;
-				if (dist < best) { best = dist; bid = c; bf = q; }
-			}
-		}
-		vec3 sp = mix(vec3(0.47, 0.31, 0.18), vec3(0.72, 0.53, 0.33), hash(bid + 2.9));
-		sp = mix(sp, sp * vec3(0.9, 0.95, 1.05), step(0.8, hash(bid + 6.6)));
-		sp *= 0.8 + 0.3 * (1.0 - smoothstep(0.2, 1.0, best));
-		sp = mix(sp, sp * 1.2, step(bf.y, -0.1) * step(best, 0.75));
-		sp = mix(sp, vec3(0.2, 0.12, 0.07), smoothstep(0.92, 1.12, best));
+		vec3 sp = dirt(wc * 1.35 + 7.0, vec3(0.44, 0.31, 0.2));
 		col = mix(sp, col, smoothstep(-0.6, 0.4, d));
 	}
 	// turf rows just under the band
@@ -199,47 +151,19 @@ void fragment() {
 		float d = wc.y - base_y(UV);
 		float off = wave_off(UV);
 		vec2 pw = wc + cam * 0.24;
-		vec3 wall = strata(layer_depth(d, off)) * 0.44;
-		wall *= 0.8 + 0.34 * fbm(pw * 0.27);
-		// pores and old burrows in the rear wall
-		vec2 pc = floor(pw * 0.6);
-		vec2 pf = fract(pw * 0.6) - 0.5;
-		if (hash(pc + 2.2) > 0.86 && length(pf * vec2(1.0, 1.5)) < 0.2) { wall *= 0.5; }
-		// root hairs through the rear wall near the top
-		if (d < 20.0) {
-			float rn = vnoise(vec2(pw.x * 1.1, pw.y * 0.12));
-			wall = mix(wall, vec3(0.12, 0.07, 0.05), (1.0 - smoothstep(0.01, 0.03, abs(rn - 0.5))) * 0.7 * (1.0 - smoothstep(8.0, 20.0, d)));
-		}
+		vec3 wall = dirt(pw, strata(layer_depth(d, off))) * 0.44;
 		// side walls receding into the back, lit from above
 		vec2 ps = TEXTURE_PIXEL_SIZE;
 		vec2 grad = vec2(texture(TEXTURE, UV + vec2(ps.x, 0.0)).r - texture(TEXTURE, UV - vec2(ps.x, 0.0)).r,
 			texture(TEXTURE, UV + vec2(0.0, ps.y)).r - texture(TEXTURE, UV - vec2(0.0, ps.y)).r);
 		float e = smoothstep(0.12, 0.5, s);
 		float lit = length(grad) > 0.01 ? dot(normalize(grad), vec2(0.35, 0.94)) : 0.0;
-		vec3 side = strata(layer_depth(d, off)) * (0.6 + 0.25 * lit);
+		vec3 side = dirt(pw, strata(layer_depth(d, off))) * (0.6 + 0.25 * lit);
 		vec3 col = mix(wall, side, e * e);
 		// the front dirt casts a shadow down-right into the tunnel
 		float sh = texture(TEXTURE, UV - vec2(1.3, 1.9) * ps).r;
 		col *= 1.0 - 0.5 * smoothstep(0.35, 0.8, sh) * (1.0 - e);
 		col *= 1.0 - 0.32 * smoothstep(20.0, 190.0, d);
-		// depth layers in the rear wall: cracks open onto a deeper, slower-parallax layer
-		vec2 pw2 = wc + cam * 0.5;
-		float rid = abs(fbm(pw2 * 0.09) - 0.5);
-		float crack = (1.0 - smoothstep(0.015, 0.05, rid)) * (1.0 - e);
-		vec3 deep2 = strata(layer_depth(d, off)) * 0.16 + vec3(0.0, 0.004, 0.012);
-		deep2 *= 0.75 + 0.5 * fbm(pw2 * 0.5);
-		col = mix(col, deep2, crack * 0.85);
-		col = mix(col, col * 1.35, (1.0 - smoothstep(0.05, 0.09, rid)) * (1.0 - crack) * (1.0 - e) * 0.35);
-		// pebbles set into the rear wall, lit from above
-		vec2 pc2 = pw * 0.42;
-		vec2 pid2 = floor(pc2);
-		vec2 pf2 = fract(pc2) - 0.5 - (vec2(hash(pid2 + 5.5), hash(pid2 + 8.8)) - 0.5) * 0.4;
-		float pr2 = length(pf2 * vec2(1.0, 1.3));
-		if (hash(pid2 + 3.3) > 0.9 && pr2 < 0.2 && e < 0.5) {
-			vec3 peb = mix(vec3(0.3, 0.28, 0.27), vec3(0.4, 0.34, 0.27), hash(pid2)) * 0.8;
-			peb = mix(peb, peb * 1.6, step(pf2.y, -0.05) * step(pr2, 0.14));
-			col = mix(col, pr2 > 0.16 ? col * 0.5 : peb, 0.9);
-		}
 		// open air is lit in the middle of a tunnel and falls off toward the walls
 		col *= 0.8 + 0.36 * (1.0 - smoothstep(0.0, 0.42, s));
 		// a warm pool of light down the middle of the tunnel: it reads as a rounded tube, not a flat cut-out
@@ -271,6 +195,8 @@ var _chunks := {}     # k -> {"tex", "stex", "back", "front"}
 var _layout := -1
 var _camc := Vector2(INF, INF)
 var _new_chunk := true
+var _dirt: ImageTexture = null
+const DIRT_FILE = "res://mods-unpacked/Judah-InfDNA/content/art/terrain/dirt_soil.png"
 
 
 # perf.gd: quality 1 swaps in a cheaper shader (two noise octaves instead of four, no rear-wall cracks).
@@ -290,6 +216,10 @@ func _ready() -> void:
 	_front_sh.code = FRONT_SHADER
 	_back_sh = Shader.new()
 	_back_sh.code = BACK_SHADER
+	var img = Image.new()
+	if img.load(DIRT_FILE) == OK:
+		_dirt = ImageTexture.new()
+		_dirt.create_from_image(img, Texture.FLAG_MIPMAPS | Texture.FLAG_REPEAT | Texture.FLAG_FILTER)
 	_back = Node2D.new()
 	add_child(_back)
 	_front = Node2D.new()
@@ -361,6 +291,8 @@ func _make_chunk(k: int) -> void:
 		mat.set_shader_param("tsize", Vector2(cw, g.H))
 		mat.set_shader_param("surf_tex", stex)
 		mat.set_shader_param("aux_tex", atex)
+		if _dirt != null:
+			mat.set_shader_param("dirt_tex", _dirt)
 		sp.material = mat
 		(_back if which == "back" else _front).add_child(sp)
 		ch[which] = sp
