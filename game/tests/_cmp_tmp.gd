@@ -86,4 +86,18 @@ func _init():
 	for k in range(-6, 10):
 		nb += _cmp_img(a, b, k, "rebuilt")
 	print("rebuilt images: %d byte differences" % nb)
+	for g in [a, b]:
+		var t1 = Time.get_ticks_usec()
+		g.rebuild_nav()
+		print("rebuild_nav W=%d: %.1f ms" % [g.W, (Time.get_ticks_usec() - t1) / 1000.0])
+	var bad = 0
+	for f in ["dist_home", "dist_exit"]:
+		var A = a.get(f)
+		var B = b.get(f)
+		for z in 2:
+			for y in a.H:
+				for x in range(b.ox, b.ox + b.W):
+					if A[z * a.WH + y * a.W + x - a.ox] != B[z * b.WH + y * b.W + x - b.ox]:
+						bad += 1
+	print("nav fields: %d differences in the old range" % bad)
 	quit()
