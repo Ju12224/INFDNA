@@ -5,6 +5,7 @@ extends Node2D
 # out of view when the camera goes down into the nest. All pictures come from art/sky (tools/art/make_sky.py).
 
 const Art = preload("res://scene/art.gd")
+const Band = preload("res://scene/band.gd")
 
 # sky colour at the top of the screen and at the horizon: day, sunrise/sunset glow, night, overcast
 const DAY_TOP = Color("#4f8fd6")
@@ -106,7 +107,8 @@ func _draw() -> void:
 		var size = tex.get_size() * c[3] * k
 		var x = fposmod(c[1] * k + _t * c[4] - cpos.x * z * CLOUD_SCROLL, span) - size.x
 		draw_texture_rect(tex, Rect2(Vector2(x, c[2] * hz * 0.8), size), false, shade)
-	# hills, far to near
+	# hills, far to near, their foot tucked behind the back lanes of the meadow band (band.gd), which stand above the ground line
+	hz -= 0.25 * Band.DEPTH * Band.lift * z
 	for h in _hills:
 		var tex: Texture2D = h[0]
 		var e = h[1]
@@ -152,3 +154,10 @@ func _draw_centered(tex: Texture2D, p: Vector2, px: float, mod: Color) -> void:
 	var sz = tex.get_size()
 	var s = px / max(sz.x, sz.y)
 	draw_texture_rect(tex, Rect2(p - sz * s * 0.5, sz * s), false, mod)
+
+
+# The sky's colour at the horizon right now: what the meadow's distance haze blends toward (surface_view.gd).
+func horizon_colour() -> Color:
+	var day = colony.day
+	var low = DAY_LOW.lerp(WARM_LOW, day.warm * 0.8).lerp(NIGHT_LOW, day.night)
+	return low.lerp(GREY_LOW * Color(low.v + 0.1, low.v + 0.1, low.v + 0.1), day.cloud * 0.7)

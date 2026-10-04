@@ -7,8 +7,8 @@ extends Node2D
 #   brood    - every egg of the sim where it was laid, in its true colour (never the ants' tint), going through its stages as it
 #              counts down to the hatch: a clutch of eggs, a grub that fattens and wriggles, a silk cocoon that twitches near the end
 #              (antkit egg_*, larva_*, cocoon_*; a winged cocoon for a winged ant, a grey one for a soldier).
-#   anthill  - the owner's mound (art/anthill) over each nest mouth, in the meadow band (band.gd) on the lane the ants walk into the
-#              hole on, its hole over the shaft. The main mouth's mound grows (small, medium, large) with the spoil carried up.
+#   anthill  - the owner's mound (art/anthill) over each nest mouth, standing on the top of the spoil heap on the front lip, the floor
+#              of its hole on the mouth. The main mouth's mound grows (small, medium, large) with the spoil carried up.
 # Ported from the Godot 3 mod (nest_decor.gd: the props and their rules; world_view.gd: the brood stages; layers_view.gd: the chamber
 # badges). Its drawn shapes (roots, drips, glowing fungus, light shafts, the lantern glow) have no picture and are left out.
 #
@@ -31,7 +31,6 @@ extends Node2D
 # is rebuilt only when the rooms, the level, the larder, the raids or the Lab items change; drawing it is one picture per thing in view.
 
 const Art = preload("res://scene/art.gd")
-const Band = preload("res://scene/band.gd")
 const WorldGrid = preload("res://core/world_grid.gd")
 
 const C = WorldGrid.CELL
@@ -104,11 +103,9 @@ const BADGE_MAX = 84.0         # ... but never wider than this many world px (zo
 
 # ---- the anthill
 const MOUND_K = 0.28           # world px per picture px (the small mound's hole comes out about as tall as an ant on the surface)
-const MOUND_LANE = 0.62        # the lane ants walk into a mouth on (units_view.gd ENTRANCE_LANE, read from it when it has one)
 const MOUND_GROW = [0, 220, 900]   # spoil grains on the surface (world_grid.mound_cells) for the small, medium and large mound
 const MOUND_COVER = 0.6        # the anthill spans this share of the spoil heap round the main mouth ...
 const MOUND_MAX = 1.5          # ... growing to at most this much over its own size
-const HAZE = Color(0.88, 0.92, 0.97)
 
 var colony
 var _grid                      # the grid the caches were built for (a new colony brings a new one)
@@ -868,26 +865,23 @@ func _draw_mounds(vr: Rect2) -> void:
 	if _mounds.is_empty():
 		return
 	var g = colony.grid
-	var lane = MOUND_LANE
-	var u = colony.views.get("units")
-	if u != null and u.get_script() != null:
-		lane = float(u.get_script().get_script_constant_map().get("ENTRANCE_LANE", MOUND_LANE))
 	var grow = 0
 	for i in MOUND_GROW.size():
 		if g.mound_cells >= MOUND_GROW[i]:
 			grow = i
-	var tint = HAZE.lerp(Color.WHITE, clamp(lane, 0.0, 1.0)) * colony.day.tint
+	var tint = colony.day.tint
 	tint.a = 1.0
 	for i in g.entrances.size():
 		var m = _mounds[min(grow if i == 0 else 0, _mounds.size() - 1)]
 		var en = g.entrances[i]
-		var hx = (en.x + 0.5) * C
-		var gy = Band.lane_y(g.surf_y(int(en.x)) * C, lane)
-		var s = MOUND_K * Band.persp(lane)
+		var ex = int(en.x)
+		# the top of the spoil right over the mouth (the shaft's chimney rises with the heap, so this follows it as it grows)
+		var top = min(g.surf_y(ex), min(g.surf_y(ex - 1), g.surf_y(ex + 1)))
+		var s = MOUND_K
 		if i == 0:
 			s *= clamp(MOUND_COVER * _heap_w / (m["w"] * MOUND_K), 1.0, MOUND_MAX)   # a wide heap carries a bigger anthill
 		var hole: Vector2 = m["hole"]
-		var r = Rect2(Vector2(hx, gy) - hole * s, Vector2(m["w"], m["h"]) * s)
+		var r = Rect2(Vector2((en.x + 0.5) * C, top * C) - hole * s, Vector2(m["w"], m["h"]) * s)
 		if not vr.intersects(r):
 			continue
 		draw_texture_rect(m["tex"], r, false, tint)

@@ -111,6 +111,8 @@ var _state := {}            # raider id -> Vector3(surface 0..1, drawn lane, dra
 var _seen := {}             # raider id -> [raider, pos, state, k] as drawn last frame (for the death fall)
 var _dying := []            # [{e, p, st, k, t}]
 var _born := {}             # raider id -> sim time first seen (the Void Maw's climb out of the pit)
+var _lane_alpha := Callable()   # band.gd's lane_alpha(lane[, tall]) when it has one: the depth zoom cuts the near lanes
+var _alpha_tall := false        # ... and it takes the `tall` flag (for what hangs in the trees)
 var _worm := {}             # borer id -> its drawn heading (radians), turned smoothly toward the way it bores
 var _earthworm := {}        # fauna_manifest "earthworm": the Tunnel Borer's picture
 var _hover := 0.0           # the bird wheels about over its prey
@@ -130,6 +132,11 @@ func _ready() -> void:
 	_back.draw.connect(_draw_back)
 	add_child(_back)
 	_load_rigs()
+	var band: Object = Band
+	for m in band.get_script_method_list():
+		if m["name"] == "lane_alpha":
+			_lane_alpha = Callable(band, "lane_alpha")
+			_alpha_tall = m.get("args", []).size() >= 2
 	var kit = Art.manifest("antkit_manifest.json").get("pieces", {})
 	for name in ["worker_full", "soldier_full", "worker_small_full"]:
 		var p = kit.get(name)
@@ -487,6 +494,10 @@ func _draw_enemy(ci: CanvasItem, e, p: Vector2, st: Vector3, far: float, zoom: f
 	var shade = lerp(1.0, BACK_SHADE, plane) * lerp(1.0, HIDDEN_SHADE, hidden)
 	var col = Color(shade, shade, shade, lerp(1.0, HIDDEN_ALPHA, hidden) * (RETREAT_ALPHA if e.state == 2 else 1.0))
 	col *= Color.WHITE.lerp(HAZE.lerp(Color.WHITE, clamp(lane, 0.0, 1.0)) * colony.day.tint, surf)
+	if surf > 0.0 and not _is_boss(e):
+		col.a *= lerp(1.0, _la(lane), surf)        # the depth zoom cuts the near lanes (a boss always shows)
+		if col.a <= 0.01:
+			return [e, p, st]
 	var face = st.z if abs(st.z) > TURN_MIN else (TURN_MIN if st.z >= 0.0 else -TURN_MIN)
 	var moving = (e.tx != e.x or e.ty != e.y) and e.stun_t <= 0.0 and die < 0.0
 	var tt = _t + e.id * 0.7
@@ -846,6 +857,13 @@ func _draw_back() -> void:
 	_back.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
+# How much of something on the surface in `lane` to draw (band.gd lane_alpha): 0 = cut by the depth zoom, skip it.
+func _la(lane: float, tall: bool = false) -> float:
+	if not _lane_alpha.is_valid():
+		return 1.0
+	return float(_lane_alpha.call(lane, tall)) if _alpha_tall else float(_lane_alpha.call(lane))
+
+
 func _lane_tint(lane: float) -> Color:
 	var c = HAZE.lerp(Color.WHITE, clamp(lane, 0.0, 1.0))
 	c.a = 1.0
@@ -871,6 +889,9 @@ func _draw_hives(sim, x0: int, x1: int, vr: Rect2) -> void:
 		var sd = float(h["seed"])
 		var lane = float(f["lane"])
 		var mod = _lane_tint(lane)
+		mod.a = _la(lane, true)
+		if mod.a <= 0.01:
+			continue
 		var hh = clamp(tr["size"].y * 0.09, 50.0, 130.0)     # bigger than an ant, small against a giant tree
 		var hang = Vector2(box.position.x + box.size.x * (0.3 + 0.4 * Hives.hash1(sd + 5.1)), box.end.y - box.size.y * 0.18)
 		var st = Hives.stage(h)
@@ -888,6 +909,7 @@ func _draw_hives(sim, x0: int, x1: int, vr: Rect2) -> void:
 			var tf = _tx("hive/hive_fallen.png")
 			if tf == null:
 				continue
+			mod.a = _la(lane)           # lying on the ground now, not hanging in the tree
 			var fw = hh * 1.5
 			var fh = fw * tf.get_height() / float(tf.get_width())
 			var by: float = tr["foot"].y
@@ -966,6 +988,7 @@ func _draw_rival(r, vr: Rect2) -> void:
 			var w = W * (1.0 if alive else 0.7)
 			var size = Vector2(w, w * tex.get_height() / tex.get_width())
 			var col = _lane_tint(RIVAL_LANE) * RIVAL_TINT * (1.0 if alive else 0.72)
+			col.a = _la(RIVAL_LANE)
 			if r.hit_t > 0.0:
 				col = _flash(col)
 			_back.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
@@ -979,6 +1002,9 @@ func _draw_rival(r, vr: Rect2) -> void:
 		var ay = Band.lane_y(_ground(ax), al)
 		var face = 1.0 if cos(ph) >= 0.0 else -1.0
 		var col = _lane_tint(al)
+		col.a = _la(al)
+		if col.a <= 0.01:
+			continue
 		if r.genome != null:
 			var b = _kit.get("worker_full")
 			if b != null:
@@ -1003,6 +1029,9 @@ func _draw_pile(p: Dictionary) -> void:
 	if not colony.view_rect(80.0).has_point(base):
 		return
 	var mod = _lane_tint(PILE_LANE)
+	mod.a = _la(PILE_LANE)
+	if mod.a <= 0.01:
+		return
 	var ps = Band.persp(PILE_LANE)
 	var share = clamp(float(p["amount"]) / max(1.0, float(p["max"])), 0.0, 1.0)
 	if float(p["amount"]) <= 0.0:
@@ -1068,7 +1097,7 @@ func _draw_carcass(p: Dictionary) -> void:
 	var sc = BIRD_K * 0.95 * ps * k
 	var flat = lerp(0.42, 1.0, smoothstep(0.0, 1.0, rot))
 	var slump = Transform2D(Vector2(1.0 + 0.12 * (1.0 - flat), 0.0), Vector2(0.0, flat), base) * Transform2D(0.0, -base)
-	var alpha = 0.4 + 0.6 * pow(rot, 0.6)
+	var alpha = (0.4 + 0.6 * pow(rot, 0.6)) * _la(PILE_LANE)
 	var tint = colony.day.tint * Color.WHITE.lerp(Color(0.62, 0.72, 0.58), clamp(e * 0.9, 0.0, 0.8))
 	var pa = [smoothstep(0.55, 0.75, rot), smoothstep(0.35, 0.6, rot), smoothstep(0.1, 0.35, rot), smoothstep(0.0, 0.16, rot), smoothstep(0.45, 0.65, rot)]
 	var piv = _carcass_pivot(base, sc, spin)

@@ -44,6 +44,8 @@ var _anims := {}        # anim name -> {"f": [{tex, c, ax}], "ref": widest frame
 var _bodies := {}       # antkit body -> {tex, feet, length}
 var _font: Font
 var _far := 1.0
+var _fa := 1.0                  # the effect being drawn: its lane's share of band.gd lane_alpha (the depth zoom cuts near lanes)
+var _lane_alpha := Callable()
 
 
 func _ready() -> void:
@@ -64,6 +66,10 @@ func _ready() -> void:
 		if tex != null:
 			_bodies[name] = {"tex": tex, "feet": Vector2(p["feet"][0], p["feet"][1]), "length": float(p["length"])}
 	_font = ThemeDB.fallback_font
+	var band: Object = Band
+	for m in band.get_script_method_list():
+		if m["name"] == "lane_alpha":
+			_lane_alpha = Callable(band, "lane_alpha")
 
 
 static func _mip(tex: Texture2D) -> Texture2D:
@@ -118,6 +124,10 @@ func _process(delta: float) -> void:
 	_under.queue_redraw()
 
 
+func _la(lane: float) -> float:
+	return float(_lane_alpha.call(lane)) if _lane_alpha.is_valid() else 1.0
+
+
 # Where an effect is drawn: on the surface, lifted into its lane.
 func _at(p: Vector2, lane: float = FIGHT_LANE) -> Vector2:
 	var g = colony.grid
@@ -167,6 +177,9 @@ func _draw_fx(ci: CanvasItem, f: Dictionary) -> void:
 	var flip = -1.0 if seed_i % 2 == 1 else 1.0
 	var white = Color.WHITE
 	var day = colony.day.tint if pos != raw else Color.WHITE
+	_fa = _la(float(f.get("lane", FIGHT_LANE))) if pos != raw else 1.0
+	if _fa <= 0.01:
+		return
 	match f["kind"]:
 		"puff":
 			# dust, brown as drawn; a puff of another colour than earth (the blue zap, the green kill) leans toward it
@@ -237,6 +250,7 @@ static func _fp(k: float, marks: Array = []) -> float:
 # middle of the fade, so it never dips). scl: picture px -> world px about the anchor; stretch > 0 draws each frame's bolt axis that long
 # (scl.y is then the most the thickness may scale, its sign flips it).
 func _anim(ci: CanvasItem, an: Dictionary, fp: float, pos: Vector2, rot: float, scl: Vector2, col: Color, stretch: float = 0.0) -> void:
+	col.a *= _fa
 	if col.a <= 0.01:
 		return
 	var frames: Array = an["f"]
@@ -290,7 +304,9 @@ func _draw_corpse(f: Dictionary) -> void:
 	var col = Color(shade, shade, shade, 1.0 - k * k) * _tint(g.color)
 	if surf:
 		col *= HAZE.lerp(Color.WHITE, clamp(lane, 0.0, 1.0)) * colony.day.tint
-		col.a = 1.0 - k * k
+		col.a = (1.0 - k * k) * _la(lane)
+		if col.a <= 0.01:
+			return
 	draw_set_transform(pos + Vector2(0, -rise + k * k * (3.0 if old else 8.0)), float(f.get("rot", 0.0)) + tip, Vector2(face * s, s * sag))
 	draw_texture(b["tex"], -b["feet"], col)
 
