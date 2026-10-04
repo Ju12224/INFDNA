@@ -1,0 +1,109 @@
+{
+ "_about": "The owner's rain and snow, cut by tools/art/make_weather.py. Sizes in pixels.",
+ "rain": [
+  {
+   "name": "rain_0",
+   "file": "weather/rain_0.png",
+   "w": 154,
+   "h": 318
+  },
+  {
+   "name": "rain_1",
+   "file": "weather/rain_1.png",
+   "w": 169,
+   "h": 361
+  },
+  {
+   "name": "rain_2",
+   "file": "weather/rain_2.png",
+   "w": 176,
+   "h": 344
+  },
+  {
+   "name": "rain_3",
+   "file": "weather/rain_3.png",
+   "w": 147,
+   "h": 271
+  }
+ ],
+ "splash": [
+  {
+   "name": "splash_0",
+   "file": "weather/splash_0.png",
+   "w": 262,
+   "h": 182
+  },
+  {
+   "name": "splash_1",
+   "file": "weather/splash_1.png",
+   "w": 305,
+   "h": 298
+  }
+ ],
+ "flake": [
+  {
+   "name": "flake_0",
+   "file": "weather/flake_0.png",
+   "w": 168,
+   "h": 185
+  },
+  {
+   "name": "flake_1",
+   "file": "weather/flake_1.png",
+   "w": 158,
+   "h": 179
+  },
+  {
+   "name": "flake_2",
+   "file": "weather/flake_2.png",
+   "w": 161,
+   "h": 184
+  },
+  {
+   "name": "flake_3",
+   "file": "weather/flake_3.png",
+   "w": 148,
+   "h": 160
+  },
+  {
+   "name": "flake_4",
+   "file": "weather/flake_4.png",
+   "w": 162,
+   "h": 174
+  },
+  {
+   "name": "flake_5",
+   "file": "weather/flake_5.png",
+   "w": 170,
+   "h": 188
+  },
+  {
+   "name": "flake_6",
+   "file": "weather/flake_6.png",
+   "w": 151,
+   "h": 168
+  },
+  {
+   "name": "flake_7",
+   "file": "weather/flake_7.png",
+   "w": 165,
+   "h": 189
+  }
+ ],
+ "snow_cap": [
+  {
+   "name": "snow_cap_0",
+   "file": "weather/snow_cap_0.png",
+   "w": 1001,
+   "h": 165
+  }
+ ],
+ "puddle": [
+  {
+   "name": "puddle_0",
+   "file": "weather/puddle_0.png",
+   "w": 493,
+   "h": 166
+  }
+ ]
+}
