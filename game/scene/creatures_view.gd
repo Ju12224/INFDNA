@@ -172,6 +172,14 @@ func _process(delta: float) -> void:
 	_dt = delta
 	if not colony.paused:
 		_t += delta
+	if _born.size() > 400:
+		# forget the raiders that are gone (critters come and go all game)
+		var live := {}
+		for e in colony.sim.enemies:
+			if _born.has(e.id):
+				live[e.id] = _born[e.id]
+		_born = live
+		_worm = {}
 	queue_redraw()
 	_back.queue_redraw()
 

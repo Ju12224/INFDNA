@@ -133,6 +133,7 @@ var _badges: Node2D            # the chamber badges: a child drawn above the ant
 var _heap_w := 0.0             # width of the spoil heap round the main mouth, world px
 var props_rebuilds := 0
 var props_ms := 0.0
+var prof := {}                 # ms per part of the last props rebuild (tests)
 
 
 func _ready() -> void:
@@ -301,6 +302,7 @@ func _props_rebuild() -> void:
 	if gk != _geo_key:
 		_geo_key = gk
 		_floor_cache = {}
+	var tq = Time.get_ticks_usec()
 	var tier = _tier()
 	var raids = sim.raid_n
 	var own = sim.owned
@@ -352,6 +354,8 @@ func _props_rebuild() -> void:
 		_furnish(fl, items, sd, [])
 		if tier >= 4 and p == "architects":
 			_hang_lantern(c["center"], rx, sd)
+	prof["rooms"] = (Time.get_ticks_usec() - tq) / 1000.0
+	tq = Time.get_ticks_usec()
 	# the queen's chamber
 	var qc = g.chamber
 	var qr = g.chamber_r
@@ -388,9 +392,12 @@ func _props_rebuild() -> void:
 			var en = g.entrances[i]
 			var sy2 = g.surf_y(int(en.x))
 			_furnish(_floors(int(en.x) - 16, int(en.x) + 16, sy2 + 3, sy2 + 22, sy2 + 3), ["fence"], en.x * 3.3, [Vector2(en.x - 1.5, en.x + 2.5) * C], int(en.x))
+	prof["queen+hall"] = (Time.get_ticks_usec() - tq) / 1000.0
+	tq = Time.get_ticks_usec()
 	# shafts: ladders at the foot of the tall straight ones, a hoist over the tallest
 	if tier >= 2:
 		_ladders(tier, own.has("tools") or own.has("dynamite") or own.has("burrow"))
+	prof["shafts"] = (Time.get_ticks_usec() - tq) / 1000.0
 
 
 # The food piles of one store: as many as the larder is full (all the stores show the same fill), the last one smaller; a few

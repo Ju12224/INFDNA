@@ -114,17 +114,18 @@ func _fx() -> void:
 	var x = int(g.entrance.x) + int(_args["dx"])
 	var gap = int(_args["gap"])
 	var p = g.center(x, g.surf_y(x) - 1)
-	var step = Vector2(gap * g.CELL, 0)
 	var kinds = ["puff", "spark", "burst", "wave", "arc", "web", "acid"]
 	var life = [1.0, 0.45, 0.8, 0.6, 0.28, 1.4, 0.9]
 	var k = float(_args.get("fxk", "0.3"))     # how far through its life each effect is (a paused shot holds it there)
 	for i in kinds.size():
-		var f = {"kind": kinds[i], "pos": p + step * i + Vector2(0, -16), "t": k * life[i], "color": Color("#ffe08a"), "r": 40.0}
+		var xi = x + gap * i
+		var f = {"kind": kinds[i], "pos": g.center(xi, g.surf_y(xi) - 1) + Vector2(0, -16), "t": k * life[i], "color": Color("#ffe08a"), "r": 40.0}
 		if kinds[i] == "arc":
 			f["to"] = f["pos"] + Vector2(70, -10)
 		sim.fx.append(f)
 	sim.fx.append({"kind": "text", "pos": p + Vector2(0, -70), "t": k * 1.2, "text": "+24", "color": Color("#a8ec74")})
 	if not sim.ants.is_empty():
 		var a = sim.ants[0]
-		sim.fx.append({"kind": "corpse", "pos": p + step * 3.5, "t": k * 0.9, "color": Color(1, 1, 1), "genome": a.genome, "id": a.id, "lane": 0.75,
+		var xc = x + int(gap * 3.5)
+		sim.fx.append({"kind": "corpse", "pos": g.center(xc, g.surf_y(xc)) + Vector2(0, -3), "t": k * 0.9, "color": Color(1, 1, 1), "genome": a.genome, "id": a.id, "lane": 0.75,
 			"caste": a.caste, "face": 1, "rot": 0.0, "old": false, "carry": false})
