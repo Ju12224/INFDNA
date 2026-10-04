@@ -31,6 +31,7 @@ const COVER_DARK = 0.22        # ... darkens by this much, and blurs by up to CO
 const COVER_BLUR = 0.6
 const FILL_FROM = 1.5          # cut (lane number) where the rows below the cover row start to fill the screen down to its bottom ...
 const FILL_TO = 3.0            # ... and where they reach it
+const COVER_SMOOTH = 1         # the cover row follows the soil's top closely (columns either side averaged), as the front row did
 const HOLE_REACH = 14.0        # the cover row reaches at most this far down into a hole (the nest's mouth)
 const STEP_PX = 20.0           # screen px between ribbon points
 const SMOOTH = 2               # columns either side averaged into the ground height
@@ -270,7 +271,7 @@ func _draw_cover(it: Node2D) -> void:
 	var bottoms := PackedFloat32Array()
 	var x = x0
 	while x <= view.end.x + step:
-		var gy = ground_y(x)
+		var gy = ground_y(x, COVER_SMOOTH)
 		lines.append(Band.lane_y(gy, lane))
 		var lip = min(_lip(x), gy + HOLE_REACH) + 2.0
 		bottoms.append(lerp(lip, view.end.y + 8.0, fill))
