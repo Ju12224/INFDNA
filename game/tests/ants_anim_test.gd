@@ -64,10 +64,10 @@ func _report() -> void:
 			var e = _fb_at[k[0]]
 			out.append("frame %d: %d ants drawn, %d with the whole-body fallback picture" % [k[0], e[0], e[1]])
 	var win := int(_args["window"])
-	# ants drawn in nearly the whole window; a sample of 20 of them, nearest the screen centre first
+	# ants drawn in at least a third of the window; a sample of 20 of them, nearest the screen centre first
 	var full := []
 	for id in _series:
-		if _series[id].size() >= win * 0.9:
+		if _series[id].size() >= win / 3:
 			full.append(id)
 	var cx = _node.cam_center()
 	full.sort_custom(func(a, b):
@@ -108,7 +108,7 @@ func _report() -> void:
 		tot["mid_still"] += mid_still
 		tot["moved_nogait"] += nogait
 		tot["flips"] += flips
-		if mid >= 30:
+		if mid >= 20:
 			tot["mid_ants"] += 1
 			if cells.size() <= 1:
 				tot["static_ants"] += 1
@@ -123,6 +123,6 @@ func _report() -> void:
 	out.append("  ... drawn at rest (no screen movement since last frame): %d (%.1f%%)" % [tot["mid_still"], pct.call(tot["mid_still"], tot["mid"])])
 	out.append("  moved on screen but gait did not advance: %d" % tot["moved_nogait"])
 	out.append("  stand<->walk cell flips while mid-step: %d (%.1f per ant-second)" % [tot["flips"], tot["flips"] / max(0.01, tot["mid"] / 60.0)])
-	out.append("  ants mid-step >= 0.5 s: %d, of them with one cell all along: %d" % [tot["mid_ants"], tot["static_ants"]])
+	out.append("  ants mid-step >= 20 frames: %d, of them with one cell all along: %d" % [tot["mid_ants"], tot["static_ants"]])
 	for l in out:
 		print(l)

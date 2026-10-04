@@ -24,6 +24,11 @@ const Z_ALL = 2.5                         # dolly 0 at this zoom and below ...
 const Z_MAX = 6.0                         # ... 1 at this one
 const FADE = 1.5                          # lanes behind the cut over which things fade in
 const TALL_GAP = 1.5                      # zoomed fully in, tall things (trees) more than this many lanes in front of the focus are gone
+# The thick grass curtains (surface_view.gd) stand at these lanes, each on a lane-bucket boundary of units_view.gd (lane * 16), so the
+# ants sort cleanly in front of or behind them: back (behind every tree), middle (in front of the food piles and the outgoing trail),
+# front (in front of the fight lane). The fourth, the fringe on the soil's top line, is surface_view's cover row.
+const CURTAINS = [0.0625, 0.5625, 0.875]
+const PART_SPAN = 0.25                    # share of the dolly over which one curtain parts
 const LIFT_RANGE = 700.0                  # world px the camera goes below the ground for the band to flatten to LIFT_MIN
 const LIFT_MIN = 0.45
 
@@ -89,6 +94,20 @@ static func lane_alpha(lane: float, tall: bool = false) -> float:
 	var a = smoothstep(c, c + FADE, n) if c > 1.0 else 1.0
 	if tall and dolly > 0.0:
 		a *= 1.0 - dolly * (1.0 - smoothstep(focus - TALL_GAP - FADE, focus - TALL_GAP, n))
+	elif not tall and lane < CURTAINS[0]:
+		a *= 1.0 - curtain_alpha(CURTAINS[0]) * (1.0 - smoothstep(CURTAINS[0] - 0.03, CURTAINS[0], lane))   # behind the closed back curtain
+	return a
+
+
+# How much of the thick grass curtain at `lane` stands (1 closed, 0 parted). Zoomed out every curtain stands. Zooming in parts the
+# ones in front of the focus lane, the farthest in front first, so each step in opens one more (and the focus lane is clear when fully
+# in); the camera's cut takes the ones it passes, as for everything else.
+static func curtain_alpha(lane: float) -> float:
+	var a = lane_alpha(lane)
+	var dist = focus - num(lane)
+	if dist > 0.0 and dolly > 0.0:
+		var d0 = clamp(0.75 - 0.06 * dist, 0.0, 0.75)
+		a *= 1.0 - smoothstep(d0, d0 + PART_SPAN, dolly)
 	return a
 
 

@@ -15,6 +15,12 @@
    "file": "grass/grass_front.png",
    "w": 2998,
    "h": 414
+  },
+  "thick": {
+   "file": "grass/grass_thick.png",
+   "w": 4000,
+   "h": 441,
+   "solid": 0.517
   }
  }
 }

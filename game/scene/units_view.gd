@@ -76,6 +76,7 @@ const SQUEEZE = 1.2                        # cells: in a tight passage its feet 
 const AIR_RATE = 3.5
 const AIR_LIFT = 30.0                      # world px at full height (times the lane's perspective)
 const FLAP_HZ = 7.0                        # wing beats per second
+const SNAP = 3.0                          # a sim step longer than this many cells is a jump (a hole, a respawn): drawn there at once
 const STRIDE_CAP = 0.15                    # walk cycles per frame at most, so very fast ants do not strobe
 # the queen
 const QUEEN_PACE = 0.3                     # paces this share of her chamber's half-width
@@ -110,7 +111,11 @@ const S_GD = 24        # from that cell's centre: drawn ground along its down, a
 const S_GD2 = 25
 const S_GDROP = 26
 const S_GT = 27        # when they were looked up
-const S_N = 28
+const S_AX = 28        # the sim's position at its last two steps (world px): the drawn ant slides from the older to the newer
+const S_AY = 29        # between steps (see _draw), so it moves every frame, not once every 0.1 s
+const S_SX = 30
+const S_SY = 31
+const S_N = 32
 
 const DIRS = 16
 
@@ -120,6 +125,7 @@ var _bodies := {}           # picture name -> {tex, feet, length; jaw, mid (x ha
 var _foods := []            # [{tex, size}]: size in world px for a FOOD_REF-long worker (premultiplied textures)
 var _state := {}            # ant id -> Array (S_*)
 var _dt := 0.016
+var _sim_time := -1.0       # the sim's clock at the last draw: it changed, so the sim stepped
 var _t := 0.0
 var _g                      # colony.grid while drawing
 var _gc := {}               # (cell, plane, direction) -> Vector2(distance from the cell centre to the drawn ground along it, time)
@@ -280,14 +286,33 @@ func _draw() -> void:
 	for i in LANE_BUCKETS:
 		lanes.append([])
 	var crowd := {}            # spot -> [items]: underground ants close together
+	# The sim moves an ant in steps of 0.1 s, so its position only changes every sixth frame or so. An ant is drawn between its last two
+	# sim positions, by how far into the next step the colony's clock is: it moves (and walks) on every frame, one step behind the sim.
+	var stepped: bool = sim.time != _sim_time
+	_sim_time = sim.time
+	var acc = colony.get("_acc")
+	var alpha: float = clamp(float(acc) / colony.STEP, 0.0, 1.0) if acc != null else 1.0
 	for a in sim.ants:
 		var t: float = a.t
-		var p := Vector2((a.x + 0.5 + (a.tx - a.x) * t) * C, (a.y + 0.5 + (a.ty - a.y) * t) * C)
-		if not vr.has_point(p):
+		var ps := Vector2((a.x + 0.5 + (a.tx - a.x) * t) * C, (a.y + 0.5 + (a.ty - a.y) * t) * C)
+		if not vr.has_point(ps):
 			continue
 		var st = _state.get(a.id)
 		if st == null:
-			st = _new_state(a, p, g)
+			st = _new_state(a, ps, g)
+		elif stepped:
+			st[S_AX] = st[S_SX]
+			st[S_AY] = st[S_SY]
+			st[S_SX] = ps.x
+			st[S_SY] = ps.y
+		var p := ps
+		if float(st[S_AX]) != ps.x or float(st[S_AY]) != ps.y:
+			var ax: float = st[S_AX]
+			var ay: float = st[S_AY]
+			var sx: float = st[S_SX]
+			var sy: float = st[S_SY]
+			if abs(sx - ax) + abs(sy - ay) < SNAP * C:
+				p = Vector2(lerp(ax, sx, alpha), lerp(ay, sy, alpha))
 		state[a.id] = st
 		var surf = 1.0 if g.is_surface_cell(a.tx, a.ty) else 0.0
 		var sk: float = lerp(float(st[S_SURF]), surf, ks)
@@ -339,6 +364,10 @@ func _new_state(a, p: Vector2, g) -> Array:
 	st[S_GAIT] = a.id * 0.37
 	st[S_PX] = p.x
 	st[S_PY] = p.y
+	st[S_AX] = p.x
+	st[S_AY] = p.y
+	st[S_SX] = p.x
+	st[S_SY] = p.y
 	var down = Vector2(-sin(a.rot), cos(a.rot)) * C * 0.5
 	st[S_OX] = down.x
 	st[S_OY] = down.y
@@ -556,7 +585,7 @@ func _draw_ant(a, p: Vector2, st: Array, far: float, poses: bool, sel: Dictionar
 	var moved = sqrt(mx * mx + my * my)
 	st[S_PX] = p.x
 	st[S_PY] = p.y
-	var walking: bool = (a.tx != a.x or a.ty != a.y) and moved > 0.001
+	var walking: bool = moved > 0.001
 	var lk = st[S_LOOK]
 	if lk != null:
 		lk["used"] = kf

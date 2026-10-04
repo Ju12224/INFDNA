@@ -19,7 +19,10 @@ TRIM = {"front": (16, 16, 0)}        # row -> (columns off the left, off the rig
 
 def main():
     os.makedirs(OUT, exist_ok=True)
-    man = {"_about": "The owner's grass strips, cut by tools/art/make_grass.py; each tiles side by side. Sizes in pixels.", "strips": {}}
+    man_path = os.path.join(OUT, "grass_manifest.json")
+    man = json.load(open(man_path)) if os.path.exists(man_path) else {"strips": {}}     # keeps strips cut by other tools ("thick")
+    man["_about"] = "The owner's grass strips, cut by tools/art/make_grass.py and make_grass_thick.py; each tiles side by side. Sizes in pixels."
+    man.setdefault("strips", {})
     for row in ROWS:
         src = os.path.join(ROOT, "art_src", "grass_%s.png" % row)
         if not os.path.exists(src):
