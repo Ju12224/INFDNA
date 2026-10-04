@@ -6,6 +6,7 @@ bottom, then left to right); small specks join the piece whose nearest pixel is 
 size and its box on the sheet; which piece is what gets named when a view first uses them.
   meadow_kit.png -> art/meadow/m_NNN.png   tufts, flowers, bushes, rocks, mushrooms, logs, leaves, reeds (roadmap step 2.2)
   lab_kit.png    -> art/lab/l_NNN.png      flasks, jars, tools, notes, terrariums, powders, crates (the Lab screen, step 4.4)
+  lab_kit_2.png  -> art/lab2/l2_NNN.png   shelves, alchemy, crystals, chests, sacks, furnaces, machines (the Lab screen)
 Needs Pillow, numpy and scipy:  python3 tools/art/make_kit.py
 """
 import json
@@ -16,7 +17,7 @@ from PIL import Image
 from scipy import ndimage
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
-KITS = [("meadow_kit.png", "meadow", "m"), ("lab_kit.png", "lab", "l")]
+KITS = [("meadow_kit.png", "meadow", "m"), ("lab_kit.png", "lab", "l"), ("lab_kit_2.png", "lab2", "l2")]
 SPECK = 120          # shapes smaller than this (pixels) are bits of a bigger piece
 MARGIN = 3
 ROW = 70             # pieces whose tops are within this many pixels count as one row
