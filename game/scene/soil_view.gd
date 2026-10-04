@@ -13,7 +13,8 @@ const WorldGrid = preload("res://core/world_grid.gd")
 const Art = preload("res://scene/art.gd")
 
 const DIRT = "terrain/dirt_soil.png"
-const BUILDS_PER_FRAME = 2    # new chunks per frame at most, so scrolling never hitches
+const BUILDS_PER_FRAME = 2    # new chunks per frame at most, so scrolling never hitches...
+const BUILD_MS = 4            # ...and no second one once a frame has spent this long building (a chunk can take a while)
 const NEAR = 1.0              # chunks are built this many chunk widths beyond the screen...
 const FAR = 3.0               # ...and freed beyond this many
 
@@ -130,10 +131,14 @@ void fragment() {
 	back *= 0.8 + 0.36 * (1.0 - smoothstep(0.0, 0.42, s));
 	back = mix(back, back * 1.35 + vec3(0.05, 0.03, 0.008), (1.0 - smoothstep(0.0, 0.3, s)) * 0.45 * (1.0 - smoothstep(30.0, 150.0, d)));
 	back *= 1.0 - 0.28 * (1.0 - smoothstep(0.32, 0.62, ax.r)) * (1.0 - e);   // a back-plane tunnel right behind this wall
-	// a hole through the rear wall into the back plane, its far rim catching the light
-	float hole = smoothstep(0.35, 0.75, ax.b);
+	// a hole through the rear wall into the back plane, its far rim catching the light (the hole mask is one bare texel
+	// per cell: blurred a little more, so a single cell reads as a round opening, not a diamond)
+	vec2 hx = 0.5 * (dx + dy);
+	vec2 hy = 0.5 * (dx - dy);
+	float hb = 0.25 * (texture(aux_tex, UV + hx).b + texture(aux_tex, UV - hx).b + texture(aux_tex, UV + hy).b + texture(aux_tex, UV - hy).b);
+	float hole = smoothstep(0.15, 0.4, hb);
 	back = mix(back, vec3(0.035, 0.025, 0.02), hole * 0.92);
-	back = mix(back, back * 1.9 + 0.08, (1.0 - smoothstep(0.0, 0.25, abs(ax.b - 0.45))) * max(facing(vec2(axx.b, axy.b)), 0.0) * 0.6 * step(0.35, ax.b));
+	back = mix(back, back * 1.9 + 0.08, (1.0 - smoothstep(0.0, 0.12, abs(hb - 0.2))) * max(facing(vec2(axx.b, axy.b)), 0.0) * 0.6);
 	float ba = (1.0 - step(0.6, s)) * smoothstep(0.4, 0.6, m.g);
 
 	// front over back
@@ -194,7 +199,10 @@ func _process(_delta: float) -> void:
 			todo.append(k)
 	var mid = colony.cam_center().x / span - 0.5
 	todo.sort_custom(func(a, b): return absf(a - mid) < absf(b - mid))
+	var t0 = Time.get_ticks_msec()
 	for k in todo.slice(0, BUILDS_PER_FRAME):
+		if Time.get_ticks_msec() - t0 > BUILD_MS:
+			break
 		if _chunks.has(k):
 			_upload(k)
 		else:
