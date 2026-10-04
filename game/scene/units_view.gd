@@ -141,6 +141,7 @@ var draw_us := 0            # how long the last _draw took (tests read it)
 var debug_on := false       # tests (ants_anim_test.gd): fill debug_frames with how each ant was drawn this frame
 var debug_frames := {}      # ant id -> [baked, frame cell (-1: whole-body picture), walking, moved px, mid-step, gait, p.x, p.y]
 var debug_stamp := 0        # counts the _draws that filled it
+var rows_hook := Callable()     # surface_view.gd sets this: draws its grass rows into this canvas between the surface lane buckets
 var _lane_alpha := Callable()   # band.gd's lane_alpha(lane), if it has one (the depth zoom cuts lanes): surface ants fade with it
 
 
@@ -346,9 +347,13 @@ func _draw() -> void:
 	_draw_queen(vr, far)
 	for it in front:
 		_draw_ant(it[0], it[1], it[2], far, poses, sel, day_tint, kf)
-	for bucket in lanes:
-		for it in bucket:
+	for i in lanes.size():
+		if rows_hook.is_valid():
+			rows_hook.call(self, float(i) / LANE_BUCKETS)    # the meadow's grass rows standing behind this bucket (surface_view.gd)
+		for it in lanes[i]:
 			_draw_ant(it[0], it[1], it[2], far, poses, sel, day_tint, kf)
+	if rows_hook.is_valid():
+		rows_hook.call(self, 99.0)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	draw_us = Time.get_ticks_usec() - t0
 
