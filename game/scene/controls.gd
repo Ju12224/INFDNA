@@ -46,8 +46,8 @@ const FOOD_ICON = "ui/food.png"
 const BROOD_ICON = "ui/queen.png"
 # The owner's pictures standing for the powers in the menu (a missing one shows as a blank). Surge borrows the Swift Strain's legs and
 # the scent flag the Trail Pheromone's scent; the purple ooze is the owner's mutation icon.
-const ICONS = {"rally": "ui/soldier.png", "harvest": "ui/food_pile.png", "recall": "ui/chamber_queen.png", "surge": "items/swift.png",
-	"breed": "ui/brood.png", "strike": "ui/crown_red.png", "beacon": "items/trail.png", "mutagen": "ui/ooze.png"}
+const ICONS = {"rally": "ui/power_rally.png", "harvest": "ui/power_harvest.png", "recall": "ui/chamber_queen.png", "surge": "ui/power_surge.png",
+	"breed": "ui/power_breed.png", "strike": "ui/crown_red.png", "beacon": "items/trail.png", "mutagen": "ui/ooze.png"}
 const LABELS = {"rally": "Rally here", "harvest": "Harvest this pile", "recall": "Recall: everyone home", "surge": "Surge: sprint",
 	"breed": "Breed: mutate hard", "strike": "Strike the rival nest"}
 const ORDER_ICONS = {"move": "ui/soldier.png", "attack": "items/pincer.png", "harvest": "ui/food_pile.png", "dig": "ui/tremors2.png",

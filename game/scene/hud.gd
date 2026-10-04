@@ -9,6 +9,7 @@ extends Control
 
 const Kit = preload("res://scene/menu_kit.gd")
 const Seasons = preload("res://core/seasons.gd")
+const Art = preload("res://scene/art.gd")
 const Arc = preload("res://core/arc.gd")
 const Run = preload("res://scene/run.gd")
 const BugReport = preload("res://core/bug_report.gd")
@@ -17,8 +18,9 @@ const BAR_K = 0.55                     # the frame's size in the bar
 const FONT = 18
 const SPEED_LABELS = ["1x", "3x", "10x"]
 const ARC_ICONS = ["", "ui/dominion.png", "ui/tremors.png", "ui/void.png"]
-const RAID_ICON = "ui/raid.png"         # not drawn yet (art list): the raid chip is text until it is
-const BOSS_ICON = "ui/boss.png"         # not drawn yet (art list)
+const RAID_ICON = "ui/raid.png"
+const BOSS_ICON = "ui/boss.png"
+const SEASON_ICONS = ["ui/season_spring.png", "ui/season_summer.png", "ui/season_autumn.png", "ui/season_winter.png"]
 const MSG_MIN = 2.6                    # seconds a message stays at least (when more are waiting)
 const MSG_MAX = 6.0                    # ... and at most
 const MSG_QUEUE = 4
@@ -91,7 +93,7 @@ func _build_bar() -> void:
 	_chip(row, "ants", "ui/soldier.png", "Ants in the colony")
 	_chip(row, "brood", "ui/brood.png", "Eggs waiting to hatch")
 	_chip(row, "queen", "ui/queen.png", "The queen's health. If she falls, the colony falls.")
-	_chip(row, "season", "", "Season and day. A season lasts five minutes at 1x; winter is lean.")
+	_chip(row, "season", SEASON_ICONS[0], "Season and day. A season lasts five minutes at 1x; winter is lean.")
 	_chip(row, "will", "ui/hivemind.png", "Will: the Director's meter. It fills over time and pays for the powers (right-click the ground).")
 	_chip(row, "raid", RAID_ICON, "Raids: the one under way, or how long until the next")
 	_chip(row, "arc", "", "The arc: how far the colony's monsters have taken the meadow")
@@ -228,6 +230,9 @@ func _refresh_bar(sim) -> void:
 	var yr = Seasons.year(sim.time)
 	_v["season"].text = "%s, day %d" % [Seasons.NAMES[day.season], day.day_n]
 	_chips["season"].tooltip_text = "Year %d. A season lasts five minutes at 1x; winter is lean." % yr
+	var season_icon = _chips["season"].get_child(0)
+	if season_icon is TextureRect:
+		season_icon.texture = Art.tex(SEASON_ICONS[clampi(day.season, 0, 3)])
 	_v["will"].text = "%d / %d" % [int(sim.will), int(sim.will_max())]
 	var raid_on = sim._raid_active or not sim.raid_queue.is_empty()
 	if raid_on:
