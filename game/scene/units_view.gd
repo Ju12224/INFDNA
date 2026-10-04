@@ -308,13 +308,13 @@ func _draw() -> void:
 			st[S_SX] = ps.x
 			st[S_SY] = ps.y
 		var p := ps
-		if float(st[S_AX]) != ps.x or float(st[S_AY]) != ps.y:
-			var ax: float = st[S_AX]
-			var ay: float = st[S_AY]
-			var sx: float = st[S_SX]
-			var sy: float = st[S_SY]
-			if abs(sx - ax) + abs(sy - ay) < snap:
-				p = Vector2(lerp(ax, sx, alpha), lerp(ay, sy, alpha))
+		var ax: float = st[S_AX]
+		var ay: float = st[S_AY]
+		if ax != ps.x or ay != ps.y:
+			var dx: float = float(st[S_SX]) - ax
+			var dy: float = float(st[S_SY]) - ay
+			if abs(dx) + abs(dy) < snap:
+				p = Vector2(ax + dx * alpha, ay + dy * alpha)
 		state[a.id] = st
 		var surf = 1.0 if g.is_surface_cell(a.tx, a.ty) else 0.0
 		var sk: float = lerp(float(st[S_SURF]), surf, ks)

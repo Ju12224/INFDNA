@@ -14,6 +14,9 @@ var _stamp := 0
 var _series := {}            # ant id -> Array of [baked, cell, walking, moved, mid-step, gait, x, y] (the measured window)
 var _fb_at := {}             # frame -> [ants drawn, ants drawn with the fallback picture]
 var _sim_t0 := 0.0
+var _us := 0                 # the units view's _draw cost, summed over the measured window
+var _us_n := 0
+var _ants_sum := 0
 var _ant := -1               # shots=<png>: the walking ant followed by the six crops, 3 frames apart, that end up side by side in that png
 var _crops := []
 var _cells := []
@@ -50,6 +53,9 @@ func _process(_delta: float) -> bool:
 	if _args.has("shots") and _frames >= n - 20 and (_frames - (n - 20)) % 3 == 0 and _crops.size() < 6:
 		_grab(df)
 	if _frames > n - int(_args["window"]):
+		_us += _uv.draw_us
+		_us_n += 1
+		_ants_sum += df.size()
 		for id in df:
 			if not _series.has(id):
 				_series[id] = []
@@ -183,6 +189,7 @@ func _report() -> void:
 	out.append("sample of %d ants over %d frames (%.1f s at 60 fps):" % [sample.size(), win, win / 60.0])
 	out.append_array(rows)
 	var pct = func(a, b): return 100.0 * a / max(1, b)
+	out.append("units view _draw: %.2f ms per frame on average, %.1f ants per frame, %.1f us per ant" % [_us / 1000.0 / max(1, _us_n), float(_ants_sum) / max(1, _us_n), float(_us) / max(1, _ants_sum)])
 	out.append("TOTAL ant-frames %d" % tot["frames"])
 	out.append("  fallback picture      : %d (%.1f%%)" % [tot["fallback"], pct.call(tot["fallback"], tot["frames"])])
 	out.append("  mid-step ant-frames   : %d" % tot["mid"])
