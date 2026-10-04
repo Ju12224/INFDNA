@@ -1,0 +1,158 @@
+# Icons the game still borrows from Brotato
+
+Each line is one picture to draw. Square, transparent background, any size (I cut them like the UI sheet).
+
+## Evolution Lab items (85)
+
+- **Swift Strain** (common): Mutations favor legs.
+- **Pincer Strain** (common): Mutations favor claws.
+- **Tendril Strain** (common): Mutations favor tentacles.
+- **Keen Strain** (common): Mutations favor eyes and longer antennae.
+- **Spider Strain** (common): Mutations favor legs and spikes.
+- **Chitin Strain** (uncommon): Mutations favor armor plating.
+- **Thorn Strain** (uncommon): Mutations favor spikes that hurt attackers.
+- **Giant Strain** (uncommon): Mutations favor bigger body segments.
+- **Octopus Strain** (uncommon): Tentacle limbs and tentacle jaws become far more likely.
+- **Hox Shift** (rare): Body segments duplicate far more often.
+- **Alate Strain** (uncommon): Wings evolve more often: fast on the surface, frail, cramped in tunnels.
+- **Sting Strain** (uncommon): Stingers evolve more often: hit harder, eat a little more.
+- **Formic Strain** (uncommon): Acid glands evolve more often: attackers get burned, loads get lighter.
+- **Soldier Heads** (uncommon): Big-headed majors evolve more often: strong bite and dig, slow walkers.
+- **Honeypot Strain** (uncommon): Replete gasters evolve more often: carry more food, waddle slower.
+- **Glow Strain** (common): Luminous spots evolve more often: sense food farther.
+- **Camouflage Strain** (uncommon): Drab mottled bodies evolve more often: harder to hit.
+- **Trail Pheromone** (common): Stronger trail scent evolves more often: foragers follow each other better.
+- **Bristle Strain** (common): Body hair evolves more often: a little armor, a little slower.
+- **Cricket Song** (uncommon): Sound organs evolve more often: chirps rally fighters, then bat ears, then a pistol-shrimp shockwave.
+- **Eel Strain** (uncommon): Electric organs evolve more often: sense prey, shock attackers, then chain lightning.
+- **Shell Strain** (uncommon): Shells evolve more often: scutes, a snail shell, then armadillos that curl up when hurt.
+- **Silk Strain** (uncommon): Silk evolves more often: carry bundles, webs that slow raiders, then bolas snares that stun.
+- **Frog Tongue** (uncommon): Long tongues evolve more often: lap food, bite from farther, then chameleon tongue shots.
+- **Axolotl Strain** (rare): Regrowth evolves more often: heal over time, then gills, then planarians that split when killed.
+- **Gatherer Pheromone** (common): Newborns start foraging at weaker hunger signals.
+- **Burrower Instinct** (common): Newborns dig deeper, straighter tunnels.
+- **War Pheromone** (uncommon): Newborns join fights at weaker alarm signals.
+- **Extra Stomach** (common): Every ant carries 20% more food.
+- **Leather Hide** (common): Every ant has 15% more HP.
+- **Big Mandibles** (common): Every ant hits 20% harder.
+- **Caffeine Glands** (common): Ants move 10% faster but eat 10% more.
+- **Slow Metabolism** (common): Ants eat 15% less but move 5% slower.
+- **Scout Antennae** (common): Foragers sense food 6 cells farther.
+- **Sharpened Claws** (common): Ants dig 25% faster.
+- **Hard Heads** (uncommon): Every ant ignores 8% more damage.
+- **Toxic Spines** (uncommon): Spikes deal double damage back.
+- **Berserker Brood** (uncommon): Ants hit 35% harder but have 20% less HP.
+- **Rally Banner** (uncommon): Defenders hit 25% harder.
+- **Long Lives** (uncommon): Ants live 25% longer.
+- **Nurse Caste** (uncommon): Wounded ants heal 2 HP/s inside the nest.
+- **Tardigrade Gene** (legendary): Every ant has 40% more HP and ignores 10% more damage.
+- **Sweet Bait** (common): New food piles are 25% richer.
+- **Lure** (uncommon): Food appears closer to the nest.
+- **Food Cellar** (uncommon): Each repelled raid adds 10% interest to stored food.
+- **Recyclers** (common): Fallen ants return 3 food to the stores.
+- **Hunters** (common): Raiders drop 30% more food.
+- **Coupon** (uncommon): Lab prices are 10% lower.
+- **Gambler's Gland** (common): Rerolls cost 2 less.
+- **Queen's Whisper** (common): Your Will regenerates 30% faster.
+- **Deep Reserve** (uncommon): Your Will bar holds 40 more.
+- **Pheromone Choir** (uncommon): Every command recharges 25% faster.
+- **Frugal Orders** (uncommon): Every command costs 20% less Will.
+- **War Standard** (uncommon): Rally lasts 50% longer and rallied ants bite 10% harder.
+- **Honey Trail** (uncommon): Harvest lasts 50% longer and the ants it sends carry 30% more.
+- **Scarecrow** (uncommon): Birds come 40% less often and leave sooner.
+- **Adrenal Glands** (uncommon): Surge lasts 50% longer and runs 15% faster.
+- **Stud Book** (uncommon): Breed steers 4 more eggs.
+- **Hive Voice** (legendary): The colony hangs on your word: +50% Will regeneration, commands recharge 20% faster, +30 Will.
+- **Metapleural Glands** (uncommon): The antibiotic glands real ants carry: mould in the fungus gardens is rarer and gets weeded out faster.
+- **Thorn Barricade** (uncommon): Raiders sieging the entrance take 4 damage per second.
+- **Tunnel Traps** (uncommon): Raiders inside the tunnels take 5 damage per second.
+- **Pheromone Mask** (rare): Raids bring 15% fewer raiders.
+- **Growth Hormone** (uncommon): Every ant has 30% more HP and hits 15% harder.
+- **Sugar Rush** (common): New food piles are 60% richer.
+- **Purebred Line** (rare): Parents are chosen from the fittest 10 instead of 4.
+- **Queen's Elixir** (uncommon): Eggs hatch 30% faster.
+- **War Drums** (uncommon): Every ant hits 25% harder; defenders 30% harder.
+- **Scent Beacon** (common): Food appears closer and foragers sense 6 cells farther.
+- **Blasting Caps** (uncommon): Ants dig 60% faster.
+- **Cursed Idol** (rare): Every ant: +40% HP, +40% attack, +20% speed.
+- **Glass Carapace** (uncommon): Every ant ignores 15% more damage.
+- **Four-Leaf Pheromone** (common): The ants seem cheerful.
+- **Mystery Egg** (uncommon): Something is growing inside. Could be anything.
+- **Puppet Strings** (uncommon): Your Will regenerates 60% faster.
+- **Antidote** (uncommon): Cures the side effect of one cursed item you own whose effect you have discovered. Refunds 20 food if there is nothing to cure.
+- **Mutagen** (uncommon): +10% chance that each egg mutates.
+- **Royal Jelly** (uncommon): Queen gains +100 max HP and heals fully.
+- **Brood Chamber** (uncommon): Eggs hatch 20% faster.
+- **Fertile Queen** (rare): Eggs cost 1 less food.
+- **Second Entrance** (rare): Dig a new shaft far from the main one. A siege can't block both.
+- **Unstable Genome** (rare): +20% mutation chance, and mutations often come in pairs.
+- **Queen's Crown** (rare): Queen +50% max HP and regenerates twice as fast.
+- **Ancestral Carapace** (legendary): Every newborn has at least 1 armor on every segment.
+- **Hive Mind** (legendary): Parents are chosen from the fittest 8 instead of 4.
+
+## Queens (64)
+
+- **The Founder**: The plain queen. No perks, no flaws.
+- **Bloodmother**: Her brood drinks what it bites.
+- **Wraith Queen**: Half in the grave already.
+- **Pact Queen**: Eggs are cheap if you pay in blood.
+- **Bone Queen**: Nothing in her nest stays dead.
+- **Apprentice Queen**: Learns from every raid.
+- **Arena Queen**: The crowd feeds the fighters.
+- **Brood Mother**: Twins, always twins.
+- **Romantic Queen**: She loves her clutch to death.
+- **Mad Queen**: Some of her eggs are... unexpected.
+- **Chimera Queen**: Her colony is never quite the same twice.
+- **Beast Queen**: Everything in her tunnels is livestock.
+- **Storm Queen**: The air over her nest crackles.
+- **Arc Queen**: Wired into the colony.
+- **Hunt Queen**: Her soldiers strike before they are struck.
+- **Spitting Queen**: Acid at range.
+- **Vault Queen**: Nothing is ever wasted.
+- **Mason Queen**: Bigger pantries, sturdier walls.
+- **Engineer Queen**: Three tunnels at once.
+- **Delver Queen**: The mountain is her mother.
+- **Bull Queen**: Nothing fits, so she makes it fit.
+- **Depth Queen**: At home in the dark.
+- **Farmer Queen**: Her fungus gardens are legendary.
+- **Gourmet Queen**: Every scrap becomes a feast.
+- **Grove Queen**: The trees answer to her.
+- **Angler Queen**: She lures the wanderers in.
+- **Tide Queen**: Storms bring wrecks.
+- **Pirate Queen**: Raiders are just deliveries.
+- **Lucky Queen**: The Lab likes her.
+- **Viral Queen**: Everyone is watching the reroll button.
+- **Arms Dealer**: Six offers on the table.
+- **Jack Queen**: Starts rich, spends fast.
+- **Curious Queen**: She has to press every button.
+- **Wanderer Queen**: Never lives behind one door.
+- **General Queen**: Her brood is mostly soldiers.
+- **Captain Queen**: Orders carry down the tunnels.
+- **Sovereign**: The throne room is the strongest room.
+- **Boss Queen**: Everyone pays their tithe.
+- **Scarred Queen**: Pain is a weapon.
+- **Thorn Queen**: Hurt me. Go on.
+- **Iron Queen**: Plated from the first egg.
+- **Chrome Queen**: Half machine, all appetite.
+- **Stone Queen**: Slow, deep, unmoving.
+- **Heavy Queen**: Big eaters, big carriers.
+- **Ogre Queen**: Nothing small about her.
+- **Sprint Queen**: Late for everything.
+- **Feral Queen**: Lean, fast, half wild.
+- **Scout Queen**: Always over the next hill.
+- **Trail Queen**: Long roads, long legs.
+- **Glutton Queen**: Eats for the whole colony.
+- **Elder Queen**: Slow to lay, slow to die.
+- **Plague Queen**: Feverish and fertile.
+- **Peace Queen**: Raiders find fewer reasons to come.
+- **Shadow Queen**: The nest that isn't there.
+- **Renegade Queen**: Bring more. She'll take it all.
+- **Loud Queen**: Everything hears her.
+- **Merchant Queen**: Food is capital.
+- **Healer Queen**: Nothing stays wounded.
+- **Trapper Queen**: Every tunnel is a snare.
+- **Brawler Queen**: Fists first.
+- **Lone Claw**: One big claw and a big grudge.
+- **Tentacle Queen**: Something is wrong with her children.
+- **Swarm Queen**: Every ant does a bit of everything.
+- **Generalist Queen**: Good at everything, great at nothing.

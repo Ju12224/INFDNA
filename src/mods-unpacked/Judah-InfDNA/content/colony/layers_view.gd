@@ -58,6 +58,11 @@ func set_layer(key: String, on: bool) -> void:
 func _process(delta: float) -> void:
 	_t += delta
 	if not (show_fights or show_tasks or show_health):
+		# a boss is pointed at whatever layers are on: redraw while one is about (and once more after, to clear its arrow)
+		var boss = _boss_out()
+		if boss or _boss_was:
+			update()
+		_boss_was = boss
 		return
 	if show_fights:
 		_pair_t -= delta
@@ -162,6 +167,7 @@ func _raider_pts(e) -> Array:
 
 func _draw() -> void:
 	if not (show_fights or show_tasks or show_health):
+		_draw_edge_arrows(true)
 		return
 	var z = _zoom()
 	var vr = ant_view._view_rect()
@@ -229,8 +235,19 @@ func _draw_ant_marks(z: float, vr: Rect2) -> void:
 			draw_rect(Rect2(o, Vector2(w * frac, h)), Color(bc.r, bc.g, bc.b, pts[4]))
 
 
-# Arrows at the screen edge toward raiders that are out of view; one arrow (with a count) per cluster.
-func _draw_edge_arrows() -> void:
+var _boss_was := false
+
+
+func _boss_out() -> bool:
+	for e in sim.enemies:
+		if e.cls == "boss" and e.state != 2:
+			return true
+	return false
+
+
+# Arrows at the screen edge toward raiders that are out of view; one arrow (with a count) per cluster. A boss gets one always (bosses_only:
+# the Fights layer is off, so only they are pointed at), bigger, with its name.
+func _draw_edge_arrows(bosses_only: bool = false) -> void:
 	if cam == null:
 		return
 	var ct = get_canvas_transform()
@@ -243,7 +260,7 @@ func _draw_edge_arrows() -> void:
 	var screen = Rect2(Vector2.ZERO, vs)
 	var groups := {}
 	for e in sim.enemies:
-		if e.cls == "prey" or e.state == 2:
+		if e.cls == "prey" or e.state == 2 or (bosses_only and e.cls != "boss"):
 			continue
 		var sp = ct.xform(sim.enemy_pos(e))
 		if screen.has_point(sp):
@@ -254,11 +271,12 @@ func _draw_edge_arrows() -> void:
 		var key = Vector2(round(ap.x / ARROW_BUCKET), round(ap.y / ARROW_BUCKET))
 		var g = groups.get(key)
 		if g == null:
-			groups[key] = {"pos": ap, "dir": dir.normalized(), "n": 1, "cls": e.cls}
+			groups[key] = {"pos": ap, "dir": dir.normalized(), "n": 1, "cls": e.cls, "name": str(e.def.get("name", ""))}
 		else:
 			g["n"] += 1
 			if CLASS_RANK[e.cls] > CLASS_RANK[g["cls"]]:
 				g["cls"] = e.cls
+				g["name"] = str(e.def.get("name", ""))
 	if groups.empty():
 		return
 	draw_set_transform_matrix(ct.affine_inverse())      # from here on, coordinates are screen pixels
@@ -268,9 +286,15 @@ func _draw_edge_arrows() -> void:
 		var dn: Vector2 = g["dir"]
 		var perp = dn.rotated(PI * 0.5)
 		var ap2: Vector2 = g["pos"]
-		var k = 1.0 + 0.12 * pulse
+		var k = (1.0 + 0.12 * pulse) * (1.6 if g["cls"] == "boss" else 1.0)
 		var tip = ap2 + dn * 20.0 * k
-		draw_colored_polygon(PoolVector2Array([tip + dn * 4.0, ap2 - dn * 12.0 + perp * 17.0, ap2 - dn * 12.0 - perp * 17.0]), INK)
-		draw_colored_polygon(PoolVector2Array([tip, ap2 - dn * 8.0 + perp * 12.0, ap2 - dn * 8.0 - perp * 12.0]), col)
+		draw_colored_polygon(PoolVector2Array([tip + dn * 4.0, ap2 - dn * 12.0 * k + perp * 17.0 * k, ap2 - dn * 12.0 * k - perp * 17.0 * k]), INK)
+		draw_colored_polygon(PoolVector2Array([tip, ap2 - dn * 8.0 * k + perp * 12.0 * k, ap2 - dn * 8.0 * k - perp * 12.0 * k]), col)
+		if g["cls"] == "boss" and g["name"] != "":
+			var tw = _font.get_string_size(g["name"]).x
+			var lp = ap2 - dn * 44.0 - Vector2(tw * 0.5, -6.0)
+			lp.x = clamp(lp.x, 8.0, get_viewport_rect().size.x - tw - 8.0)
+			draw_string(_font, lp + Vector2(1, 1), g["name"], INK)
+			draw_string(_font, lp, g["name"], col)
 		if g["n"] > 1:
 			draw_string(_font, ap2 - dn * 30.0 + Vector2(-6.0, 7.0), str(g["n"]), Color.white)

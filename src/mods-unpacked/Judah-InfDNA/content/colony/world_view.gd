@@ -98,6 +98,7 @@ func _process(delta: float) -> void:
 		var g = sim.grid
 		g.surf_y(int((c.x - vp.x * z) / g.CELL))
 		g.surf_y(int((c.x + vp.x * z) / g.CELL))
+		ground.zoom = z
 		ground.prepare(_view_cols(g), _t)
 		if ground.perf == null or ground.perf.scenery > 0:
 			nest_decor.prepare(_view_cols(g), _t)

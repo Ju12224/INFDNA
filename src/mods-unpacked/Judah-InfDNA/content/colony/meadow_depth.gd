@@ -29,17 +29,18 @@ const CH = GroundView.CH          # columns per chunk (the ground's cache unit, 
 const PIECES = 2                  # meshes per row and chunk, each with its own sway and parting
 const PW = 24                     # columns per piece (CH / PIECES)
 const NC = 4
-const INNER = 3                   # rows that can hide a unit (the fringe in front of the lip never does)
+const INNER = 4                   # rows that can hide a unit: all of them, the fringe in front of the lip too (no gap anywhere in the meadow)
 # ant_view sorts by depth into 48 buckets of (lane + 2) / 3.2; bucket b starts at lane b / 15 - 2. Each row sits on one such boundary:
 # back row 0.2 (behind the empty-handed trail), middle 0.533 (just in front of the food piles), front 0.867 (in front of the fight
 # lane), and a fringe at 1.067 in front of the lip.
 const ROW_B = [33, 38, 43, 46]
 const HEIGHT = [130.0, 150.0, 146.0, 118.0]  # tallest blades, px before perspective (tall enough to hide the lanes behind across the deep band)
-const SOLID = [0.62, 0.66, 0.66, 0.0]      # share of the height that is a closed wall of grass at the foot
-# The rows open one at a time, front first, as the camera comes in: at the usual zoom they all stand (the colony is mostly hidden, symbols
-# mark what goes on), each further step in shows one more row's lanes.
-const Z_HI = [0.37, 0.48, 0.62, 0.80]       # camera zoom at which a row begins to part (zoom < 1 is a magnified view) ...
-const Z_LO = [0.30, 0.39, 0.50, 0.64]       # ... and has gone
+const SOLID = [0.62, 0.66, 0.66, 0.62]     # share of the height that is a closed wall of grass at the foot
+# The rows open one at a time, front first, as the camera comes in: at every usual zoom they all stand (the colony is hidden in the grass,
+# and what it hides is not drawn; symbols mark what goes on, a boss always shows), and each step further in opens one more row. The last
+# row opens deep in (the camera goes down to cam.min_zoom), where the dense short lawn (ground_view.gd) still covers the ground.
+const Z_HI = [0.18, 0.27, 0.38, 0.50]       # camera zoom at which a row begins to part (zoom < 1 is a magnified view) ...
+const Z_LO = [0.12, 0.20, 0.29, 0.40]       # ... and has gone
 const FADE_IN = 0.45              # a freshly built row fades in (never pops)
 const ANT_H = 34.0                # px an ant stands at perspective 1 (the tallest caste)
 const DL = GroundView.DEPTH * GroundView.LANE_K
@@ -210,8 +211,8 @@ func pass_item(ci: CanvasItem, it: Array) -> bool:
 			return false
 		hid = _hidden_at(key, (u.x + 0.5) * _C, ANT_H * GroundView.persp(key))
 	else:
-		if u.def.get("fly", false):
-			return false
+		if u.def.get("fly", false) or u.cls == "boss":
+			return false          # a flyer may be in the air; a boss always shows, whatever stands in front of it
 		hid = _hidden_at(key, (u.x + 0.5) * _C, EnemyDefs.height_of(u) * GroundView.persp(key))
 	if hid:
 		stat_skipped += 1
@@ -275,14 +276,13 @@ func _process(delta: float) -> void:
 	_snow = day.snow if day != null else Seasons.snow(st)
 	_flat = 1.0 - 0.2 * _snow
 	_wind = 1.0 + 1.6 * sim.rain
-	var fringe_ok = perf == null or perf.scenery > 0
 	_cover_max = -1.0
 	for c in NC:
 		var goal = 1.0 - smoothstep(Z_LO[c], Z_HI[c], z)
 		_part[c] = lerp(_part[c], goal, k)
 		if abs(_part[c] - goal) < 0.002:
 			_part[c] = goal
-		_alpha[c] = _on_k * pow(1.0 - _part[c], 1.5) * (1.0 if (c < INNER or fringe_ok) else 0.0)
+		_alpha[c] = _on_k * pow(1.0 - _part[c], 1.5)
 		_dense[c] = c < INNER and _part[c] < 0.01 and _on_k >= 1.0
 		_hs[c] = SOLID[c] * HEIGHT[c] * _ps[c] * 0.9 * _flat
 		if _dense[c]:
@@ -425,6 +425,17 @@ func _update_local(delta: float) -> void:
 			for pidx in range(int(floor((px - 70.0) / pw)), int(floor((px + 70.0) / pw)) + 1):
 				for c in NC:
 					if _lanes[c] > ln + 0.004:
+						want[pidx * NC + c] = 1.0
+		# a boss: the rows in front of it part over its whole width, so it can always be seen
+		for e in sim.enemies:
+			if e.cls != "boss" or e.hp <= 0.0 or sim.grid.is_under(e.x, e.y):
+				continue
+			var bx = (e.x + 0.5) * C
+			var half = max(120.0, EnemyDefs.height_of(e) * 1.1)
+			var bl = float(e.lane)
+			for pidx in range(int(floor((bx - half) / pw)), int(floor((bx + half) / pw)) + 1):
+				for c in NC:
+					if _lanes[c] > bl + 0.004:
 						want[pidx * NC + c] = 1.0
 	if want.empty() and _lp.empty():
 		return
@@ -609,18 +620,10 @@ func _csig(ci: int) -> String:
 	return s
 
 
-# How tall the grass grows at a column, 0..1: none on the bare spoil mound, trampled around the nest holes and the rival's mound, and
-# (back row only, which would stand over it) around a fallen bird.
-func _clear_k(c: int, col: int, mfv: float) -> float:
-	var k = 1.0 - smoothstep(0.06, 0.28, mfv)
-	for ex in _ent:
-		k *= smoothstep(7.0, 15.0, abs(col - ex))
-	if _rival_x > -999999:
-		k *= smoothstep(19.0, 27.0, abs(col - _rival_x))
-	if c == 0:
-		for px in _carc:
-			k *= smoothstep(14.0, 22.0, abs(col - px))
-	return k
+# How tall the grass grows at a column, 0..1: everywhere at full height. There are no clearings (the owner: no gaps anywhere): the grass
+# stands over the spoil heaps, round the nest holes and the rival mound, and over a fallen bird; zooming in is how one looks past it.
+func _clear_k(_c: int, _col: int, _mfv: float) -> float:
+	return 1.0
 
 
 static func _undul(x: float, c: int) -> float:

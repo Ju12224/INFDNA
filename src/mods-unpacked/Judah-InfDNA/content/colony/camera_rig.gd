@@ -3,7 +3,7 @@ extends Camera2D
 # The world is infinite sideways, so x is never clamped.
 
 var world_size := Vector2(1560, 900)
-var min_zoom := 0.24
+var min_zoom := 0.07      # far in: the meadow's back rows only open near the bottom of this (meadow_depth.gd), and the view is small there
 var max_zoom := 1.0
 var _drag := false
 var _shake := 0.0

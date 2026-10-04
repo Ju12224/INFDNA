@@ -71,7 +71,21 @@ var _tex_loads := 0  # seasonal pictures loaded this frame (one a frame; the big
 var _grid_idx := PoolIntArray()     # the triangles of the canopy sway grid (the same for every tree)
 var _grid_uv := PoolVector2Array()
 var _pit_x := -999999 # the column of the open Void pit (arc.gd, drawn by world_view): no grass or scenery grows in it
+var zoom := 1.0       # the camera zoom, set by world_view each frame (below 1 is a magnified view)
+var _lawn_a := 0.0    # how much of the lawn shows (by the zoom, less under snow)
+var _lawn_img: Image
+var _lawn_tex: ImageTexture
+var _lawn_st := -999.0
 const PIT_COLS = 28
+const HEAP_LANE = 0.62        # the spoil heap is piled round the nest mouth, which is drawn at this lane (ant_view.ENTRANCE_LANE): bare earth there,
+                              # turf in front of and behind it (the heap is no longer a brown strip across the whole depth)
+# The lawn: dense short grass over the whole walkable band, so close up the ground is grass everywhere. Built and drawn only as the camera comes
+# in (the view is small then, so the blades cost little): one mesh per lane slice for each chunk in view, built on demand (one chunk a frame),
+# drawn in ant_view's depth-sorted loop with its slice so the ants walk through it. UVs into a small palette texture (no vertex colours), so it
+# fades with the zoom (GLES2 ignores draw_mesh's modulate on vertex-coloured meshes) and a change of season repaints one 8 x 12 texture.
+const LAWN_FAR = 0.95         # the lawn fades in from this camera zoom ...
+const LAWN_NEAR = 0.6         # ... and is full from this one in
+const LAWN_PER = 3            # blades per column and lane slice
 const PIT_SWALLOW = 125.0     # px: scenery whose middle is this near the pit's falls into it
 
 
@@ -202,7 +216,111 @@ func prepare(cols: Array, t: float) -> void:
 		for ci in _chunks.keys():
 			if ci < c_lo - 14 or ci > c_hi + 14:
 				_chunks.erase(ci)
+	_prepare_lawn(c_lo, c_hi)
 	_prepare_features(cols, budget)
+
+
+func _prepare_lawn(c_lo: int, c_hi: int) -> void:
+	var snow = day.snow if day != null else 0.0
+	_lawn_a = (1.0 - smoothstep(LAWN_NEAR, LAWN_FAR, zoom)) * (1.0 - smoothstep(0.25, 0.75, snow))
+	if _lawn_a <= 0.004:
+		return
+	var st = day.sea_t if day != null else 0.0
+	if _lawn_tex == null or abs(st - _lawn_st) > 2.0:
+		_paint_lawn(st)
+	# one chunk a frame, the middle of the view first, and one either side of it ready for a pan
+	var mid = (c_lo + c_hi) / 2
+	var order := [mid]
+	for d in range(1, max(mid - c_lo, c_hi - mid) + 2):
+		order.append(mid - d)
+		order.append(mid + d)
+	for ci in order:
+		if ci < c_lo - 1 or ci > c_hi + 1:
+			continue
+		var ch = _chunks.get(ci)
+		if ch != null and not ch.has("lawn"):
+			ch["lawn"] = _build_lawn(ci, ch)
+			return
+
+
+func _paint_lawn(st: float) -> void:
+	_lawn_st = st
+	if _lawn_img == null:
+		_lawn_img = Image.new()
+		_lawn_img.create(8, 12, false, Image.FORMAT_RGBA8)
+		_lawn_tex = ImageTexture.new()
+		_lawn_tex.create_from_image(_lawn_img, Texture.FLAG_FILTER)
+	var gb = Seasons.blend_color(st, [Color("#72b04f"), GRASS_BACK, Color("#93994a"), Color("#8a9877")])
+	var gf = Seasons.blend_color(st, [Color("#aade5e"), GRASS_FRONT, Color("#bdb65a"), Color("#a8b79b")])
+	var dry = Seasons.blend(st, [0.0, 0.12, 0.7, 0.85])
+	var deep = gb.darkened(0.55)
+	var mid = gb.linear_interpolate(gf, 0.5)
+	var hi = gf.lightened(0.2).linear_interpolate(Color(0.98, 1.0, 0.7), 0.18)
+	_lawn_img.lock()
+	for r in 12:
+		var t = r / 11.0
+		var rc = deep.linear_interpolate(mid.darkened(0.3), t * 0.8)
+		var tc = mid.darkened(0.12).linear_interpolate(hi, t)
+		for q in 8:
+			var h = q / 7.0
+			var col = rc.linear_interpolate(tc, pow(h, 0.8))
+			col = col.linear_interpolate(STRAW.darkened(0.3 * (1.0 - h)), dry * (0.25 + 0.5 * h))
+			_lawn_img.set_pixel(q, r, Color(col.r, col.g, col.b, 1.0))
+	_lawn_img.unlock()
+	_lawn_tex.set_data(_lawn_img)
+
+
+# A chunk's lawn: LAWN_PER blades per column in every lane slice, each a slim tapering blade with a slight bend, leaning its own way, taller in
+# the thick patches of the meadow; none on the bare heap round a nest mouth or in the Void pit. One mesh per slice.
+func _build_lawn(ci: int, ch: Dictionary) -> Array:
+	var C = g.CELL
+	var c0 = ci * CH
+	var sy: PoolRealArray = ch["sy"]
+	var mf: PoolRealArray = ch["mf"]
+	var out := []
+	for s in SLICES:
+		var bv := PoolVector2Array()
+		var bu := PoolVector2Array()
+		for i in CH:
+			var col = c0 + i
+			if _pit_x != -999999 and abs(col - _pit_x) < PIT_COLS:
+				continue
+			var patch = 0.5 + 0.5 * sin(col * 0.047 + 1.3) * sin(col * 0.0173 + 0.4)
+			for k in LAWN_PER:
+				var sd = col * 3.71 + s * 17.3 + k * 5.13
+				var lane = (s + MK.hash1(sd)) / SLICES
+				if mf[i] * _heap_k(lane) > 0.22:
+					continue
+				var px = (col + MK.hash1(sd + 1.0)) * C
+				var b = Vector2(px, lane_y(_sy_at(sy, c0, px, C), lane) + 1.0)
+				var ps = persp(lane)
+				var h = (6.0 + 12.0 * MK.hash1(sd + 2.0)) * (0.75 + 0.5 * patch) * ps
+				var w = (1.3 + 1.3 * MK.hash1(sd + 3.0)) * ps
+				var lean = (MK.hash1(sd + 4.0) - 0.5) * 0.8 * h
+				var tone = clamp(0.15 + 0.6 * MK.hash1(sd + 5.0) + 0.25 * lane, 0.0, 1.0)
+				var v = (tone * 11.0 + 0.5) / 12.0
+				var m = b + Vector2(lean * 0.35, -h * 0.55)
+				var tip = b + Vector2(lean, -h)
+				var bl = b - Vector2(w * 0.5, 0.0)
+				var br = b + Vector2(w * 0.5, 0.0)
+				var ml = m - Vector2(w * 0.32, 0.0)
+				var mr = m + Vector2(w * 0.32, 0.0)
+				bv.append_array(PoolVector2Array([bl, br, mr, bl, mr, ml, ml, mr, tip]))
+				var u0 = Vector2(0.5 / 8.0, v)
+				var um = Vector2(4.4 / 8.0, v)
+				var ut = Vector2(7.5 / 8.0, v)
+				bu.append_array(PoolVector2Array([u0, u0, um, u0, um, um, um, um, ut]))
+		if bv.empty():
+			out.append(null)
+			continue
+		var arrays = []
+		arrays.resize(Mesh.ARRAY_MAX)
+		arrays[Mesh.ARRAY_VERTEX] = bv
+		arrays[Mesh.ARRAY_TEX_UV] = bu
+		var mesh = ArrayMesh.new()
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], 0)      # uncompressed: GLES2 reads plain floats
+		out.append(mesh)
+	return out
 
 
 func _prepare_features(cols: Array, chunk_budget: int) -> void:
@@ -288,6 +406,14 @@ func draw_slice(ci: CanvasItem, s: int) -> void:
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	var amp = 0.008 + 0.03 * float(s) / SLICES + (0.02 if s == SLICES else 0.0)
 	var detail = perf.scenery if perf != null else 2
+	if _lawn_a > 0.004 and s < SLICES and _lawn_tex != null:
+		var lm = Color(1, 1, 1, _lawn_a)
+		for e in _vis:
+			var lw = e[1].get("lawn")
+			if lw == null or lw[s] == null:
+				continue
+			var sw = amp * 0.7 * sin(_t * 1.3 + e[0] * 1.7 + s * 0.45)
+			ci.draw_mesh(lw[s], _lawn_tex, null, Transform2D(Vector2(1, 0), Vector2(sw, 1), Vector2(-sw * e[1]["oy"], 0)), lm)
 	var skip_decor = detail == 0 or (detail == 1 and s % 2 == 1 and s != SLICES)
 	for e in _vis:
 		if skip_decor:
@@ -736,7 +862,7 @@ func _rock_sprite(f: Dictionary):
 func visible_slices() -> Array:
 	var out := []
 	for s in SLICES + 1:
-		var any = not _vis_f[s].empty() or (s < _vis_spr.size() and not _vis_spr[s].empty())
+		var any = not _vis_f[s].empty() or (s < _vis_spr.size() and not _vis_spr[s].empty()) or (_lawn_a > 0.004 and s < SLICES)
 		if not any:
 			for e in _vis:
 				if e[1]["sl"][s] != null:
@@ -790,7 +916,13 @@ func _by_lane(a, b) -> bool:
 	return a["lane"] < b["lane"]
 
 
+# How much of the spoil heap lies at a lane: all of it round the nest mouth, none toward the back and the front lip.
+static func _heap_k(lane: float) -> float:
+	return 1.0 - smoothstep(0.1, 0.3, abs(lane - HEAP_LANE))
+
+
 func _lane_col(lane: float, mfv: float, i: int, j: int, slope: float = 0.0) -> Color:
+	mfv *= _heap_k(lane)
 	var t = clamp(lane, 0.0, 1.0)
 	var col = _P["gb"].linear_interpolate(_P["gf"], t)
 	var n = sin((i) * 0.11 + j * 1.7) * 0.022 + (0.018 if j % 2 == 0 else -0.018)
@@ -824,9 +956,10 @@ func _build_snow(ci: int, ch: Dictionary):
 		var lb = -0.11 + 1.13 * float(j + 1) / rows
 		var ca = cool.linear_interpolate(white, clamp(la, 0.0, 1.0))
 		var cb = cool.linear_interpolate(white, clamp(lb, 0.0, 1.0))
+		var hk = _heap_k((la + lb) * 0.5)
 		for i in CH:
-			var m0 = 1.0 - clamp(mf[i] * 1.6, 0.0, 1.0)
-			var m1 = 1.0 - clamp(mf[i + 1] * 1.6, 0.0, 1.0)
+			var m0 = 1.0 - clamp(mf[i] * hk * 1.6, 0.0, 1.0)
+			var m1 = 1.0 - clamp(mf[i + 1] * hk * 1.6, 0.0, 1.0)
 			if m0 <= 0.01 and m1 <= 0.01:
 				continue
 			var xa = (c0 + i) * C
@@ -845,7 +978,7 @@ func _build_snow(ci: int, ch: Dictionary):
 		for i in CH + 1:
 			var colx = c0 + i
 			var nz = 0.5 + 0.5 * sin(colx * 0.083 + j * 2.3) * sin(colx * 0.029 + j * 1.1 + 0.7)
-			var thick = (2.0 + 13.0 * nz * nz) * dps * (1.0 - clamp(mf[i] * 3.0, 0.0, 1.0))
+			var thick = (2.0 + 13.0 * nz * nz) * dps * (1.0 - clamp(mf[i] * _heap_k(dl) * 3.0, 0.0, 1.0))
 			var yy = lane_y(sy[i], dl) - 1.5 * dps * nz + sin(colx * 0.21 + j) * 0.8
 			dp.append(Vector2(colx * C, yy))
 			dpl.append(Vector2(colx * C, yy + 2.0 * dps))
@@ -859,7 +992,7 @@ func _build_snow(ci: int, ch: Dictionary):
 	var wl := PoolRealArray()
 	var wl2 := PoolRealArray()
 	for i in CH + 1:
-		var bare = mf[i] > 0.3
+		var bare = mf[i] * _heap_k(1.0) > 0.3
 		if not bare:
 			run.append(Vector2((c0 + i) * C, sy[i] - 2.5))
 			run_lo.append(Vector2((c0 + i) * C, sy[i] + 3.0))
@@ -899,9 +1032,9 @@ func _band(mk, c0: int, sy: PoolRealArray, mf: PoolRealArray) -> void:
 	for i in range(0, CH, 3):
 		var col = c0 + i
 		var h = MK.hash1(col * 1.7)
-		if h < 0.5 or mf[i] > 0.3:
-			continue
 		var lane = MK.hash1(col * 3.1)
+		if h < 0.5 or mf[i] * _heap_k(lane) > 0.3:
+			continue
 		var p = Vector2(col * C, lane_y(sy[i], lane))
 		var sz = (12.0 + 18.0 * MK.hash1(col * 5.3)) * persp(lane)
 		mk.ellipse(p, sz, sz * 0.3, Color(1, 1, 1, 0.07) if h > 0.78 else Color(0.18, 0.33, 0.08, 0.11), 10)
@@ -923,7 +1056,8 @@ func _band(mk, c0: int, sy: PoolRealArray, mf: PoolRealArray) -> void:
 			var lane1 = MK.hash1(col2 * 3.7 + k * 5.3)
 			var p1 = Vector2(col2 * C + h1 * C, lane_y(sy[i], lane1))
 			var ps = persp(lane1)
-			if mf[i] > 0.3:
+			var mh = mf[i] * _heap_k(lane1)
+			if mh > 0.3:
 				mk.ellipse(p1, (1.3 + 1.7 * h1) * ps, (1.0 + 1.2 * h1) * ps, Color("#6b4426") if h1 > 0.55 else Color("#c9935c"), 6)
 				if k == 0 and MK.hash1(col2 * 4.9 + 3.0) > 0.9:
 					# a clod of packed earth with a dark rim and a lit top
@@ -931,9 +1065,9 @@ func _band(mk, c0: int, sy: PoolRealArray, mf: PoolRealArray) -> void:
 					mk.ellipse(p1 + Vector2(0, 1.0 * ps), cr * 1.15, cr * 0.78, Color(0.2, 0.11, 0.06, 0.8), 9)
 					mk.ellipse(p1, cr, cr * 0.7, Color("#8d5f38").linear_interpolate(Color("#b8834f"), h1), 9)
 					mk.ellipse(p1 + Vector2(-cr * 0.25, -cr * 0.22), cr * 0.5, cr * 0.3, Color(1.0, 0.9, 0.7, 0.35), 7)
-			elif mf[i] < 0.2:
+			elif mh < 0.2:
 				mk.blade(p1, (h1 - 0.5) * 5.0, (3.0 + 5.0 * h1) * ps, 1.7 * ps + 0.4, _sg(BLADES[0]), _sg(BLADES[int(h1 * 2.99)]))
-		if mf[i] < 0.2 and MK.hash1(col2 * 2.37 + 4.0) > 0.86 - 0.45 * float(_P["autumn"]):
+		if mf[i] * _heap_k(MK.hash1(col2 * 8.1)) < 0.2 and MK.hash1(col2 * 2.37 + 4.0) > 0.86 - 0.45 * float(_P["autumn"]):
 			var lane2 = MK.hash1(col2 * 8.1)
 			var p2 = Vector2(col2 * C, lane_y(sy[i], lane2))
 			var ps2 = persp(lane2)
@@ -954,15 +1088,15 @@ func _decor(sl: Array, shade, band, c0: int, sy: PoolRealArray, mf: PoolRealArra
 		var h0 = MK.hash1(col * 3.17 + 0.5)
 		# meadow patches: thick grass in some stretches, thin in others (a smooth function of the column, so it flows over chunk edges)
 		var patch = 0.5 + 0.5 * sin(col * 0.047 + 1.3) * sin(col * 0.0173 + 0.4)
-		if h0 > 0.12 + 0.62 * patch or mf[i] > 0.25:
+		var lane = fposmod(col * 0.618034 + 0.2 * MK.hash1(col * 5.71 + 2.0), 1.0)      # spread evenly through the depth, not in random clumps and gaps
+		if h0 > 0.12 + 0.62 * patch or mf[i] * _heap_k(lane) > 0.25:
 			continue
 		var near = false
 		for ex in ents:
-			if abs(col - ex) < 9:
+			if abs(col - ex) < 9 and abs(lane - HEAP_LANE) < 0.22:
 				near = true
 		if near or abs(col - _pit_x) < PIT_COLS:
 			continue
-		var lane = fposmod(col * 0.618034 + 0.2 * MK.hash1(col * 5.71 + 2.0), 1.0)      # spread evenly through the depth, not in random clumps and gaps
 		var px = (col + MK.hash1(col * 9.1)) * C
 		var p = Vector2(px, lane_y(_sy_at(sy, c0, px, C), lane))
 		var ps = persp(lane)
@@ -1006,7 +1140,7 @@ func _decor(sl: Array, shade, band, c0: int, sy: PoolRealArray, mf: PoolRealArra
 	for i in range(0, CH, 6):
 		var col2 = c0 + i
 		var patch2 = 0.5 + 0.5 * sin(col2 * 0.047 + 1.3) * sin(col2 * 0.0173 + 0.4)
-		if mf[i] > 0.25 or MK.hash1(col2 * 4.4 + 1.0) > 0.25 + 0.6 * patch2:
+		if MK.hash1(col2 * 4.4 + 1.0) > 0.25 + 0.6 * patch2:
 			continue
 		var lane2 = 1.03 + 0.12 * MK.hash1(col2 * 6.1)
 		var px2 = (col2 + MK.hash1(col2 * 2.9)) * C
@@ -1066,11 +1200,12 @@ func _scenery_add(spr: Array, shade, kind: String, col: int, c0: int, sy: PoolRe
 		if abs(o["x"] - px) < (o["size"].x + size.x) * 0.32:
 			return false                               # never two in a heap
 	var reach = int(ceil(size.x * 0.5 / C)) + 2
+	var hk = _heap_k(lane)
 	for en in g.entrances:
-		if abs(col - int(en.x)) < reach + 8:
-			return false                               # clear of the nest mouths
+		if hk > 0.1 and abs(col - int(en.x)) < reach + 8:
+			return false                               # clear of the nest mouths (at their own depth)
 	for xx in range(col - reach, col + reach + 1, 2):
-		if g.mound_h(xx) > 0.2:
+		if g.mound_h(xx) * hk > 0.2:
 			return false                               # and of the bare spoil heaps
 	var by = lane_y(_sy_at(sy, c0, px, C), lane) + 2.0 * ps
 	var foot = Vector2(float(def["foot"][0]), float(def["foot"][1])) * k
