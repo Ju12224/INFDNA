@@ -55,6 +55,7 @@ var _t := 0.0
 var _chunks := {}            # chunk index -> {band, shade, sl[], sy, oy, t}
 var _stale := {}
 var _vis := []               # [chunk index, chunk] for the chunks in view
+var _vis_spr := []           # per slice: the drawn scenery (bushes, ferns, mushrooms) of the chunks in view
 var _fcache := {}            # feature id -> {mesh, shade, slice, x0, x1}
 var _flist := []
 var _flist_key := -999999
@@ -189,6 +190,14 @@ func prepare(cols: Array, t: float) -> void:
 				_stale.erase(ci)
 		if ch != null:
 			_vis.append([ci, ch])
+	# the drawn scenery of the chunks in view, per slice (gathered once a frame, not once per slice drawn)
+	_vis_spr = []
+	for s in SLICES + 1:
+		_vis_spr.append([])
+	for e in _vis:
+		var by_slice = e[1].get("spr", {})
+		for s2 in by_slice.keys():
+			_vis_spr[s2].append_array(by_slice[s2])
 	if _chunks.size() > 70:
 		for ci in _chunks.keys():
 			if ci < c_lo - 14 or ci > c_hi + 14:
@@ -288,11 +297,14 @@ func draw_slice(ci: CanvasItem, s: int) -> void:
 			continue
 		var sw = amp * sin(_t * 1.15 + e[0] * 1.7 + s * 0.45)
 		ci.draw_mesh(m, null, null, Transform2D(Vector2(1, 0), Vector2(sw, 1), Vector2(-sw * e[1]["oy"], 0)))
+	var lst = _vis_spr[s] if s < _vis_spr.size() and detail > 0 else []
+	if lst.empty() and _vis_f[s].empty():
+		return
 	# how close the camera is (a zoom below 1 is a magnified view) and what part of the world it sees: only what is in view is drawn
 	var ct = ci.get_canvas_transform()
 	var z = 1.0 / max(0.01, ct.get_scale().x)
 	var vr = ct.affine_inverse().xform(Rect2(Vector2.ZERO, ci.get_viewport_rect().size))
-	if detail > 0:
+	if not lst.empty():
 		var gust0 = 1.0 + 1.6 * sim.rain
 		var shk = -1.0
 		var au0 = day.autumn if day != null else 0.0
@@ -301,19 +313,15 @@ func draw_slice(ci: CanvasItem, s: int) -> void:
 			var yp = Seasons.phase(day.sea_t)
 			berry = smoothstep(0.38, 0.44, yp) * (1.0 - smoothstep(0.71, 0.76, yp))      # berries from late summer through autumn
 		var n_drawn = 0
-		for e in _vis:
-			var lst = e[1].get("spr", {}).get(s)
-			if lst == null:
+		for it in lst:
+			n_drawn += 1
+			if detail == 1 and n_drawn % 2 == 0:
 				continue
-			for it in lst:
-				n_drawn += 1
-				if detail == 1 and n_drawn % 2 == 0:
-					continue
-				if it["x"] + it["size"].x < vr.position.x or it["x"] - it["size"].x > vr.end.x:
-					continue
-				if it["kind"] == "shroom" and shk < 0.0:
-					shk = _shroom_k()
-				_draw_scenery(ci, it, gust0, shk, au0, berry)
+			if it["x"] + it["size"].x < vr.position.x or it["x"] - it["size"].x > vr.end.x:
+				continue
+			if it["kind"] == "shroom" and shk < 0.0:
+				shk = _shroom_k()
+			_draw_scenery(ci, it, gust0, shk, au0, berry)
 		ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if _vis_f[s].empty():
 		return
@@ -728,10 +736,10 @@ func _rock_sprite(f: Dictionary):
 func visible_slices() -> Array:
 	var out := []
 	for s in SLICES + 1:
-		var any = not _vis_f[s].empty()
+		var any = not _vis_f[s].empty() or (s < _vis_spr.size() and not _vis_spr[s].empty())
 		if not any:
 			for e in _vis:
-				if e[1]["sl"][s] != null or e[1].get("spr", {}).has(s):
+				if e[1]["sl"][s] != null:
 					any = true
 					break
 		if any:

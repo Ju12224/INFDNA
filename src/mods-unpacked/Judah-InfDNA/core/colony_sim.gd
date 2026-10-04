@@ -1733,9 +1733,9 @@ func _step_ant(a, dt: float) -> void:
 		var moved = a.tx != a.x or a.ty != a.y
 		if moved:
 			# note the step in the gait word, and slow down for a sharp turn
-			var mx = a.tx - a.x
-			var my = a.ty - a.y
-			var code = Loco.DIR_OF[(4 if my > 0 else (-2 if my < 0 else 1)) + (1 if mx > 0 else (-1 if mx < 0 else 0)) + 3]
+			var sx = 1 if a.tx > a.x else (-1 if a.tx < a.x else 0)
+			var sy = 1 if a.ty > a.y else (-1 if a.ty < a.y else 0)
+			var code = Loco.DIR_OF[(sy + 1) * 3 + sx + 1]
 			var gait = a.scout
 			var last = gait & Loco.DIR_MASK
 			var r = (gait >> Loco.RAMP_SHIFT) & 255
@@ -1748,17 +1748,17 @@ func _step_ant(a, dt: float) -> void:
 		if (moved or a.tz != a.z) and a.dig_timer <= 0.0:
 			dist = a.hop if a.hop > 0.0 else (1.4142 if (a.tx != a.x and a.ty != a.y) else 1.0)
 			a.t = min(over / dist, 1.6)
-			if a.ty > grid.surf_y_hint and occ.size() == grid.PLANES * grid.WH:
+			if occ.size() == grid.PLANES * grid.WH:
 				_mark_step(a)
 		else:
 			a.scout = a.scout & Loco.NO_RAMP      # standing: it will set off slowly
 			break
 
 
-# The body's target tilt and the way the ant faces, set once per step. On open ground: the smoothed hill, and left/right is the screen direction. In
-# the tunnels: the floor under its feet (the nearest solid ground), facing the way the step goes along the body. Where the walls of a shaft or crack
+# The body's target tilt and the way the ant faces, for the step it is on. On open ground: the smoothed hill, and left/right is the screen direction.
+# In the tunnels: the floor under its feet (the nearest solid ground), facing the way the step goes along the body. Where the walls of a shaft or crack
 # cancel out, or it climbs a chimney or scrambles a ledge, the body lies along the way it is going (it used to go up a shaft lying flat, like a lift).
-# A plain vertical step on level ground never turns it round. Also notes the step in the gait word and slows the ant for a sharp turn.
+# A plain vertical step on level ground never turns it round.
 func _orient(a) -> void:
 	var mx = a.tx - a.x
 	var my = a.ty - a.y
@@ -1771,7 +1771,7 @@ func _orient(a) -> void:
 		else:
 			th = atan2(f * my, f * mx)
 	else:
-		# the rock round the cell it came from, this cell and the next together: one odd cell at a bend no longer turns the ant over and back
+		# the rock round the cell behind, this cell and the next together: one odd cell at a bend no longer turns the ant over and back
 		var n = _floor_dir(a.tx, a.ty, a.tz)
 		var roof = -2.0                 # how much more rock above than below makes a real roof
 		if a.tz == a.z:
@@ -1800,13 +1800,6 @@ func _orient(a) -> void:
 			th = atan2(f * my, f * mx)
 	a.trot = th
 	a.facing = f
-	var gait = a.scout
-	var code = Loco.dir_code(mx, my)
-	var r = (gait >> Loco.RAMP_SHIFT) & 255
-	var last = gait & Loco.DIR_MASK
-	if last != 0 and last != Loco.PLANE_STEP:
-		r = int(min(r, RAMP_CAP[Loco.TURN[last * 9 + code]]))
-	a.scout = (gait & Loco.DEBT_MASK) | code | (r << Loco.RAMP_SHIFT)
 
 
 # Solid cells round (x, y) in plane z: (sum of their offsets x, y; how many) - the raw ground normal and how boxed in the cell is.
@@ -1837,12 +1830,14 @@ func _floor_dir(x: int, y: int, z: int) -> Vector3:
 # others then choose a free cell beside it where there is one (Loco.descend), and one that has to follow into a taken cell slows down behind it, or
 # squeezes past it slowly, instead of walking on through it.
 func _mark_step(a) -> void:
-	if not grid.inb(a.tx, a.ty):
+	var g = grid
+	var xl = a.tx - g.ox
+	if xl < 0 or xl >= g.W or a.ty < 0 or a.ty >= g.H:
 		return
-	var j = a.ty * grid.W + (a.tx - grid.ox)
-	if grid.under[j] != 1:
+	var j = a.ty * g.W + xl
+	if g.under[j] != 1:
 		return
-	var i = a.tz * grid.WH + j
+	var i = a.tz * g.WH + j
 	var q = int(time * 10.0)
 	var o = occ[i]
 	var me = a.id & 4095
