@@ -37,9 +37,14 @@ const CURTAIN_H = [36.0, 58.0, 51.0]   # height of each curtain's strip at scale
 									   # to about the next curtain's foot, so zoomed out the meadow is closed grass
 const CURTAIN_SHADE = [0.86, 0.93, 1.0]
 const SWAY = 0.035             # wind: the tips of a curtain sway this share of its height
+const TRAMPLE = [0.0, 0.85, 0.7]       # round a nest mouth the ants have trodden the grass down: curtain heights lose this share there ...
+const TRAMPLE_COVER = 0.6              # ... and the cover row's
+const CLEAR_IN = 8.0           # cells from a mouth where the clearing is fully trodden ...
+const CLEAR_OUT = 20.0         # ... and where the grass stands full again
 const COVER_H = 26.0           # the cover row's height at scale 1 ...
 const COVER_GROW = 0.8         # ... grown by this much as the cut moves COVER_SPAN lanes into the band ...
 const COVER_SPAN = 6.0
+const COVER_ROOM = 0.45        # zoomed in, the cover row's blades reach at most this share of the way up to the focus lane
 const COVER_DARK = 0.22        # ... darkened by this much, and blurred by up to COVER_BLUR (mip bias)
 const COVER_BLUR = 0.6
 const RIM = 3.0                # world px the cover row's foot reaches below the soil's top edge, hiding it
@@ -254,6 +259,14 @@ func _far(c: int) -> float:
 	return _fcache[c]
 
 
+# 1 in the trodden clearing round a nest mouth, 0 where the grass stands full.
+func _clearing(px: float) -> float:
+	var c := 0.0
+	for en in colony.grid.entrances:
+		c = max(c, 1.0 - smoothstep(CLEAR_IN, CLEAR_OUT, abs(px / C - 0.5 - float(en.x))))
+	return c
+
+
 # The soil's top as dug at world x (px).
 func _lip(px: float) -> float:
 	var g = colony.grid
@@ -317,8 +330,11 @@ func _draw_items(it: Node2D, n: int) -> void:
 			"curtain":
 				it.draw_set_transform(Vector2.ZERO)
 				_draw_curtain(it.get_canvas_item(), f[2], true)
+	var w = colony.views.get("weather")
+	if w != null and w.has_method("draw_lane"):
+		w.draw_lane(it, n)                      # ground decals (puddles, lying snow) first, under whatever stands in the lane
 	for v in colony.views.values():
-		if v != self and v.has_method("draw_lane"):
+		if v != self and v != w and v.has_method("draw_lane"):
 			v.draw_lane(it, n)
 	it.draw_set_transform(Vector2.ZERO)
 
@@ -355,12 +371,14 @@ func _draw_curtain(rid: RID, i: int, lit: bool) -> void:
 		var bx = cx + (x - cx) * s
 		var rel = clamp((x - cx) / half, -1.3, 1.3)
 		var sway = SWAY * h * (0.6 * sin(_t * 1.1 + x * 0.013 + i * 1.7) + 0.4 * sin(_t * 2.3 - x * 0.029 + i))
-		xt.append(bx + 0.9 * rel * pt * up + sway)
-		yt.append(line - up)
+		var sunk = TRAMPLE[i] * _clearing(x) * up           # trodden down: only its upper blades show, as drawn
+		var tall = up + (1.0 - VLINE) * h
+		xt.append(bx + 0.9 * rel * pt * (up - sunk) + sway)
+		yt.append(line - up + sunk)
 		xb.append(bx)
 		yb.append(line + (1.0 - VLINE) * h)
 		us.append(x / w + i * 0.37)
-		vb.append(V1)
+		vb.append(lerp(V0, V1, 1.0 - sunk / tall))
 		x += step
 	var col = colony.day.tint * CURTAIN_SHADE[i]
 	if not lit:
@@ -392,13 +410,18 @@ func _cover_rows(it: Node2D, under: bool) -> void:
 	var k = _cover_k()
 	var h = COVER_H * p * (1.0 + COVER_GROW * k)
 	var fill = smoothstep(FILL_FROM, FILL_TO, n)
+	if fill > 0.0:            # keep the lanes between the cut and the focus in sight
+		var room = COVER_ROOM * (Band.raise(Band.lane_of(Band.focus)) - Band.raise(lane)) / VLINE
+		h = lerp(h, clamp(room, COVER_H * p * 0.5, h), fill)
 	var view = colony.view_rect(0.0)
 	var step = _step()
 	var x0 = floor((view.position.x - step) / step) * step
 	var lines := PackedFloat32Array()
 	var bottoms := PackedFloat32Array()
+	var trod := PackedFloat32Array()
 	var x = x0
 	while x <= view.end.x + step:
+		trod.append(1.0 - TRAMPLE_COVER * (1.0 - fill) * _clearing(x))    # (zoomed in, the rows close to the camera are not trodden)
 		var gy = ground_y(x, COVER_SMOOTH)
 		var line = Band.lane_y(gy, lane)
 		lines.append(line)
@@ -408,21 +431,23 @@ func _cover_rows(it: Node2D, under: bool) -> void:
 		else:
 			bottoms.append(lerp(min(lip, gy) + RIM, view.end.y + 8.0, fill))
 		x += step
-	# the cover row, then rows nearer the camera than it (lower, in front of it), while any of them shows above the bottom
+	# the cover row, then rows nearer the camera than it, each bigger, its tips lower by part of the one before, while any shows above
+	# the bottom: [offset of its line below the cover row's, height, shade, u offset]
 	var rows := [[0.0, h, 1.0, 0.11]]
-	var y = 0.0
-	for i in range(1, 5):
-		if under:
+	var tip = -VLINE * h
+	for i in range(1, 6):
+		if under or fill <= 0.0:
 			break
-		y += 0.5 * h * (1.0 + 0.25 * i)
+		tip += 0.45 * rows[i - 1][1]
+		var hi = h * (1.0 + 0.25 * i)
 		var any := false
 		for j in lines.size():
-			if lines[j] + y - VLINE * h * (1.0 + 0.2 * i) < bottoms[j]:
+			if lines[j] + tip < bottoms[j]:
 				any = true
 				break
 		if not any:
 			break
-		rows.append([y, h * (1.0 + 0.2 * i), 1.0 - 0.1 * i, i * 0.29])
+		rows.append([tip + VLINE * hi, hi, 1.0 - 0.09 * i, i * 0.29])
 	var rid = it.get_canvas_item()
 	for r in rows:
 		var hh: float = r[1]
@@ -439,7 +464,7 @@ func _cover_rows(it: Node2D, under: bool) -> void:
 		for j in lines.size():
 			var xx = x0 + j * step
 			var line = lines[j] + r[0]
-			var top = line - VLINE * hh
+			var top = line - VLINE * hh * trod[j]              # trodden down: sunk, only its upper blades show
 			var b = bottoms[j]
 			var foot = min(line + (1.0 - VLINE) * hh, b)
 			xs.append(xx)
