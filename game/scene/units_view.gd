@@ -48,7 +48,7 @@ const MARGIN = 80.0                        # world px past the view an ant can s
 const LANE_BUCKETS = 16
 
 var colony
-var _bodies := {}          # picture name -> {tex, feet, length, jaw, mid (x halfway from tail to nose)} in the picture's pixels
+var _bodies := {}          # picture name -> {tex, feet, length; jaw, mid (x halfway from tail to nose) from the feet} in picture pixels
 var _foods := []           # [{tex, size}]: size in world px for a FOOD_REF-long worker
 var _state := {}           # ant id -> Vector3(surface 0..1, drawn lane, drawn facing), kept only for ants near the view
 var _dt := 0.016
@@ -62,9 +62,10 @@ func _ready() -> void:
 		var tex = Art.tex(p["file"]) if p != null else null
 		if tex == null:
 			continue
-		var nose = Vector2(p["nose"][0], p["nose"][1])
-		_bodies[name] = {"tex": _mipmapped(tex), "feet": Vector2(p["feet"][0], p["feet"][1]), "length": float(p["length"]),
-			"jaw": nose + Vector2(0, JAW_DOWN * float(p["length"])), "mid": (nose.x + float(p["tail"][0])) * 0.5}
+		var feet = Vector2(p["feet"][0], p["feet"][1])
+		var nose = Vector2(p["nose"][0], p["nose"][1]) - feet
+		_bodies[name] = {"tex": _mipmapped(tex), "feet": feet, "length": float(p["length"]),
+			"jaw": nose + Vector2(0, JAW_DOWN * float(p["length"])), "mid": (nose.x + float(p["tail"][0]) - feet.x) * 0.5}
 	var fauna = Art.manifest("fauna_manifest.json").get("items", {})
 	for name in FOODS:
 		var f = fauna.get(name)
@@ -207,7 +208,7 @@ func _draw_queen(vr: Rect2, far: float) -> void:
 	while y < lim and not g.is_solid(cx, y, 0):
 		y += 1
 	var s = QUEEN_LEN * far / b["length"]
-	var feet = Vector2((cx + 0.5) * C + (b["feet"].x - b["mid"]) * s, y * C)
+	var feet = Vector2((cx + 0.5) * C - b["mid"] * s, y * C)
 	if not vr.has_point(feet):
 		return
 	draw_set_transform(feet, 0.0, Vector2(s, s))
