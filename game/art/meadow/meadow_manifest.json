@@ -1,5 +1,5 @@
 {
- "_about": "The owner's meadow kit, cut by tools/art/make_meadow.py. Sizes in pixels; src is the box on the sheet.",
+ "_about": "The owner's meadow_kit.png, cut by tools/art/make_kit.py. Sizes in pixels; src is the box on the sheet.",
  "pieces": [
   {
    "name": "m_000",
