@@ -68,6 +68,8 @@ func _settle() -> Dictionary:
 	lab["bank"] = int(lab["bank"]) + int(out["earn"].back()[1])
 	lab["items"] = {}                         # the Lab items went into this colony and fell with it
 	lab["raids"] = sim.raid_n
+	lab["offers"] = []                        # a new visit, new offers
+	lab["rerolls"] = 0
 	ShopItems.lab_save(lab)
 	out["bank"] = lab["bank"]
 	Run.items = {}

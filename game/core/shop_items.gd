@@ -170,7 +170,8 @@ static func lab_pool() -> Array:
 	return out
 
 
-# {"bank": food to spend, "items": {id: count} bought for the next colony, "raids": raids the last colony saw (better tiers)}
+# {"bank": food to spend, "items": {id: count} bought for the next colony, "raids": raids the last colony saw (better tiers),
+#  "offers": the Lab's current offers ("" = bought), "rerolls": rerolls since the last colony fell (each costs more)}
 static func lab_load() -> Dictionary:
 	var d = null
 	if FileAccess.file_exists(LAB_PATH):
@@ -183,7 +184,48 @@ static func lab_load() -> Dictionary:
 		for id in items.keys():
 			if ITEMS.has(id) and int(items[id]) > 0:
 				clean[id] = int(items[id])
-	return {"bank": int(max(0, int(d.get("bank", 0)))), "items": clean, "raids": int(d.get("raids", 0))}
+	var offers := []
+	var o = d.get("offers", [])
+	if o is Array:
+		for id in o:
+			offers.append(str(id) if (str(id) == "" or ITEMS.has(str(id))) else "")
+	return {"bank": int(max(0, int(d.get("bank", 0)))), "items": clean, "raids": int(d.get("raids", 0)), "offers": offers,
+		"rerolls": int(d.get("rerolls", 0))}
+
+
+# A fresh set of offers from the items with icons, rarer tiers likelier after a colony that saw many raids (`raids`).
+static func lab_roll(raids: int, items: Dictionary, rng: RandomNumberGenerator) -> Array:
+	var tw = tier_weights(raids)
+	var pool := []
+	var weights := []
+	for id in lab_pool():
+		var it = ITEMS[id]
+		if it.has("max") and int(items.get(id, 0)) >= int(it["max"]):
+			continue
+		if tw[it["tier"]] <= 0.0:
+			continue
+		pool.append(id)
+		weights.append(tw[it["tier"]])
+	var out := []
+	while out.size() < LAB_OFFERS and not pool.is_empty():
+		var tot := 0.0
+		for w in weights:
+			tot += w
+		var roll = rng.randf() * tot
+		var j = weights.size() - 1
+		for k in weights.size():
+			roll -= weights[k]
+			if roll <= 0.0:
+				j = k
+				break
+		out.append(pool[j])
+		pool.remove_at(j)
+		weights.remove_at(j)
+	return out
+
+
+static func lab_reroll_cost(rerolls: int) -> int:
+	return 5 + 4 * rerolls
 
 
 static func lab_save(d: Dictionary) -> void:

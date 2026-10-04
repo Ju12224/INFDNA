@@ -506,12 +506,15 @@ func _free_selection() -> void:
 	_say(("%d ant%s let go: back to their own work." % [n, "" if n == 1 else "s"]) if n > 0 else "None of the selected ants are under orders.")
 
 
-# Breed and mutagen take this ant: the one asked about (under the cursor), else the selection's first.
+# Breed and mutagen take this ant: the one asked about (under the cursor), else the most mutated of the selection.
 func _breed_source(under):
 	if under != null:
 		return under
-	var sel = selection()
-	return sel[0] if not sel.is_empty() else null
+	var best = null
+	for a in selection():
+		if best == null or colony.sim.ms_of(a) > colony.sim.ms_of(best):
+			best = a
+	return best
 
 
 func _cast(id: String, col: int, ant) -> void:
@@ -613,7 +616,8 @@ func _build_menu() -> void:
 		b.add_theme_stylebox_override("hover", _hover_sb)
 		b.add_theme_stylebox_override("pressed", _hover_sb)
 		b.add_theme_stylebox_override("hover_pressed", _hover_sb)
-		b.tooltip_text = "What the queen's eggs lean toward (%s cycles)." % OS.get_keycode_string(KEY_CASTE)
+		b.mouse_entered.connect(_hover.bind("What the queen's eggs lean toward: %s.  (%s cycles)" % [CASTE_NAMES[i].to_lower(), OS.get_keycode_string(KEY_CASTE)]))
+		b.mouse_exited.connect(_hover.bind(""))
 		b.pressed.connect(_set_caste.bind(i))
 		brood.add_child(b)
 		_caste_btns.append(b)
@@ -631,6 +635,8 @@ func _row(parent: Control, id: String, icon_path: String) -> Dictionary:
 	b.add_theme_stylebox_override("hover", _hover_sb)
 	b.add_theme_stylebox_override("pressed", _hover_sb)
 	b.pressed.connect(_choose.bind(id))
+	b.mouse_entered.connect(_hover_row.bind(id))
+	b.mouse_exited.connect(_hover.bind(""))
 	parent.add_child(b)
 	var line := HBoxContainer.new()
 	line.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -642,7 +648,7 @@ func _row(parent: Control, id: String, icon_path: String) -> Dictionary:
 	line.add_child(_icon(icon_path, 28))
 	var nm = _label("", 17, INK)
 	nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	nm.clip_text = true
+	nm.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	line.add_child(nm)
 	var key = _label("", 15, DIM)
 	key.custom_minimum_size.x = 22
@@ -660,7 +666,15 @@ func _row(parent: Control, id: String, icon_path: String) -> Dictionary:
 	line.add_child(food)
 	var food_i = _icon(FOOD_ICON, 20)
 	line.add_child(food_i)
-	return {"btn": b, "line": line, "name": nm, "key": key, "will": will, "will_i": will_i, "food": food, "food_i": food_i}
+	return {"btn": b, "line": line, "name": nm, "key": key, "will": will, "will_i": will_i, "food": food, "food_i": food_i, "tip": ""}
+
+
+func _hover(tip: String) -> void:
+	_tip = tip
+
+
+func _hover_row(id: String) -> void:
+	_tip = str(_rows[id]["tip"])
 
 
 # will < 0: no Will cost; food < 0: no food cost; cd > 0: recharging (the seconds show instead of the costs).
@@ -668,7 +682,7 @@ func _set_row(id: String, label: String, key: String, will: float, food: float, 
 	var r = _rows[id]
 	r["btn"].visible = true
 	r["btn"].disabled = not ok
-	r["btn"].tooltip_text = tip
+	r["tip"] = tip
 	r["line"].modulate = Color(1, 1, 1, 1.0 if ok else OFF)
 	r["name"].text = label
 	r["key"].text = key
@@ -704,6 +718,7 @@ func _open_menu(screen_pos: Vector2, t: Dictionary) -> void:
 func _close_menu() -> void:
 	if _menu != null:
 		_menu.visible = false
+	_tip = ""
 
 
 func is_menu_open() -> bool:
@@ -736,7 +751,7 @@ func _refresh_menu() -> void:
 		for a in sel:
 			if a.squad != 0:
 				ordered += 1
-		_set_row("free", "Free these ants  (%d under orders)" % ordered, OS.get_keycode_string(KEY_FREE), -1.0, -1.0, 0.0, ordered > 0,
+		_set_row("free", "Free them  (%d on orders)" % ordered, OS.get_keycode_string(KEY_FREE), -1.0, -1.0, 0.0, ordered > 0,
 			"They go home and choose their own work again.")
 	# the powers
 	var ant = _breed_source(t.get("ant"))
@@ -760,7 +775,7 @@ func _refresh_menu() -> void:
 					label = "Harvest the nearest pile"
 			"breed":
 				if ant != null:
-					label = "Breed from this ant  (mutation %d)" % int(sim.ms_of(ant))
+					label = "Breed from %s  (mutation %d)" % ["this ant" if ant == t.get("ant") else "the selection", int(sim.ms_of(ant))]
 			"strike":
 				if not sim.rival.found:
 					ok = false
@@ -772,11 +787,11 @@ func _refresh_menu() -> void:
 					label = "Strike the %s" % sim.rival.name
 		_set_row(id, label, str(c["key"]), cost, fc, cd, ok, tip)
 	var bcd = float(sim._beacon_cd)
-	_set_row("beacon", "Scent flag here: scouts search it", OS.get_keycode_string(KEY_BEACON), -1.0, sim.BEACON_FOOD, bcd,
+	_set_row("beacon", "Scent flag here", OS.get_keycode_string(KEY_BEACON), -1.0, sim.BEACON_FOOD, bcd,
 		bcd <= 0.0 and sim.food >= sim.BEACON_FOOD + sim.FOOD_RESERVE,
 		"Foragers leaving the nest are drawn to the flag and search around it. Two at a time, 25 s recharge.")
 	var mg = int(sim.mutagen)
-	var ml = ("Mutagen this ant  (%d left)" % mg) if ant != null else ("Mutagen  (%d left): pick an ant" % mg)
+	var ml = ("Mutagen  (%d left)" % mg) if ant != null else ("Mutagen: pick an ant  (%d left)" % mg)
 	_set_row("mutagen", ml, OS.get_keycode_string(KEY_MUTAGEN), -1.0, -1.0, 0.0, mg > 0 and ant != null,
 		"The next 8 eggs are bred from this ant, each with a fresh mutation. Earn mutagen by repelling raids and reaching goals.")
 	for i in _caste_btns.size():
@@ -841,7 +856,9 @@ func _build_status() -> void:
 
 func _update_status() -> void:
 	var text := ""
-	if _msg_t > 0.0:
+	if _tip != "" and _menu.visible:
+		text = _tip
+	elif _msg_t > 0.0:
 		text = _msg
 	elif not selected.is_empty():
 		var sel = selection()

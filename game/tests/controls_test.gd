@@ -92,6 +92,8 @@ func _process(_delta: float) -> bool:
 		var p = _node.get_viewport_rect().size * Vector2(0.45, 0.4)
 		_mouse_button(MOUSE_BUTTON_RIGHT, p, true)
 		_mouse_button(MOUSE_BUTTON_RIGHT, p, false)
+	elif _f == 36:
+		_mouse_move(_ctl._rows["rally"]["btn"].get_global_rect().get_center())      # the mouse over Rally: lit, its tip on the bottom line
 	elif _f == 40:
 		_check(_ctl.is_menu_open(), "a right-click with nobody selected opens the Director's menu")
 		_shot("menu")
