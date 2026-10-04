@@ -30,6 +30,7 @@ const UgView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ug_view.
 const DayCycle = preload("res://mods-unpacked/Judah-InfDNA/content/colony/day_cycle.gd")
 const WatchCam = preload("res://mods-unpacked/Judah-InfDNA/content/colony/watch_cam.gd")
 const MeadowDepth = preload("res://mods-unpacked/Judah-InfDNA/content/colony/meadow_depth.gd")
+const BugReport = preload("res://mods-unpacked/Judah-InfDNA/core/bug_report.gd")
 const SELECT_SCENE = "res://mods-unpacked/Judah-InfDNA/content/colony/queen_select.tscn"
 const TITLE_SCENE = "res://ui/menus/title_screen/title_screen.tscn"
 const MAX_STEP = 0.05
@@ -59,6 +60,8 @@ var _ug_view           # ug_view.gd: draws the underground structures
 var _fast_k := 4               # how many cells an unwatched ant covers per decision at 10x (raised when the machine lags)
 var _lag_t := 0.0
 var _ok_t := 0.0
+var _rep_t := 0.0              # the report for the developer (bug_report.gd): checks every few seconds, written every minute
+var _rep_save := 0.0
 var _budget_hit := false
 var _since_speed := 99.0
 var _prune_timer := 10.0
@@ -90,6 +93,8 @@ func _ready() -> void:
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	var qid = Engine.get_meta("infdna_queen") if Engine.has_meta("infdna_queen") else "well_rounded"
 	sim = Sim.new(0, qid, Legacy.active(), Wild.active())
+	BugReport.colony_started()
+	BugReport.stat("last colony queen", str(qid))
 	if sim.kin.empty() and Wild.is_on():
 		sim.toasts.append({"text": "Whatever you breed well will be waiting for you next time: the Wild remembers fallen colonies.", "t": 12.0})
 	perf = Perf.new()
@@ -246,6 +251,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	_report_tick(delta)
 	day.update(sim.time, sim.rain, sim.wet, sim.overcast)
 	# a button released over a panel never reaches _unhandled_input: finish the drag from the real button state
 	if _lmb and not Input.is_mouse_button_pressed(BUTTON_LEFT):
@@ -819,7 +825,59 @@ func go_to_menu() -> void:
 # The art library caches textures in Engine metadata; metadata outlives the script engine at quit and crashed the game on exit,
 # so it is dropped when the colony scene goes away (and on a window close).
 func _exit_tree() -> void:
+	if not BugReport.closing():
+		BugReport.write("left the colony mode")
 	_drop_caches()
+
+
+# The developer's report: the worst frames, peaks, and anything that looks broken (checked every 5 s on a sample, so it costs nothing),
+# written to the Desktop once a minute so a crash still leaves the last state behind.
+func _report_tick(delta: float) -> void:
+	BugReport.frame(delta)
+	_rep_t += delta
+	_rep_save += delta
+	if _rep_save >= 60.0:
+		_rep_save = 0.0
+		BugReport.write("autosave while playing")
+	if _rep_t < 5.0 or sim == null:
+		return
+	_rep_t = 0.0
+	BugReport.stat_max("peak ants", sim.ants.size())
+	BugReport.stat_max("peak enemies", sim.enemies.size())
+	BugReport.stat_max("peak fast hop k", _fast_k)
+	BugReport.stat("last colony sim time s", sim.time)
+	BugReport.stat("last colony speed", speed)
+	if perf != null:
+		BugReport.stat("quality now", perf.label())
+		BugReport.stat_max("worst smoothed frame ms", perf.ft * 1000.0)
+		if perf.mode == 0 and perf.tier <= 1:
+			BugReport.note("perf", "auto quality fell to the lowest tier (frames about %.0f ms, %d ants)" % [perf.ft * 1000.0, sim.ants.size()])
+	var g = sim.grid
+	var lo = g.sim_l() - 2
+	var hi = g.sim_r() + 2
+	var n = sim.ants.size()
+	var stride = max(1, n / 300)
+	var i = int(sim.time * 7.0) % stride
+	while i < n:
+		var a = sim.ants[i]
+		i += stride
+		var p = sim.ant_pos(a)
+		if is_nan(p.x) or is_nan(p.y) or is_inf(p.x) or is_inf(p.y):
+			BugReport.note("ant", "position is not a number (caste %s)" % str(a.caste))
+		elif a.x < lo or a.x > hi or a.y < -2 or a.y > g.H + 2:
+			BugReport.note("ant", "outside the world (caste %s at cell %d,%d; world %d..%d x 0..%d)" % [str(a.caste), a.x, a.y, lo, hi, g.H])
+	for e in sim.enemies:
+		var hp = float(e.hp)
+		if is_nan(hp) or is_inf(hp):
+			BugReport.note("enemy", "%s has broken health" % str(e.kind))
+		elif e.x < lo - 40 or e.x > hi + 40:
+			BugReport.note("enemy", "%s far outside the world (cell %d)" % [str(e.kind), e.x])
+	if sim.toasts.size() > 60:
+		BugReport.note("list", "toasts piling up (%d)" % sim.toasts.size())
+	if sim.piles.size() > 400:
+		BugReport.note("list", "food piles piling up (%d)" % sim.piles.size())
+	if sim.enemies.size() > 400:
+		BugReport.note("list", "enemies piling up (%d)" % sim.enemies.size())
 
 
 func _notification(what: int) -> void:
