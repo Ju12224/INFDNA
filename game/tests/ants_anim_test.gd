@@ -73,7 +73,7 @@ func _report() -> void:
 	full.sort_custom(func(a, b):
 		return Vector2(_series[a][0][6], _series[a][0][7]).distance_to(cx) < Vector2(_series[b][0][6], _series[b][0][7]).distance_to(cx))
 	var sample = full.slice(0, 20)
-	var tot := {"frames": 0, "fallback": 0, "mid": 0, "mid_stand": 0, "mid_still": 0, "moved_nogait": 0, "flips": 0, "static_ants": 0, "mid_ants": 0, "cells": 0}
+	var tot := {"frames": 0, "fallback": 0, "mid": 0, "mid_stand": 0, "mid_still": 0, "moved_nogait": 0, "flips": 0, "static_ants": 0, "mid_ants": 0, "cells": 0, "gait_n": 0, "gait_sum": 0.0, "gait_cap": 0, "jumps": 0}
 	var rows := []
 	for id in sample:
 		var s: Array = _series[id]
@@ -97,6 +97,14 @@ func _report() -> void:
 					mid_still += 1
 			if i > 0:
 				var q = s[i - 1]
+				if r[2]:
+					var dg = r[5] - q[5]
+					tot["gait_n"] += 1
+					tot["gait_sum"] += dg
+					if dg >= 0.1499:
+						tot["gait_cap"] += 1                          # strobing: the walk cycle is capped per frame
+				if Vector2(r[6], r[7]).distance_to(Vector2(q[6], q[7])) > 12.0:
+					tot["jumps"] += 1                                 # drawn spot moved over 12 px in one frame
 				if (r[6] != q[6] or r[7] != q[7]) and r[5] == q[5]:
 					nogait += 1                                   # it moved on screen, the gait did not
 				if r[4] and q[4] and (r[1] == 6) != (q[1] == 6):
@@ -123,6 +131,7 @@ func _report() -> void:
 	out.append("  ... drawn at rest (no screen movement since last frame): %d (%.1f%%)" % [tot["mid_still"], pct.call(tot["mid_still"], tot["mid"])])
 	out.append("  moved on screen but gait did not advance: %d" % tot["moved_nogait"])
 	out.append("  stand<->walk cell flips while mid-step: %d (%.1f per ant-second)" % [tot["flips"], tot["flips"] / max(0.01, tot["mid"] / 60.0)])
+	out.append("  walking frames: mean gait %.3f cycles/frame (cap 0.15), at the cap %d, spot jumps > 12 px: %d" % [tot["gait_sum"] / max(1, tot["gait_n"]), tot["gait_cap"], tot["jumps"]])
 	out.append("  ants mid-step >= 20 frames: %d, of them with one cell all along: %d" % [tot["mid_ants"], tot["static_ants"]])
 	for l in out:
 		print(l)
