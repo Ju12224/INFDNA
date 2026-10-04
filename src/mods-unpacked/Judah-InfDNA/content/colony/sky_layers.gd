@@ -81,7 +81,6 @@ func _draw() -> void:
 	_stage = day.stage if day != null else 0
 	var v = _view()
 	var bd = perf.backdrop if perf != null else 3
-	var first = [5, 3, 1, 0][bd]            # lower quality drops the far layers first
 	var dn = day.night if day != null else 0.0
 	_sky(v)
 	if dn > 0.04 and bd >= 1:
@@ -95,9 +94,9 @@ func _draw() -> void:
 		_cloud_layer(v, 0.05, _wisps, 0.55, 900.0, 640.0, 1.6, 4.0)
 	if bd >= 2:
 		_cloud_layer(v, 0.10, _clouds, 0.95, 640.0, 560.0, 1.0, 9.0)
+	# every hill layer is always drawn (cached meshes, a handful of draw calls): dropping them on a lag spike made the background, trees and
+	# all, blink out; only the sky's extras (clouds, sun, birds) follow the optimizer
 	for i in LAYERS.size():
-		if i < first:
-			continue
 		_layer(v, i)
 		if i == 2 and bd >= 3 and dn < 0.7:
 			_birds(v)
@@ -252,15 +251,31 @@ func _layer(v: Rect2, i: int) -> void:
 				continue
 		if m is Mesh:
 			draw_mesh(m, null)
-	# ambient ants marching along the farmland and hedge ridges (the idea comes from the v0.22 sky)
-	if (i == 3 or i == 6) and s > 0.38 and (perf == null or perf.backdrop >= 2):
-		_bg_ants(i, s, p0, p1)
-	if i >= 3 and (perf == null or perf.backdrop >= 2):
+	# the far trees are drawn whatever the optimizer says: a few pictures cost nothing, and switching them off on a hitch made the woods blink
+	if i >= 3:
 		_mist_trees(i, p0, p1)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if _cache.size() > 160:
-		_cache.clear()
-		_cache_sk.clear()
+		_evict()
+
+
+# Too many cached pieces: drop the ones out of view (far from the camera in layer space), never the ones being drawn, so nothing blinks
+# while it is rebuilt.
+func _evict() -> void:
+	var keep := {}
+	var v = _view()
+	for i in LAYERS.size():
+		var xf = _xf(LAYERS[i]["f"])
+		var s: float = xf[0]
+		var off: Vector2 = xf[1]
+		var p0 = (v.position.x - off.x) / s - 60.0 - CW
+		var p1 = (v.end.x - off.x) / s + 60.0 + CW
+		for ci in range(int(floor(p0 / CW)), int(floor(p1 / CW)) + 1):
+			keep["%d:%d" % [i, ci]] = true
+	for k in _cache.keys():
+		if not keep.has(k):
+			_cache.erase(k)
+			_cache_sk.erase(k)
 
 
 # A layer's colour as the year has left it.
@@ -451,53 +466,6 @@ func _mist_trees(i: int, p0: float, p1: float) -> void:
 		draw_texture_rect(tex, Rect2(x - w * 0.5, ry - hgt, w, hgt), false, mod)
 
 
-# Columns of tiny ants marching along a layer's ridge, some carrying a leaf. Deterministic in x and time,
-# so nothing is stored; they fade at the ends of their stretch instead of popping.
-func _bg_ants(i: int, s: float, p0: float, p1: float) -> void:
-	var L = LAYERS[i]
-	var f: float = L["f"]
-	var detail = s > 0.62
-	var size = 3.2 + f * 3.4
-	var span = 340.0 if detail else 520.0
-	var gap = size * 7.0
-	var ink = Color(L["col"]).darkened(0.6)
-	for ci in range(int(floor(p0 / span)) - 1, int(ceil(p1 / span)) + 1):
-		var hh = _hh(ci * 57.31, f * 5.1)
-		if hh < 0.3:
-			continue
-		var dir = 1.0 if hh > 0.65 else -1.0
-		var n = 3 + int(hh * 4.0)
-		var speed = 10.0 + hh * 14.0
-		for k in n:
-			var u = fmod(_t * speed * dir + (k * gap + hh * 90.0) * dir, span)
-			if u < 0.0:
-				u += span
-			var edge = clamp(min(u, span - u) / 40.0, 0.0, 1.0)
-			var rx = ci * span + u
-			var ry = _ridge_y(i, rx) + 2.0
-			var ang = atan2(_ridge_y(i, rx + 6.0) - _ridge_y(i, rx - 6.0), 12.0)
-			var fw = Vector2(cos(ang), sin(ang)) * dir
-			var up = Vector2(sin(ang), -cos(ang))
-			var foot = Vector2(rx, ry)
-			var ac = Color(ink.r, ink.g, ink.b, 0.92 * edge)
-			var mid = foot + up * size
-			draw_circle(mid - fw * size * 1.7, size * 0.95, ac)
-			draw_circle(mid, size * 0.62, ac)
-			draw_circle(mid + fw * size * 1.35, size * 0.62, ac)
-			if detail:
-				var legs := PoolVector2Array()
-				for lg in 3:
-					var sw = sin(_t * 13.0 + k * 1.3 + lg * 2.1) * size * 0.4
-					legs.append(mid + fw * (lg - 1) * size * 0.45)
-					legs.append(foot + fw * ((lg - 1) * size * 0.9 + sw))
-				draw_multiline(legs, ac, max(1.0, size * 0.22), true)
-				var hp = mid + fw * size * 1.35
-				draw_line(hp, hp + fw * size + up * size * 0.8, ac, max(1.0, size * 0.18), true)
-				if (k + ci) % 2 == 0:
-					draw_circle(mid + up * size * 1.7 - fw * size * 0.2, size * 0.95, Color(0.42, 0.75, 0.29, 0.9 * edge))
-
-
-# A few motes of pollen and seed fluff in the foreground air.
 func _pollen(v: Rect2) -> void:
 	var xf = _xf(0.9)
 	var s: float = xf[0]
@@ -573,25 +541,6 @@ func _fields(mk, pts: PoolVector2Array, i: int, x0: float, step: float, col: Col
 			var b = pts[j + 1]
 			var d = 70.0
 			mk.quad_c(a, tc.lightened(0.04), b, tc.lightened(0.04), b + Vector2(0, d), tc.darkened(0.06), a + Vector2(0, d), tc.darkened(0.06))
-		var mid = pts[(k + k2) / 2]
-		var r = _hh(x0 + k, 43.0)
-		if r > 0.86:
-			# a small red barn with a pitched roof
-			var bw = 22.0
-			var bh = 15.0
-			var bc = Color("#b6483c").linear_interpolate(HAZE, hz)
-			mk.quad(mid + Vector2(-bw * 0.5, 4), mid + Vector2(bw * 0.5, 4), mid + Vector2(bw * 0.5, 4 - bh), mid + Vector2(-bw * 0.5, 4 - bh), bc)
-			mk.tri(mid + Vector2(-bw * 0.6, 4 - bh), mid + Vector2(bw * 0.6, 4 - bh), mid + Vector2(0, 4 - bh - 11), Color("#6b3a2e").linear_interpolate(HAZE, hz))
-		elif r < 0.07:
-			# a windmill
-			var tc2 = Color("#e9e3d6").linear_interpolate(HAZE, hz)
-			mk.quad(mid + Vector2(-5, 4), mid + Vector2(5, 4), mid + Vector2(3, -34), mid + Vector2(-3, -34), tc2)
-			var hub = mid + Vector2(0, -34)
-			for bl in 4:
-				var a2 = PI * 0.25 + PI * 0.5 * bl
-				var dir = Vector2(cos(a2), sin(a2))
-				var nn = Vector2(-dir.y, dir.x)
-				mk.quad(hub + dir * 4.0 + nn * 1.5, hub + dir * 26.0 + nn * 4.0, hub + dir * 26.0 - nn * 1.0, hub + dir * 4.0 - nn * 1.5, Color("#f3efe4").linear_interpolate(HAZE, hz))
 		k = k2
 
 

@@ -6,7 +6,6 @@ const EnemyDefs = preload("res://mods-unpacked/Judah-InfDNA/core/enemy_defs.gd")
 const CreatureArt = preload("res://mods-unpacked/Judah-InfDNA/content/colony/creature_art.gd")
 const Lib = preload("res://mods-unpacked/Judah-InfDNA/content/colony/art_lib.gd")
 const Rig = preload("res://mods-unpacked/Judah-InfDNA/content/colony/rig_art.gd")
-const Critters = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ground_critters.gd")
 const SPINE_N = 18           # joints in a worm's spine
 const INK = Color("#15121a")
 const FONT_PATH = "res://resources/fonts/raw/Anybody-Medium.ttf"
@@ -209,7 +208,6 @@ func _draw_emerging(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade:
 # The meadow's critters (prey: they run, they never bite). Ground ones walk with legs keyed to the distance travelled; the grasshopper
 # hops; butterflies and honeybees flutter above the grass, out of reach of anything without wings.
 const CRITTER_RIGS = {"ladybird": "ladybug", "snail": "snail", "caterpillar": "caterpillar", "bee": "bee", "dragonfly": "dragonfly"}
-const BUTTERFLY_WINGS = [Color("#f2c14e"), Color("#e8728f"), Color("#7fb7e8"), Color("#f29b4e"), Color("#c9a6f2")]
 
 
 func _draw_critter(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade: float, alpha: float, moving: bool) -> void:
@@ -226,28 +224,7 @@ func _draw_critter(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade: 
 		var sh = shade * (0.6 if e.flash > 0.0 else 1.0)
 		Rig.draw(ci, rig, feet - Vector2(0.0, lift), depth_scale, e.facing, _t + e.id * 0.7, moving or fly, 0.2, Color(sh, sh, sh, a), e.flash > 0.0)
 		return
-	if kind == "butterfly" or kind == "bee":
-		var lift = (34.0 + 10.0 * sin(_t * 2.1 + e.id)) * depth_scale
-		ci.draw_set_transform(feet, 0.0, Vector2(1.0, 0.3))
-		ci.draw_circle(Vector2.ZERO, 7.0 * depth_scale, Color(0.05, 0.1, 0.03, 0.14 * a))
-		ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-		if kind == "bee":
-			CreatureArt.draw("bee", ci, feet, 0.42 * depth_scale, shade, a, _t + e.id, e.facing, e.id, true, e.flash > 0.0, lift)
-		else:
-			CreatureArt.butterfly(ci, feet + Vector2(0.0, -lift - 10.0 * depth_scale), 1.3 * depth_scale, _t + e.id * 0.37, e.facing, BUTTERFLY_WINGS[e.id % BUTTERFLY_WINGS.size()], a)
-		return
-	var walk = feet.x
-	var air = 0.0
-	var crouch = 0.0
-	if kind == "grasshopper" and moving:
-		var u = fposmod(walk / 46.0, 1.0)
-		air = u if u < 0.75 else 0.0
-		crouch = clamp((u - 0.75) / 0.25, 0.0, 1.0)
-	var sh = shade * (0.6 if e.flash > 0.0 else 1.0)
-	ci.draw_set_transform(feet + Vector2(-3.0 * depth_scale, 0.0), 0.0, Vector2(1.0, 0.3))
-	ci.draw_circle(Vector2.ZERO, (9.0 + 6.0 * depth_scale) * (1.0 - air * 0.4), Color(0.05, 0.1, 0.03, 0.16 * a))
-	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	Critters.draw(kind, ci, feet, (1.1 if kind == "snail" else 1.0) * depth_scale, e.facing, _t + e.id, walk, moving, air / 0.75 if air > 0.0 else 0.0, crouch, sh)
+	# no picture for this critter: nothing is drawn (the old drawn-only critters are gone)
 
 
 # A worm (the Tunnel Borer) has a spine: a chain of joints. The head goes where the raider is; every joint follows the one before it at

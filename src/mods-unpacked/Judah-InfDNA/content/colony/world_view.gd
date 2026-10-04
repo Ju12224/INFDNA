@@ -10,8 +10,6 @@ const GroundView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/grou
 const NestDecor = preload("res://mods-unpacked/Judah-InfDNA/content/colony/nest_decor.gd")
 const PredatorView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/predator_view.gd")
 const DEPTH = GroundView.DEPTH   # thickness of the ground's top face (2.5D surface band, many lanes)
-const TREE_TEX = "res://entities/units/neutral/tree.png"
-const ROCK_TEX = "res://entities/units/neutral/rock.png"
 const FRUIT_TEX = "res://items/consumables/fruit/fruit.png"
 const GLOW_TEX = "res://particles/sprites/particle_28.png"     # soft radial light
 const MOTE_TEX = "res://particles/sprites/particle_11.png"     # small round mote
@@ -79,7 +77,7 @@ func _ready() -> void:
 	arc_node = Node2D.new()          # tremor cracks and the Void pit, over the snow and the shadows (see _step_arc_ground)
 	arc_node.connect("draw", self, "_draw_arc_node")
 	band.add_child(arc_node)
-	for k in [TREE_TEX, ROCK_TEX, FRUIT_TEX, GLOW_TEX, MOTE_TEX, HUSK_TEX]:
+	for k in [FRUIT_TEX, GLOW_TEX, MOTE_TEX, HUSK_TEX]:
 		if ResourceLoader.exists(k):
 			_tex[k] = load(k)
 	for kv in [["bar_bg", "res://ui/hud/ui_lifebar_bg.png"], ["bar_fill", "res://ui/hud/ui_lifebar_fill.png"], ["bar_frame", "res://ui/hud/ui_lifebar_frame.png"]]:
@@ -508,13 +506,6 @@ func _chamber_seen(c: Dictionary, vr: Rect2) -> bool:
 
 const POOL_COLORS = {"food": Color(1.0, 0.82, 0.45), "brood": Color(1.0, 0.72, 0.62), "farm": Color(0.6, 1.0, 0.55), "midden": Color(0.7, 0.8, 0.4),
 	"armory": Color(0.75, 0.85, 1.0), "venom": Color(0.6, 1.0, 0.4), "battery": Color(1.0, 0.6, 0.45), "cistern": Color(0.5, 0.8, 1.0), "architects": Color(1.0, 0.95, 0.75)}
-# Workshop props: Brotato item icons laid out on the room floor.
-const WORKSHOP_PROPS = {
-	"armory": ["metal_plate", "helmet", "metal_plate", "helmet"],
-	"venom": ["toxic_sludge", "poisonous_tonic", "toxic_sludge"],
-	"battery": ["nail", "sharp_bullet", "nail", "sharp_bullet", "nail"],
-	"architects": ["pile_of_books", "compass", "pencil", "toolbox"],
-}
 
 
 # Dust motes drifting through the tunnels: world-anchored, deterministic per tile, so
@@ -833,22 +824,7 @@ func _draw_chamber(ci: CanvasItem, c: Dictionary, mod: Color = Color.white) -> v
 		"brood":
 			ci.draw_circle(Vector2(cx, floor_y - 2), 3.0, Color(mod.r, mod.g, mod.b, 0.15))
 		"armory", "venom", "battery", "architects":
-			var props = WORKSHOP_PROPS[c["purpose"]]
-			var n2 = props.size()
-			for i in n2:
-				var path = "res://items/all/%s/%s_icon.png" % [props[i], props[i]]
-				if not _tex.has(path):
-					_tex[path] = load(path) if ResourceLoader.exists(path) else null
-				var it = _tex[path]
-				if it == null:
-					continue
-				var sz = 26.0 if c["purpose"] != "battery" else 20.0
-				var px = cx + (i - (n2 - 1) * 0.5) * min(30.0, c["rx"] * C * 1.4 / n2)
-				var bob = sin(_t * 1.5 + i * 1.7) * 1.2 if c["purpose"] == "venom" else 0.0
-				var rot = 0.9 if c["purpose"] == "battery" else (_hash(i + cx) - 0.5) * 0.3
-				ci.draw_set_transform(Vector2(px, floor_y - sz * 0.45 + bob), rot, Vector2.ONE)
-				ci.draw_texture_rect(it, Rect2(Vector2(-sz, -sz) * 0.5, Vector2(sz, sz)), false, mod)
-				ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			# the room's things are the owner's nest props (nest_decor.gd); the old Brotato item icons are gone
 			if c["purpose"] == "venom":
 				# a bubbling vat glow
 				var gt2 = _tex.get(GLOW_TEX)

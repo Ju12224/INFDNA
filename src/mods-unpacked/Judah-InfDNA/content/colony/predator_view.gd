@@ -155,8 +155,8 @@ func _draw_bird(b: Dictionary) -> void:
 		# winged ants are on it: it flinches and blinks red
 		hurt = fmod(_t, 0.22) < 0.1
 		pos += Vector2(sin(_t * 83.0), cos(_t * 71.0)) * 3.0 * ps * clamp(hit / 0.3, 0.0, 1.0)
-	if not (Rig.bird_available() and Rig.bird(self, pos, 0.95 * ps, _t, face, fold, fade, hurt)):
-		CreatureArt.bird(self, pos, 0.95 * ps, _t, face, fold, fade)
+	if Rig.bird_available():
+		Rig.bird(self, pos, 0.95 * ps, _t, face, fold, fade, hurt)
 
 
 func _draw_fall(f: Dictionary) -> void:
