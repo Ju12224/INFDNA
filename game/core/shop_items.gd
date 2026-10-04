@@ -147,3 +147,79 @@ static func icon_path(id: String) -> String:
 
 static func tier_weights(raid_n: int) -> Array:
 	return [0.0, 1.0, 0.15 + 0.1 * raid_n, 0.03 * raid_n, max(0.0, 0.012 * (raid_n - 3))]
+
+
+# ------------------------------------------------------------------ the Lab between runs (scene/lab.tscn)
+# A fallen colony leaves food to the Lab: what it earned (earnings() below) goes into a bank kept in user://infdna_lab.json, with
+# the items bought for the next colony (scene/run.gd hands them over when it starts; the run that carried them uses them up).
+# Only items with the owner's icon are offered. Everything is optional: if the file cannot be read or written the bank starts empty.
+const LAB_PATH = "user://infdna_lab.json"
+const LAB_OFFERS = 5
+
+
+static func has_icon(id: String) -> bool:
+	return ResourceLoader.exists(icon_path(id))
+
+
+# The items the Lab may offer: those that have their picture.
+static func lab_pool() -> Array:
+	var out := []
+	for id in ITEMS.keys():
+		if has_icon(id):
+			out.append(id)
+	return out
+
+
+# {"bank": food to spend, "items": {id: count} bought for the next colony, "raids": raids the last colony saw (better tiers)}
+static func lab_load() -> Dictionary:
+	var d = null
+	if FileAccess.file_exists(LAB_PATH):
+		d = JSON.parse_string(FileAccess.get_file_as_string(LAB_PATH))
+	if not (d is Dictionary):
+		d = {}
+	var items = d.get("items", {})
+	var clean := {}
+	if items is Dictionary:
+		for id in items.keys():
+			if ITEMS.has(id) and int(items[id]) > 0:
+				clean[id] = int(items[id])
+	return {"bank": int(max(0, int(d.get("bank", 0)))), "items": clean, "raids": int(d.get("raids", 0))}
+
+
+static func lab_save(d: Dictionary) -> void:
+	var f = FileAccess.open(LAB_PATH, FileAccess.WRITE)
+	if f != null:
+		f.store_string(JSON.stringify(d))
+
+
+# The Lab's price: the item's own price, 15% more for each copy already bought for the same colony.
+static func lab_price(id: String, have: int) -> int:
+	return int(round(float(ITEMS[id]["price"]) * (1.0 + 0.15 * have)))
+
+
+# What a colony leaves to the Lab when it falls: [[what, food], ...], the total last. Days lived, raids repelled, food hauled,
+# the crowd it grew to, winters, and how far it carried the arc.
+static func earnings(sim, arc_best: int = 0) -> Array:
+	var out := []
+	var days = int(sim.time / 420.0 + 0.30) + 1
+	out.append(["%d day%s lived" % [days, "" if days == 1 else "s"], 6 * days])
+	if sim.raids_repelled > 0:
+		out.append(["%d raid%s repelled" % [sim.raids_repelled, "" if sim.raids_repelled == 1 else "s"], 12 * sim.raids_repelled])
+	var hauled = int(sim.delivered_total / 100.0)
+	if hauled > 0:
+		out.append(["%d food hauled" % int(sim.delivered_total), hauled])
+	var crowd = int(sim.peak_ants / 4)
+	if crowd > 0:
+		out.append(["a peak of %d ants" % sim.peak_ants, crowd])
+	if sim.winters > 0:
+		out.append(["%d winter%s lived through" % [sim.winters, "" if sim.winters == 1 else "s"], 30 * sim.winters])
+	var arc = max(arc_best, int(sim.arc_stage))
+	if arc > 0:
+		out.append(["the arc reached %s" % ["Growing", "Dominion", "Tremors", "The Void"][clamp(arc, 0, 3)], 40 * arc])
+	if sim.void_cycles > 0:
+		out.append(["%d void%s sealed" % [sim.void_cycles, "" if sim.void_cycles == 1 else "s"], 80 * sim.void_cycles])
+	var total := 0
+	for e in out:
+		total += int(e[1])
+	out.append(["total", total])
+	return out
