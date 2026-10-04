@@ -4,6 +4,7 @@ extends Reference
 
 const INK = Color("#15121a")
 const AL = preload("res://mods-unpacked/Judah-InfDNA/content/colony/art_lib.gd")
+const ShopItems = preload("res://mods-unpacked/Judah-InfDNA/core/shop_items.gd")
 # short key -> the owner's icon (content/art/...); these win over the Brotato icon of the same key below
 const OWN = {
 	"food": "ui/food.png",
@@ -98,6 +99,17 @@ static func icon(key: String):
 		if t != null:
 			return t
 	return tex(ICONS.get(key, ""))
+
+
+# A Lab item's icon: the owner's drawing (content/art/items/<id>.png, cut by tools/art/make_item_icons.py) when there is one, else the
+# Brotato item icon the item borrowed. Null when neither exists.
+static func item_icon(id: String):
+	var f = File.new()
+	if f.file_exists(AL.DIR + "items/" + id + ".png"):
+		var t = AL.get_lib().tex("items/" + id + ".png")
+		if t != null:
+			return t
+	return tex(ShopItems.icon_path(id)) if ShopItems.ITEMS.has(id) else null
 
 
 # The owner's icon for a key, or null (no Brotato fallback): for places that should show nothing rather than an old icon.

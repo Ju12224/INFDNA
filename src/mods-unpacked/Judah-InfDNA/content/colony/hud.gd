@@ -2151,10 +2151,10 @@ func refresh_shop(animate: bool = false, sold_slot: int = -1) -> void:
 		var h = HBoxContainer.new()
 		h.add_constant_override("separation", 1)
 		box.add_child(h)
-		var ip = ShopItems.icon_path(id)
-		if ip != "" and ResourceLoader.exists(ip):
+		var itex = Kit.item_icon(id)
+		if itex != null:
 			var tr = TextureRect.new()
-			tr.texture = load(ip)
+			tr.texture = itex
 			tr.rect_min_size = Vector2(34, 34)
 			tr.expand = true
 			tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -2191,13 +2191,13 @@ func _make_card(slot: int, id: String, cw: float) -> Control:
 	var icon_bg = PanelContainer.new()
 	icon_bg.add_stylebox_override("panel", Kit.flat(col.darkened(0.6), col, 12, 3, 4.0, 3))
 	top.add_child(icon_bg)
-	var ip = ShopItems.icon_path(id)
 	var icon = TextureRect.new()
 	icon.rect_min_size = Vector2(68, 68)
 	icon.expand = true
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	if ip != "" and ResourceLoader.exists(ip):
-		icon.texture = load(ip)
+	var itex = Kit.item_icon(id)
+	if itex != null:
+		icon.texture = itex
 	icon_bg.add_child(icon)
 	var tv = VBoxContainer.new()
 	tv.alignment = BoxContainer.ALIGN_CENTER

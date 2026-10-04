@@ -1,29 +1,10 @@
 # Icons the game still borrows from Brotato
 
-Each line is one picture to draw. Square, transparent background, any size (I cut them like the UI sheet).
+Each line is one picture to draw. Square, transparent background, any size; a sheet in a grid works best (I cut them like the mutation sheet).
+Done so far: 20 Lab items (the mutation strains).
 
-## Evolution Lab items (85)
+## Evolution Lab items still needed (65 of 85)
 
-- **Swift Strain** (common): Mutations favor legs.
-- **Pincer Strain** (common): Mutations favor claws.
-- **Tendril Strain** (common): Mutations favor tentacles.
-- **Keen Strain** (common): Mutations favor eyes and longer antennae.
-- **Spider Strain** (common): Mutations favor legs and spikes.
-- **Chitin Strain** (uncommon): Mutations favor armor plating.
-- **Thorn Strain** (uncommon): Mutations favor spikes that hurt attackers.
-- **Giant Strain** (uncommon): Mutations favor bigger body segments.
-- **Octopus Strain** (uncommon): Tentacle limbs and tentacle jaws become far more likely.
-- **Hox Shift** (rare): Body segments duplicate far more often.
-- **Alate Strain** (uncommon): Wings evolve more often: fast on the surface, frail, cramped in tunnels.
-- **Sting Strain** (uncommon): Stingers evolve more often: hit harder, eat a little more.
-- **Formic Strain** (uncommon): Acid glands evolve more often: attackers get burned, loads get lighter.
-- **Soldier Heads** (uncommon): Big-headed majors evolve more often: strong bite and dig, slow walkers.
-- **Honeypot Strain** (uncommon): Replete gasters evolve more often: carry more food, waddle slower.
-- **Glow Strain** (common): Luminous spots evolve more often: sense food farther.
-- **Camouflage Strain** (uncommon): Drab mottled bodies evolve more often: harder to hit.
-- **Trail Pheromone** (common): Stronger trail scent evolves more often: foragers follow each other better.
-- **Bristle Strain** (common): Body hair evolves more often: a little armor, a little slower.
-- **Cricket Song** (uncommon): Sound organs evolve more often: chirps rally fighters, then bat ears, then a pistol-shrimp shockwave.
 - **Eel Strain** (uncommon): Electric organs evolve more often: sense prey, shock attackers, then chain lightning.
 - **Shell Strain** (uncommon): Shells evolve more often: scutes, a snail shell, then armadillos that curl up when hurt.
 - **Silk Strain** (uncommon): Silk evolves more often: carry bundles, webs that slow raiders, then bolas snares that stun.
