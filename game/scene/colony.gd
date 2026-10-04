@@ -45,6 +45,7 @@ const WORLD_VIEWS = [
 	["units", "res://scene/units_view.gd", 40],
 	["creatures", "res://scene/creatures_view.gd", 45],
 	["effects", "res://scene/effects_view.gd", 50],
+	["weather", "res://scene/weather_view.gd", 55],
 ]
 
 var sim
@@ -83,6 +84,9 @@ func _ready() -> void:
 	add_child(ui_layer)
 	_add_view("hud", HUD, ui_layer, 0)
 	_add_view("controls", CONTROLS, ui_layer, 1)
+	_add_view("ambience", "res://scene/ambience.gd", self, 0)      # sound; skipped until the script exists
+	_add_view("watch", "res://scene/watch_cam.gd", self, 0)        # watch mode (a self-directing camera); skipped until it exists
+	_add_view("depth_gauge", "res://scene/depth_gauge.gd", ui_layer, 0)   # depth gauge, room labels, minimap; skipped until it exists
 
 
 func _add_view(view_name: String, path: String, parent: Node, z: int) -> void:
