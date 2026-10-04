@@ -48,6 +48,8 @@ const TURN = [0, 0, 0, 0, 0, 0, 0, 0, 0,
 # between cells that are equally close to the goal: progress is never given up)
 const TURN_PEN = [0, 2, 5, 9, 14]
 const CROWD_PEN = 5           # ... and for a cell another ant is about to walk into
+const ROOF_PEN = 4            # ... and for a cell with more rock above it than below (given the choice an ant walks on the floor, not upside down on the
+                              # roof: it used to flip over every second or so in a sloping tunnel)
 const PLANE_HOP = 2.2         # a crossing to the other tunnel plane takes as long as walking this many cells (the ant squeezes through the hole)
 const NURSE_W = [6, 4, 1, 0, 0]   # a nurse's next step, weighted by how sharply it turns: on along the floor, never straight back mid-walk
 
@@ -145,6 +147,7 @@ static func descend(sim, a, f: PoolIntArray, macro: bool = true, ant: bool = fal
 	var ox = g.ox
 	var H = g.H
 	var walk = g.walk
+	var solid = g.solid
 	var rng = sim.rng
 	var prev := 0
 	var occ = sim.occ
@@ -187,6 +190,14 @@ static func descend(sim, a, f: PoolIntArray, macro: bool = true, ant: bool = fal
 			var sc = v * 16 + rng.randi_range(0, 3)
 			if not g.walled(nx, ny, cz):
 				sc += 6
+			if ny + 1 < H:
+				var c = base + d
+				var up = solid[c - W - 1] + solid[c - W] + solid[c - W + 1]
+				var dn = solid[c + W - 1] + solid[c + W] + solid[c + W + 1]
+				if up > dn:
+					sc += ROOF_PEN
+				elif up == dn:
+					sc += 1
 			if prev != 0:
 				sc += TURN_PEN[TURN[pt + i]]
 			if crowd:

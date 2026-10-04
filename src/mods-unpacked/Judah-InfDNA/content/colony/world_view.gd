@@ -167,7 +167,7 @@ func _draw_band() -> void:
 
 # ---- the ground answering the monsters (arc.gd): tremor cracks round the nest, and the pit the Void climbs out of
 # The cracks open one by one as the tremors come (sim.arc_tremors) and widen with each one, and heal slowly once the ground is
-# calm again; from the fifth tremor a faint violet light shows in the widest. The pit opens at sim.void_x when the ground
+# calm again; from the fourth tremor a faint violet light shows in the widest. The pit opens at sim.void_x when the ground
 # collapses (stage 3): a dark crater with a violet rim, light glowing in its depths and motes rising out of it; it closes again
 # when the void is sealed. All of it is drawn on the top face under every unit, only while it is there and in view.
 const CRACK_N = 11
@@ -175,12 +175,18 @@ const PIT_LANE = 0.5          # the pit is centred on this lane of the top face.
 const PIT_RX = 160.0          # ...this wide (px, half), and flattened by the view onto the top face
 const PIT_FLAT = 0.36
 const VOID_VIOLET = Color(0.72, 0.42, 1.0)
+const CrackMK = preload("res://mods-unpacked/Judah-InfDNA/content/colony/mesh_kit.gd")
 var _cracks := []             # built once: [{"pts": [Vector2(cells from the entrance, lane)], "br": [...], "thr", "w"}]
 var _crack_k := 0.0           # tremors felt, eased (0 = no cracks)
 var _pit_k := 0.0             # 0 closed .. 1 open
 var _pit_x := 0
 var _arc_last := 0.0
 var _arc_drawn := false
+var _crack_key := Vector2(-1, -1)
+var _crack_mesh = null      # the cracks, built when they change (see _draw_cracks)
+var _crack_glow = null
+var _pit_key := -1.0
+var _pit_mesh = null        # the pit's earth and near lip, round the origin (see _draw_pit)
 
 
 # Where the pit's centre is drawn (world px): the middle of the top face at that column. Shared with the Void Maw's climb out of it (enemy_view).
@@ -251,20 +257,34 @@ func _draw_cracks(ci: CanvasItem) -> void:
 	var vc = _view_cols(g)
 	if ex + 70.0 < vc[0] or ex - 70.0 > vc[1]:
 		return
-	var glow = smoothstep(3.5, 6.5, _crack_k) * (0.65 + 0.35 * sin(_t * 1.4))
-	for c in _cracks:
-		var age = _crack_k - float(c["thr"])
-		if age <= 0.0:
-			continue
-		var grow = clamp(age / 1.6, 0.0, 1.0)                    # it runs out to its full length over a tremor or two...
-		var w = float(c["w"]) * clamp(0.5 + 0.2 * age, 0.5, 1.6)  # ...and gapes wider with every one after
-		_crack_line(ci, c["pts"], grow, w, ex, glow)
-		if grow > c["bk"] + 0.1:
-			_crack_line(ci, c["br"], clamp((grow - c["bk"]) * 2.0, 0.0, 1.0), w * 0.55, ex, 0.0)
+	# the geometry is built into two meshes (the gaps, and the violet light in them) and only rebuilt when the cracks have grown or
+	# healed a little, or the nest has moved
+	var key = Vector2(stepify(_crack_k, 0.04), ex)
+	if key != _crack_key:
+		_crack_key = key
+		var mk = CrackMK.new()
+		var gl = CrackMK.new()
+		var glow = smoothstep(3.5, 6.5, _crack_k)
+		for c in _cracks:
+			var age = _crack_k - float(c["thr"])
+			if age <= 0.0:
+				continue
+			var grow = clamp(age / 1.6, 0.0, 1.0)                    # it runs out to its full length over a tremor or two...
+			var w = float(c["w"]) * clamp(0.5 + 0.2 * age, 0.5, 1.6)  # ...and gapes wider with every one after
+			_crack_line(mk, gl, c["pts"], grow, w, ex, glow)
+			if grow > c["bk"] + 0.1:
+				_crack_line(mk, gl, c["br"], clamp((grow - c["bk"]) * 2.0, 0.0, 1.0), w * 0.55, ex, 0.0)
+		_crack_mesh = null if mk.empty() else mk.build()
+		_crack_glow = null if gl.empty() else gl.build()
+	if _crack_mesh != null:
+		ci.draw_mesh(_crack_mesh, null)
+	if _crack_glow != null:
+		ci.draw_mesh(_crack_glow, null)
 
 
-# One crack: a tapering dark gap along the top face, its near lip catching the light, and (late) the violet light far down in it.
-func _crack_line(ci: CanvasItem, pts: Array, grow: float, w: float, ex: float, glow: float) -> void:
+# One crack: a tapering dark gap along the top face with broken earth either side, its near lip catching the light, and (late) the
+# violet light far down in it (into `gl`).
+func _crack_line(mk, gl, pts: Array, grow: float, w: float, ex: float, glow: float) -> void:
 	var g = sim.grid
 	var C = g.CELL
 	var m = int(ceil((pts.size() - 1) * grow))
@@ -278,8 +298,11 @@ func _crack_line(ci: CanvasItem, pts: Array, grow: float, w: float, ex: float, g
 	var dark = Color(0.06, 0.035, 0.03, 0.95)
 	var lip = Color(0.9, 0.78, 0.55, 0.5)
 	var torn = Color(0.5, 0.36, 0.24, 0.45)        # broken earth along both sides of the gap
+	var vio = Color(0.82, 0.58, 1.0, 0.0)
 	var prev_a := Vector2.ZERO
 	var prev_b := Vector2.ZERO
+	var prev_n := Vector2.ZERO
+	var prev_t := 0.0
 	for k in m + 1:
 		var u = float(k) / m
 		var taper = pow(sin(PI * clamp(u * 0.92 + 0.04, 0.0, 1.0)), 0.5) * (0.65 + 0.7 * _hash(k * 2.71 + pts[0].x))
@@ -290,13 +313,23 @@ func _crack_line(ci: CanvasItem, pts: Array, grow: float, w: float, ex: float, g
 		var a = sp[k] - nrm
 		var b = sp[k] + nrm
 		if k > 0:
-			ci.draw_colored_polygon(PoolVector2Array([sp[k - 1] + (prev_a - sp[k - 1]) * 1.9, sp[k] - nrm * 1.9, sp[k] + nrm * 1.9, sp[k - 1] + (prev_b - sp[k - 1]) * 1.9]), torn)
-			ci.draw_colored_polygon(PoolVector2Array([prev_a, a, b, prev_b]), dark)
-			ci.draw_line(prev_b + Vector2(0, 1.0), b + Vector2(0, 1.0), lip, 1.2)
-			if glow > 0.02 and taper > 0.45:
-				ci.draw_line(sp[k - 1], sp[k], Color(0.82, 0.58, 1.0, min(1.0, 0.9 * glow * taper)), max(1.5, half * 0.6))
+			mk.quad(sp[k - 1] - prev_n * 1.9, sp[k] - nrm * 1.9, sp[k] + nrm * 1.9, sp[k - 1] + prev_n * 1.9, torn)
+			mk.quad(prev_a, a, b, prev_b, dark)
+			var ld = Vector2(0, 0.6)
+			mk.quad(prev_b + Vector2(0, 0.4), b + Vector2(0, 0.4), b + Vector2(0, 0.4) + ld * 2.0, prev_b + Vector2(0, 0.4) + ld * 2.0, lip)
+			if glow > 0.02 and min(taper, prev_t) > 0.45:
+				vio.a = min(1.0, 0.75 * glow * taper)
+				mk_glow(gl, sp[k - 1], sp[k], max(0.75, half * 0.3), max(0.75, prev_n.length() * 0.3), vio)
 		prev_a = a
 		prev_b = b
+		prev_n = nrm
+		prev_t = taper
+
+
+static func mk_glow(gl, p0: Vector2, p1: Vector2, h1: float, h0: float, col: Color) -> void:
+	var d = (p1 - p0).normalized()
+	var n = Vector2(-d.y, d.x)
+	gl.quad(p0 - n * h0, p1 - n * h1, p1 + n * h1, p0 + n * h0, col)
 
 
 func _draw_pit(ci: CanvasItem) -> void:
@@ -315,33 +348,26 @@ func _draw_pit(ci: CanvasItem) -> void:
 	if gt != null:
 		var hw = Vector2(rx * 3.4, rx * 3.4 * PIT_FLAT * 1.5)
 		ci.draw_texture_rect(gt, Rect2(c - hw * 0.5, hw), false, Color(vv.r, vv.g, vv.b, (0.22 + 0.08 * pulse) * k))
-	# churned earth, the rim, the hole and the far wall of it, the void at the bottom
-	ci.draw_set_transform(c, 0.0, Vector2(1.0, PIT_FLAT))
-	ci.draw_circle(Vector2(0, rx * 0.06), rx * 1.42, Color(0.33, 0.23, 0.15, 0.4 * k))
-	ci.draw_circle(Vector2(0, rx * 0.04), rx * 1.2, Color(0.4, 0.27, 0.17, 0.85 * k))
-	ci.draw_circle(Vector2.ZERO, rx * 1.07, Color(0.27, 0.17, 0.11, k))
-	ci.draw_circle(Vector2.ZERO, rx, Color(INK.r, INK.g, INK.b, k))
-	ci.draw_circle(Vector2(0, -rx * 0.02), rx * 0.96, Color(0.33, 0.22, 0.15, k))          # the far wall of the hole, earth in layers
-	ci.draw_arc(Vector2(0, rx * 0.1), rx * 0.9, PI * 1.12, PI * 1.88, 28, Color(0.21, 0.13, 0.09, k), 4.0)
-	ci.draw_arc(Vector2(0, rx * 0.17), rx * 0.88, PI * 1.18, PI * 1.82, 28, Color(0.42, 0.3, 0.2, 0.8 * k), 3.0)
-	ci.draw_circle(Vector2(0, rx * 0.24), rx * 0.83, Color(0.03, 0.02, 0.05, k))           # and below it nothing: the void
-	ci.draw_circle(Vector2(0, rx * 0.34), rx * 0.5, Color(0.07, 0.03, 0.12, k))
-	ci.draw_arc(Vector2.ZERO, rx * 1.005, 0.0, TAU, 56, Color(vv.r, vv.g, vv.b, (0.5 + 0.3 * pulse) * k), 4.0, true)
+	# the earth: built into a mesh round the origin while the pit opens or closes, then the same mesh every frame
+	var key = stepify(k, 0.02)
+	if key != _pit_key or _pit_mesh == null:
+		_pit_key = key
+		var mk = CrackMK.new()
+		pit_earth(mk, rx, k)
+		pit_lip(mk, rx, k)
+		_pit_mesh = mk.build()
+	ci.draw_set_transform(c, 0.0, Vector2.ONE)              # (not draw_mesh's own transform: GLES2 misplaces it)
+	ci.draw_mesh(_pit_mesh, null)
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	# light far down in it, breathing
+	# its rim of violet light, breathing, and the light far down in it
+	ci.draw_set_transform(c, 0.0, Vector2(1.0, PIT_FLAT))
+	ci.draw_arc(Vector2.ZERO, rx * 1.005, PI, TAU, 28, Color(vv.r, vv.g, vv.b, (0.5 + 0.3 * pulse) * k), 4.0, true)
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if gt != null:
 		var dw = Vector2(rx * 1.0, rx * PIT_FLAT * 1.0)
 		ci.draw_texture_rect(gt, Rect2(c + Vector2(0, rx * PIT_FLAT * 0.34) - dw * 0.5, dw), false, Color(0.62, 0.3, 0.95, (0.35 + 0.3 * pulse) * k))
-	draw_pit_lip(ci, c, rx, k)
-	# clods of turf and earth thrown up round the edge
-	for j in 16:
-		var ang = TAU * (j + 0.5 * _hash(j * 2.3 + 1.0)) / 16.0
-		var rr = rx * (1.1 + 0.26 * _hash(j * 3.9 + 2.0))
-		var p = c + Vector2(cos(ang) * rr, sin(ang) * rr * PIT_FLAT)
-		var s = (3.5 + 5.5 * _hash(j * 5.1 + 3.0)) * (0.6 + 0.4 * ke)
-		ci.draw_circle(p + Vector2(0, 1.5), s, Color(0.12, 0.08, 0.06, 0.6 * k))
-		ci.draw_circle(p, s, Color(0.45, 0.31, 0.2, k) if j % 3 != 0 else Color(0.35, 0.5, 0.22, k))
 	# motes of violet light rising out of it
+	var mt = _tex.get(MOTE_TEX)
 	for j in 16:
 		var h1 = _hash(j * 1.31 + 0.7)
 		var h2 = _hash(j * 2.17 + 1.9)
@@ -352,12 +378,47 @@ func _draw_pit(ci: CanvasItem) -> void:
 		if j % 3 == 0 and gt != null:
 			var gs = Vector2(22.0, 22.0) * (1.0 + h1)
 			ci.draw_texture_rect(gt, Rect2(p2 - gs * 0.5, gs), false, Color(vv.r, vv.g, vv.b, a * 0.8))
-		ci.draw_circle(p2, (1.8 + 2.4 * h2) * (1.0 - 0.4 * ph), Color(0.88, 0.7, 1.0, a))
+		var r = (1.8 + 2.4 * h2) * (1.0 - 0.4 * ph)
+		if mt != null:
+			ci.draw_texture_rect(mt, Rect2(p2 - Vector2(r, r) * 1.4, Vector2(r, r) * 2.8), false, Color(0.9, 0.74, 1.0, a))
+		else:
+			ci.draw_rect(Rect2(p2 - Vector2(r, r) * 0.7, Vector2(r, r) * 1.4), Color(0.88, 0.7, 1.0, a))
 
 
-# The near rim of the pit: earth heaved up along its front edge (a crescent under the hole), lit along the top, torn turf at its foot.
-# enemy_view draws it once more over a Void Maw still climbing out, so its sunk body stays behind it.
-static func draw_pit_lip(ci: CanvasItem, c: Vector2, rx: float, a: float) -> void:
+# The pit round the origin (world_view draws it translated): churned earth, the rim, the hole with its far wall of layered earth,
+# the void at the bottom, and clods of turf and earth thrown up round the edge. `a` fades it in and out.
+static func pit_earth(mk, rx: float, a: float) -> void:
+	var f = PIT_FLAT
+	mk.ellipse(Vector2(0, rx * 0.06 * f), rx * 1.42, rx * 1.42 * f, Color(0.33, 0.23, 0.15, 0.4 * a), 36)
+	mk.ellipse(Vector2(0, rx * 0.04 * f), rx * 1.2, rx * 1.2 * f, Color(0.4, 0.27, 0.17, 0.85 * a), 36)
+	mk.ellipse(Vector2.ZERO, rx * 1.07, rx * 1.07 * f, Color(0.27, 0.17, 0.11, a), 36)
+	mk.ellipse(Vector2.ZERO, rx, rx * f, Color(INK.r, INK.g, INK.b, a), 36)
+	mk.ellipse(Vector2(0, -rx * 0.02 * f), rx * 0.96, rx * 0.96 * f, Color(0.33, 0.22, 0.15, a), 36)        # the far wall, earth in layers
+	for band in [[0.1, 0.9, 1.12, 4.0, Color(0.21, 0.13, 0.09, a)], [0.17, 0.88, 1.18, 3.0, Color(0.42, 0.3, 0.2, 0.8 * a)]]:
+		var pts := PoolVector2Array()
+		var ws := PoolRealArray()
+		for i in 15:
+			var ang = PI * (band[2] + (3.0 - 2.0 * band[2]) * i / 14.0)          # from PI * 1.12 round to PI * 1.88: the far side
+			pts.append(Vector2(cos(ang) * rx * band[1], (band[0] * rx + sin(ang) * rx * band[1]) * f))
+			ws.append(band[3])
+		mk.ribbon(pts, ws, band[4])
+	mk.ellipse(Vector2(0, rx * 0.24 * f), rx * 0.83, rx * 0.83 * f, Color(0.03, 0.02, 0.05, a), 36)       # and below it nothing: the void
+	mk.ellipse(Vector2(0, rx * 0.34 * f), rx * 0.5, rx * 0.5 * f, Color(0.07, 0.03, 0.12, a), 28)
+	var ke = clamp(a, 0.0, 1.0)
+	for j in 16:
+		var ang = TAU * (j + 0.5 * _hash(j * 2.3 + 1.0)) / 16.0
+		if sin(ang) > 0.25:
+			continue                                    # the near side is under the lip
+		var rr = rx * (1.1 + 0.26 * _hash(j * 3.9 + 2.0))
+		var p = Vector2(cos(ang) * rr, sin(ang) * rr * f)
+		var s = (3.5 + 5.5 * _hash(j * 5.1 + 3.0)) * (0.6 + 0.4 * ke)
+		mk.ellipse(p + Vector2(0, 1.5), s, s, Color(0.12, 0.08, 0.06, 0.6 * a), 10)
+		mk.ellipse(p, s, s, Color(0.45, 0.31, 0.2, a) if j % 3 != 0 else Color(0.35, 0.5, 0.22, a), 10)
+
+
+# The near rim of the pit round the origin: earth heaved up along its front edge (a crescent under the hole), lit along the top, torn
+# turf at its foot. enemy_view draws it once more over a Void Maw still climbing out, so its sunk body stays behind it.
+static func pit_lip(mk, rx: float, a: float) -> void:
 	var ry = rx * PIT_FLAT
 	var n = 22
 	var inner := PoolVector2Array()
@@ -365,28 +426,26 @@ static func draw_pit_lip(ci: CanvasItem, c: Vector2, rx: float, a: float) -> voi
 	for i in n + 1:
 		var ang = PI * float(i) / n
 		var sn = sin(ang)
-		inner.append(c + Vector2(cos(ang) * rx * 1.02, sn * ry * 1.02))
-		outer.append(c + Vector2(cos(ang) * rx * 1.15, sn * (ry * 1.04 + rx * 0.2) + (_hash(i * 3.1 + 0.5) - 0.5) * 7.0 * sn))
-	var poly := PoolVector2Array()
-	poly.append_array(inner)
-	for i in range(n, -1, -1):
-		poly.append(outer[i])
-	ci.draw_colored_polygon(poly, Color(0.41, 0.28, 0.18, a))
-	var mid := PoolVector2Array()
-	for i in n + 1:
-		mid.append(inner[i].linear_interpolate(outer[i], 0.55))
-	var low := PoolVector2Array()
-	low.append_array(mid)
-	for i in range(n, -1, -1):
-		low.append(outer[i])
-	ci.draw_colored_polygon(low, Color(0.3, 0.2, 0.13, a))
-	ci.draw_polyline(inner, Color(0.66, 0.5, 0.33, a), 3.0, true)
-	ci.draw_polyline(outer, Color(0.14, 0.09, 0.06, 0.8 * a), 2.0, true)
+		inner.append(Vector2(cos(ang) * rx * 1.02, sn * ry * 1.02))
+		outer.append(Vector2(cos(ang) * rx * 1.15, sn * (ry * 1.04 + rx * 0.2) + (_hash(i * 3.1 + 0.5) - 0.5) * 7.0 * sn))
+	var c_top = Color(0.41, 0.28, 0.18, a)
+	var c_low = Color(0.3, 0.2, 0.13, a)
+	var c_lit = Color(0.66, 0.5, 0.33, a)
+	var c_ink = Color(0.14, 0.09, 0.06, 0.8 * a)
+	for i in n:
+		var m0 = inner[i].linear_interpolate(outer[i], 0.55)
+		var m1 = inner[i + 1].linear_interpolate(outer[i + 1], 0.55)
+		mk.quad(inner[i], inner[i + 1], m1, m0, c_top)
+		mk.quad(m0, m1, outer[i + 1], outer[i], c_low)
+		var l0 = inner[i].linear_interpolate(outer[i], 0.12)
+		var l1 = inner[i + 1].linear_interpolate(outer[i + 1], 0.12)
+		mk.quad(inner[i], inner[i + 1], l1, l0, c_lit)
+		mk.quad(outer[i], outer[i + 1], outer[i + 1] + Vector2(0, 2.0), outer[i] + Vector2(0, 2.0), c_ink)
 	for i in range(1, n, 2):
 		var p = outer[i]
 		var hh = 7.0 + 6.0 * _hash(i * 5.3)
-		ci.draw_line(p + Vector2(-2, 1), p + Vector2(-5, -hh), Color(0.33, 0.48, 0.2, a), 2.0)
-		ci.draw_line(p + Vector2(2, 1), p + Vector2(4, -hh - 3.0), Color(0.42, 0.58, 0.26, a), 2.0)
+		mk.blade(p + Vector2(-2, 1), -3.0, hh, 3.0, Color(0.33, 0.48, 0.2, a), Color(0.33, 0.48, 0.2, a))
+		mk.blade(p + Vector2(2, 1), 2.0, hh + 3.0, 3.0, Color(0.42, 0.58, 0.26, a), Color(0.42, 0.58, 0.26, a))
 
 
 func _draw_snow() -> void:

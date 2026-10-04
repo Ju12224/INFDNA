@@ -453,7 +453,7 @@ func _mist_trees(i: int, p0: float, p1: float) -> void:
 		if a < 0.03:
 			continue
 		var mfile = str(def["mist"].get(look, def["mist"].get("summer", "")))
-		var tex = lib.tex(mfile) if mfile != "" else null
+		var tex = lib.tex_mip(mfile) if mfile != "" else null      # mipmapped: a hazy far tree drawn a little smaller than its picture does not shimmer
 		if tex == null:
 			continue
 		var w = hgt * float(def["w"]) / float(def["h"])

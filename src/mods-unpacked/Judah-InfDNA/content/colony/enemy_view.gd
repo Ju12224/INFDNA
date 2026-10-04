@@ -134,21 +134,26 @@ func draw_enemy(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade: flo
 
 # ---- a Void Maw climbing out of the collapse pit (arc.gd: void_born). For its first EMERGE_T sim seconds it rises out of the pit (world_view
 # draws the pit): young and small, sunk to the chest, dark as the void it came from and lit violet from below, the front rim of the pit and
-# a cloud of dust over its lower body, clods flying. Then it is the plain Void Maw. The clock is the sim's, so a paused game holds it.
+# a cloud of dust over its lower body, clods flying. Then it is the plain Void Maw. Its age comes from the arc's own clock (arc.gd lets
+# the first one out 6 s after the collapse and each next one 55 s later), so it climbs out whether or not anyone was looking, and a
+# paused game holds it.
 const WorldView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/world_view.gd")
 const EMERGE_T = 4.5
-var _born := {}       # void-born raider id -> sim time it began to climb out (first seen at the pit), or -1e9 when first seen already out
+var _born := {}       # raider id -> sim time it began to climb out: an override (the screenshot harness sets it), else the arc's clock decides
 var _glow = null      # soft radial light (loaded when first wanted; false when missing)
+var _lip = null       # the pit's near lip (world_view.pit_lip), built once
 
 
 func _emerge_k(e) -> float:
-	var b = _born.get(e.id)
-	if b == null:
-		b = sim.time if (sim.arc_stage == 3 and abs(e.x - sim.void_x) <= 6) else -1e9
-		if _born.size() > 12:
-			_born.clear()
-		_born[e.id] = b
-	return clamp((sim.time - float(b)) / EMERGE_T, 0.0, 1.0)
+	if _born.has(e.id):
+		return clamp((sim.time - float(_born[e.id])) / EMERGE_T, 0.0, 1.0)
+	if sim.arc_stage != 3:
+		return 1.0
+	for o in sim.enemies:
+		if o.void_born and o.id > e.id:
+			return 1.0                         # a later one is out already: this one is old
+	var released = 1 + int(min(2, sim.void_cycles)) - sim.void_left
+	return clamp((sim.arc_t - (6.0 + 55.0 * (released - 1))) / EMERGE_T, 0.0, 1.0)
 
 
 func _draw_emerging(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade: float, alpha: float, h: float, em: float, moving: bool, mouth: float) -> void:
@@ -174,7 +179,13 @@ func _draw_emerging(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade:
 		var lw = Vector2(h * 1.7, h * 0.9)
 		ci.draw_texture_rect(_glow, Rect2(pc + Vector2(0, -h * 0.12) - lw * 0.5, lw), false, Color(vv.r, vv.g, vv.b, 0.4 * fade * alpha))
 	# the near rim of the pit, in front of its sunk body (the same one the pit has: nothing changes when this one goes)
-	WorldView.draw_pit_lip(ci, pc, rx, alpha)
+	if _lip == null:
+		var mk = WorldView.CrackMK.new()
+		WorldView.pit_lip(mk, rx, 1.0)
+		_lip = mk.build()
+	ci.draw_set_transform(pc, 0.0, Vector2.ONE)
+	ci.draw_mesh(_lip, null)
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	# dust billowing up round it (the thickest at the start), and clods thrown out of the pit
 	if _glow:
 		for j in 10:

@@ -18,6 +18,22 @@ static func _h(a: float, b: float = 0.0) -> float:
 	return fmod(abs(sin(a * 12.9898 + b * 78.233) * 43758.5453), 1.0)
 
 
+# the per-drop hashes never change: worked out once (the same _h values the loops used to call for every drop, every frame)
+var _hx := []        # _h(k * 1.71, 3.0): rain streaks and snowflakes
+var _hy := []        # _h(k * 2.33, 4.0)
+var _sp := []        # splash k: [_h(k, 7.0), _h(k, 8.0), _h(k * 3.7, 9.0), _h(k * 1.3, 10.0)]
+
+
+func _tables(drops: int, splashes: int = 0) -> void:
+	while _hx.size() < drops:
+		var k = _hx.size()
+		_hx.append(_h(k * 1.71, 3.0))
+		_hy.append(_h(k * 2.33, 4.0))
+	while _sp.size() < splashes:
+		var k2 = _sp.size()
+		_sp.append([_h(k2, 7.0), _h(k2, 8.0), _h(k2 * 3.7, 9.0), _h(k2 * 1.3, 10.0)])
+
+
 func _active() -> bool:
 	return day != null and (day.rain > 0.02 or day.wet > 0.04 or day.snow > 0.05)
 
@@ -74,9 +90,10 @@ func _snowfall(r: float, tl: Vector2, vp: Vector2, z: float) -> void:
 	var lite = perf != null and perf.backdrop < 2
 	var n = int((70 if lite else 190) * r)
 	var C = sim.grid.CELL
+	_tables(n)
 	for k in n:
-		var hx = _h(k * 1.71, 3.0)
-		var hy = _h(k * 2.33, 4.0)
+		var hx = _hx[k]
+		var hy = _hy[k]
 		var y = fposmod(hy + _t * (0.15 + 0.13 * hx), 1.0)
 		var x = fposmod(hx * 1.37 + sin(_t * 0.7 + k * 1.3) * 0.015 + _t * 0.012 * (hx - 0.5), 1.0)
 		var p = tl + Vector2(x * vp.x, y * vp.y) * z
@@ -124,9 +141,10 @@ func _draw() -> void:
 	var n = int((60 if lite else 170) * r)
 	var slant = Vector2(-0.2, 1.0).normalized()
 	var C0 = sim.grid.CELL
+	_tables(n)
 	for k in n:
-		var hx = _h(k * 1.71, 3.0)
-		var hy = _h(k * 2.33, 4.0)
+		var hx = _hx[k]
+		var hy = _hy[k]
 		var y = fposmod(hy + _t * (1.25 + 0.9 * hx), 1.0)
 		var x = fposmod(hx * 1.37 + y * 0.1, 1.0)
 		var p = tl + Vector2(x * vp.x, y * vp.y) * z
@@ -139,11 +157,13 @@ func _draw() -> void:
 	# splash rings where the drops land, spread over the walking lanes
 	var C = sim.grid.CELL
 	var m = 26 if lite else 60
+	_tables(0, int(m * r))
 	for k in int(m * r):
-		var ph = fposmod(_t * (1.4 + 0.8 * _h(k, 7.0)) + _h(k, 8.0), 1.0)
-		var wx = tl.x + _h(k * 3.7, 9.0) * vp.x * z
+		var hk = _sp[k]
+		var ph = fposmod(_t * (1.4 + 0.8 * hk[0]) + hk[1], 1.0)
+		var wx = tl.x + hk[2] * vp.x * z
 		var sy = ground.smooth_px(int(floor(wx / C)))
-		var lane = _h(k * 1.3, 10.0)
+		var lane = hk[3]
 		var ps = GroundView.persp(lane)
 		var gp = Vector2(wx, GroundView.lane_y(sy, lane))
 		if gp.y < tl.y or gp.y > tl.y + vp.y * z:

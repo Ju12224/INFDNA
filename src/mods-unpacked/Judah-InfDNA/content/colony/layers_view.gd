@@ -21,6 +21,7 @@ const CLASS_COLORS = {"small": Color("#ffb347"), "burrower": Color("#ff7a4a"), "
 const CLASS_RANK = {"prey": 0, "small": 1, "burrower": 2, "brute": 3, "elite": 4, "boss": 5}
 const MAX_LINKS = 8          # links drawn per raider; a swarm on a boss is one blob anyway
 const ARROW_BUCKET = 90.0    # off-screen raiders closer than this (screen px) share one arrow
+const PAIR_BUCKET = 8.0      # columns per bucket when matching ants to the raiders in view (_rebuild_pairs)
 
 var sim
 var cam
@@ -89,10 +90,26 @@ func _rebuild_pairs() -> void:
 		foes.append([e, ep])
 	if foes.empty():
 		return
+	# the ants bucketed once by the column they start from (the meadow's critters make a dozen "raiders" in view at a time, and
+	# each used to walk the whole colony); a raider then looks only at the buckets within reach, in the colony's own order
 	var ants = sim.ants
 	var max_k2 := 1.0
-	for a in ants:
+	var span := 0
+	var buckets := {}
+	for i in ants.size():
+		var a = ants[i]
 		max_k2 = max(max_k2, a.ph.get("reach2", 1.0))
+		var lo = a.x
+		var hi = a.tx
+		if hi < lo:
+			lo = a.tx
+			hi = a.x
+		span = max(span, hi - lo)
+		var bk = int(floor(lo / PAIR_BUCKET))
+		if buckets.has(bk):
+			buckets[bk].append(i)
+		else:
+			buckets[bk] = [i]
 	for fe in foes:
 		var e = fe[0]
 		var ep: Vector2 = fe[1]
@@ -102,9 +119,16 @@ func _rebuild_pairs() -> void:
 		# an ant is drawn between the centres of its cell and its next cell: rule out the far ones from the cells alone
 		var cx0 = (ep.x - far) / C - 1.0
 		var cx1 = (ep.x + far) / C
+		var near := []
+		for bk in range(int(floor((cx0 - span) / PAIR_BUCKET)), int(floor(cx1 / PAIR_BUCKET)) + 1):
+			if buckets.has(bk):
+				near += buckets[bk]
+		near.sort()
+		var ez = e.z
 		var links := 0
-		for a2 in ants:
-			if a2.z != e.z:
+		for ai in near:
+			var a2 = ants[ai]
+			if a2.z != ez:
 				continue          # a wall of dirt between them
 			if (a2.x < cx0 and a2.tx < cx0) or (a2.x > cx1 and a2.tx > cx1):
 				continue

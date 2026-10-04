@@ -19,10 +19,10 @@ const CLOSE_INK_LO = 0.3      # the owner's outline as drawn is on the tree at a
 const CLOSE_INK_HI = 0.62
 const CLOSE_DETAIL_LO = 0.42  # bark furrows, moss and rim leaves are full strength at and below CLOSE_DETAIL_LO and gone at CLOSE_DETAIL_HI
 const CLOSE_DETAIL_HI = 0.95
-const SHADE_FAR = 0.4         # the share of the soft light and shadow that stays on a tree seen from afar
+const SHADE_FAR = 0.3         # the share of the soft light and shadow that stays on a tree seen from afar
 const SWAY_Z = 0.95           # at and below this zoom the clumps of a canopy move each their own way (beyond it the whole tree bends as one)
 const SWAY_N = 8              # the canopy moves on a (SWAY_N + 1)^2 grid of points (the manifest's `sway` says how much each one is leaf)
-const FOG_K = 0.16            # depth fog on the trees of the back lanes: the share of haze at lane 0 (less close up, where it would only wash out the detail)
+const FOG_K = 0.14            # depth fog on the trees: the share of haze on the farthest (trees stand in lanes 0.1 to 0.45; less close up, where it would wash out the detail)
 const FOG_COL = Color(0.8, 0.87, 0.91)
 const LEAF_Z = 1.3            # falling leaves are drawn at and below this zoom
 const DEPTH = 128.0          # thickness of the walkable band, px
@@ -288,6 +288,10 @@ func draw_slice(ci: CanvasItem, s: int) -> void:
 			continue
 		var sw = amp * sin(_t * 1.15 + e[0] * 1.7 + s * 0.45)
 		ci.draw_mesh(m, null, null, Transform2D(Vector2(1, 0), Vector2(sw, 1), Vector2(-sw * e[1]["oy"], 0)))
+	# how close the camera is (a zoom below 1 is a magnified view) and what part of the world it sees: only what is in view is drawn
+	var ct = ci.get_canvas_transform()
+	var z = 1.0 / max(0.01, ct.get_scale().x)
+	var vr = ct.affine_inverse().xform(Rect2(Vector2.ZERO, ci.get_viewport_rect().size))
 	if detail > 0:
 		var gust0 = 1.0 + 1.6 * sim.rain
 		var shk = -1.0
@@ -305,16 +309,14 @@ func draw_slice(ci: CanvasItem, s: int) -> void:
 				n_drawn += 1
 				if detail == 1 and n_drawn % 2 == 0:
 					continue
+				if it["x"] + it["size"].x < vr.position.x or it["x"] - it["size"].x > vr.end.x:
+					continue
 				if it["kind"] == "shroom" and shk < 0.0:
 					shk = _shroom_k()
 				_draw_scenery(ci, it, gust0, shk, au0, berry)
 		ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if _vis_f[s].empty():
 		return
-	# how close the camera is (a zoom below 1 is a magnified view) and what part of the world it sees: the close-up layers of a tree are only drawn for trees in view
-	var ct = ci.get_canvas_transform()
-	var z = 1.0 / max(0.01, ct.get_scale().x)
-	var vr = ct.affine_inverse().xform(Rect2(Vector2.ZERO, ci.get_viewport_rect().size))
 	var gust = 1.0 + 1.6 * sim.rain
 	for fe in _vis_f[s]:
 		if fe["x1"] < vr.position.x - 200.0 or fe["x0"] > vr.end.x + 200.0:
@@ -368,7 +370,7 @@ func _draw_tree(ci: CanvasItem, sp: Dictionary, by: float, z: float, sway: float
 			if ta != null:
 				layers.append([ta, Color(mod.r, mod.g, mod.b, au)])
 	if sp["shade"] != null:
-		layers.append([sp["shade"], Color(mod.r, mod.g, mod.b, SHADE_FAR + (1.0 - SHADE_FAR) * (1.0 - smoothstep(0.4, 1.1, z)))])
+		layers.append([sp["shade"], Color(mod.r, mod.g, mod.b, SHADE_FAR + (1.0 - SHADE_FAR) * (1.0 - smoothstep(0.35, 0.8, z)))])
 	var da = 1.0 - smoothstep(CLOSE_DETAIL_LO, CLOSE_DETAIL_HI, z)
 	if da > 0.03:
 		var td = _lazy(sp, "detail", true)
@@ -463,6 +465,7 @@ func _draw_leaves(ci: CanvasItem, sp: Dictionary, by: float, z: float, gust: flo
 	var c0: Color = lf["green"].linear_interpolate(lf["autumn"], au)
 	var mod: Color = sp["mod"]
 	var sz: float = lf["size"]
+	var lt = _leaf_texture()
 	for i in n:
 		var h1 = MK.hash1(sd + i * 3.17)
 		var h2 = MK.hash1(sd + i * 5.71 + 1.0)
@@ -481,14 +484,40 @@ func _draw_leaves(ci: CanvasItem, sp: Dictionary, by: float, z: float, gust: flo
 		var spin = _t * (1.6 + 1.4 * h3) + h2 * 6.28
 		var flip = cos(_t * (2.2 + 1.5 * h1) + h3 * 5.0)
 		var col = c0.linear_interpolate(Color(c0.r * 0.7, c0.g * 0.7, c0.b * 0.6), h3 * 0.6)
-		col = Color(col.r * mod.r, col.g * mod.g, col.b * mod.b, a)
-		var tip = Color(min(1.0, col.r * 1.25), min(1.0, col.g * 1.2), min(1.0, col.b * 1.1), a)
 		ci.draw_set_transform(Vector2(x, y), spin, Vector2(1.0, 0.25 + 0.75 * abs(flip)))
 		var L = sz * (0.8 + 0.4 * h2)
-		ci.draw_polygon(PoolVector2Array([Vector2(-L * 1.25, 0), Vector2(-L * 0.5, -L * 0.36), Vector2(L * 0.25, -L * 0.42), Vector2(L, 0),
-			Vector2(L * 0.25, L * 0.42), Vector2(-L * 0.5, L * 0.36)]), PoolColorArray([col.darkened(0.3), col, tip, tip, col, col.darkened(0.2)]))
-		ci.draw_line(Vector2(-L * 1.25, 0), Vector2(L * 0.8, 0), Color(col.r * 0.6, col.g * 0.55, col.b * 0.5, a), max(0.6, L * 0.09))
+		ci.draw_texture_rect(lt, Rect2(-L * 1.2, -L * 0.48, L * 2.4, L * 0.96), false, Color(col.r * mod.r * 1.15, col.g * mod.g * 1.15, col.b * mod.b * 1.15, a))
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+# The little leaf the falling leaves are drawn with: grey (lighter toward the tip, a darker midrib), tinted by the colour it is drawn in. Made once.
+var _leaf_tex = null
+
+
+func _leaf_texture():
+	if _leaf_tex != null:
+		return _leaf_tex
+	var w = 40
+	var h = 16
+	var img = Image.new()
+	img.create(w, h, false, Image.FORMAT_RGBA8)
+	img.lock()
+	for yy in h:
+		for xx in w:
+			var u = (xx + 0.5) / w
+			var v = ((yy + 0.5) / h - 0.5) * 2.0
+			var hw = pow(max(0.0, sin(PI * min(1.0, u * 1.06))), 0.75) * (1.0 - 0.25 * u)
+			var edge = clamp((hw - abs(v)) * h * 0.5, 0.0, 1.0)
+			var stem = clamp(1.0 - abs(v) * h * 0.5, 0.0, 1.0) * (1.0 if u < 0.12 else 0.0)
+			var a = max(edge, stem)
+			var g = 0.68 + 0.3 * u - 0.12 * abs(v)
+			g *= 1.0 - 0.35 * clamp(1.0 - abs(v) * h * 0.6, 0.0, 1.0)          # the midrib
+			img.set_pixel(xx, yy, Color(g, g, g, a))
+	img.unlock()
+	var t = ImageTexture.new()
+	t.create_from_image(img, Texture.FLAG_FILTER | Texture.FLAG_MIPMAPS)
+	_leaf_tex = t
+	return t
 
 
 # The picture entry of a tree or rock feature, or null when the art is not there. `sh` is the ground shadow mesh builder.
@@ -565,7 +594,7 @@ func _tree_sprite(f: Dictionary):
 	# a tree in a back lane is farther off: a little cooler, and veiled by the haze (the fog layer, see _draw_tree)
 	var tint = Color.white.linear_interpolate(Color(0.9, 0.93, 0.97), 1.0 - clamp(lane, 0.0, 1.0))
 	var spr = {"tree": true, "base": base, "size": size, "pos": Vector2(b.x - size.x * 0.5, b.y - size.y + 6.0 * sc), "mod": tint * _vary(sd),
-		"sway": 1.0 if sways else 0.0, "files": {}, "fog": FOG_K * pow(1.0 - clamp(lane, 0.0, 1.0), 1.5)}
+		"sway": 1.0 if sways else 0.0, "files": {}, "fog": FOG_K * clamp((0.47 - lane) / 0.37, 0.0, 1.0)}
 	if leafy:
 		# the spring look and the autumn one (each tree turns orange, red or gold) are read when the year first needs them
 		spr["autumn"] = ["orange", "red", "gold"][int(MK.hash1(sd + 55.0) * 2.99)]

@@ -1648,7 +1648,7 @@ func _step_ant(a, dt: float) -> void:
 		if dr != 0.0:
 			var kr = dt * rot_every
 			var lim = ROT_RATE * kr
-			a.rot += clamp(dr * min(1.0, kr * 9.0), -lim, lim)
+			a.rot = wrapf(a.rot + clamp(dr * min(1.0, kr * 9.0), -lim, lim), -PI, PI)
 
 	if a.dig_timer > 0.0:
 		a.dig_timer -= dt
@@ -1700,8 +1700,8 @@ func _step_ant(a, dt: float) -> void:
 			sp *= fac
 			a.scout = (gait & Loco.DIR_MASK) | (int(r1 * 255.0) << Loco.RAMP_SHIFT) | (debt << Loco.DEBT_SHIFT)
 		elif gait >= (1 << Loco.DEBT_SHIFT):
-			var extra = sp * CATCH_K
 			var debt2 = (gait >> Loco.DEBT_SHIFT) & 4095
+			var extra = sp * CATCH_K * clamp(debt2 / 128.0, 0.25, 1.0)     # eases off over the last two cells owed
 			debt2 = int(max(0, debt2 - max(1, int(extra * dt * 64.0 + 0.5))))
 			sp += extra
 			a.scout = (gait & 4095) | (debt2 << Loco.DEBT_SHIFT)
@@ -1755,16 +1755,30 @@ func _orient(a) -> void:
 		else:
 			th = atan2(f * my, f * mx)
 	else:
+		# the rock round the cell it came from, this cell and the next together: one odd cell at a bend no longer turns the ant over and back
 		var n = _floor_dir(a.tx, a.ty, a.tz)
+		var roof = -2.0                 # how much more rock above than below makes a real roof
+		if a.tz == a.z:
+			n += _floor_dir(a.x, a.y, a.z)
+			roof -= 2.0
+			var lc = a.scout & Loco.DIR_MASK
+			if lc >= 1 and lc <= 8:
+				n += _floor_dir(a.x - Loco.OX[lc - 1], a.y - Loco.OY[lc - 1], a.z)
+				roof -= 2.0
 		var nl = n.x * n.x + n.y * n.y
-		if nl * 3.0 >= n.z and nl > 0.0:
+		var along = nl * 3.0 < n.z or nl <= 0.0
+		if not along:
 			th = atan2(-n.x, n.y)
 			if grid.is_solid(a.tx, a.ty + 1, a.tz) or grid.is_solid(a.x, a.y + 1, a.z):
 				th = clamp(th, -1.1, 1.1)       # a floor under the feet wins (a ceiling cell must not turn it upside down)
-			var d = mx * cos(th) + my * sin(th)
-			if abs(d) > 0.35 * sqrt(mx * mx + my * my):
-				f = 1 if d > 0 else -1
-		else:
+			elif abs(th) > 2.0 and mx != 0 and abs(a.trot) <= 2.0 and (n.y > roof or abs(n.x) > -n.y):
+				along = true                    # it turns upside down only under a real roof (round an overhang at a bend it stays upright),
+				                                # and once on a roof it stays there until the roof ends
+			if not along:
+				var d = mx * cos(th) + my * sin(th)
+				if abs(d) > 0.35 * sqrt(mx * mx + my * my):
+					f = 1 if d > 0 else -1
+		if along:
 			if abs(mx) >= abs(my) and mx * f < 0:
 				f = -f                                 # a level step against its facing: turn round rather than walk on upside down
 			th = atan2(f * my, f * mx)

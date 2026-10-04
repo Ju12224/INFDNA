@@ -349,9 +349,9 @@ PRESETS = {
     # on the clump rims, canopy = the crown's shadow on the bark, base = dark where it meets the ground. The oaks are plain and want all of it; the others
     # are already painted with their own bark and leaf texture, so they only get light, shadow and a few leaves.
     "oak": dict(dome=0.8, cyl=0.9, bark=1.0, moss=0.8, tufts=1.0, canopy=1.0, base=1.0),
-    "moss": dict(dome=0.5, cyl=0.35, bark=0.0, moss=0.0, tufts=0.35, canopy=0.7, base=1.0),
-    "acacia": dict(dome=0.45, cyl=0.4, bark=0.0, moss=0.0, tufts=0.3, canopy=0.6, base=1.0),
-    "grove": dict(dome=0.45, cyl=0.4, bark=0.0, moss=0.0, tufts=0.3, canopy=0.6, base=1.0),
+    "moss": dict(dome=0.3, cyl=0.3, bark=0.0, moss=0.0, tufts=0.3, canopy=0.5, base=1.0),
+    "acacia": dict(dome=0.3, cyl=0.35, bark=0.0, moss=0.0, tufts=0.25, canopy=0.45, base=1.0),
+    "grove": dict(dome=0.3, cyl=0.35, bark=0.0, moss=0.0, tufts=0.25, canopy=0.45, base=1.0),
     "spruce": dict(dome=0.0, cyl=0.3, bark=0.0, moss=0.0, tufts=0.0, canopy=0.0, base=1.0),
     "stump": dict(dome=0.0, cyl=0.35, bark=0.0, moss=0.0, tufts=0.0, canopy=0.0, base=1.0),
     "log": dict(dome=0.0, cyl=0.3, bark=0.0, moss=0.0, tufts=0.0, canopy=0.0, base=0.8),
@@ -369,8 +369,8 @@ def shade_layer(parts, P, lo=0.5):
     dev_d, Dleaf, lab = _dome(parts, cap, 1.0)
     dev_c, Dbark, theta = _cylinder(parts, 0.95)
     if P["dome"] > 0:
-        sh = np.clip(-dev_d * 0.5, 0, 0.42) * P["dome"]
-        li = np.clip(dev_d * 0.75 - 0.05, 0, 0.3) * P["dome"]
+        sh = np.clip(-dev_d * 0.42, 0, 0.34) * P["dome"]
+        li = np.clip(dev_d * 0.6 - 0.05, 0, 0.22) * P["dome"]
         _over(ar, aa, dark, sh * parts.green)
         _over(ar, aa, [214, 232, 150], li * parts.green)
     if P["cyl"] > 0:

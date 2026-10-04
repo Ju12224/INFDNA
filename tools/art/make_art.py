@@ -212,6 +212,13 @@ def make_oaks(manifest):
         print("oak %s: %dx%d, looks %s, %d KB" % (nm, entry["w"], entry["h"], ",".join(entry["looks"].keys()), sum(sizes.values()) // 1024))
 
 
+def make_scenery(manifest):
+    """The meadow scenery sheets (bushes, ferns, mushroom clusters), one PNG per item and look in content/art/scenery/: see scenery_art.py."""
+    import scenery_art as SA
+    sizes = SA.make_scenery(manifest, OUT, SRC)
+    print("scenery: %d files, %d KB" % (len(sizes), sum(sizes.values()) // 1024))
+
+
 def make_bird(manifest):
     """The bird's five parts, each cropped (the open top of the legs closed with an outline); the game assembles and flaps them. See creature_cuts.make_bird."""
     CC.make_bird(manifest, OUT)
@@ -222,6 +229,7 @@ def main():
     manifest = {}
     make_trees(manifest)
     make_oaks(manifest)
+    make_scenery(manifest)
     make_bird(manifest)
     make_rocks(manifest)
     CC.make_creatures(manifest, out_dir=OUT)
