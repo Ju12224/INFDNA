@@ -1652,11 +1652,14 @@ func _step_ant(a, dt: float) -> void:
 			a.rot_key = rk
 			if a.tx != a.x or a.ty != a.y:
 				_orient(a)
-		var dr = wrapf(a.trot - a.rot, -PI, PI)
-		if dr != 0.0:
-			var kr = dt * rot_every
-			var lim = ROT_RATE * kr
-			a.rot = wrapf(a.rot + clamp(dr * min(1.0, kr * 9.0), -lim, lim), -PI, PI)
+		if a.rot != a.trot:
+			var dr = wrapf(a.trot - a.rot, -PI, PI)
+			if abs(dr) < 0.01:
+				a.rot = a.trot          # settled (and then this costs nothing until the next turn)
+			else:
+				var kr = dt * rot_every
+				var lim = ROT_RATE * kr
+				a.rot = wrapf(a.rot + clamp(dr * min(1.0, kr * 9.0), -lim, lim), -PI, PI)
 
 	if a.dig_timer > 0.0:
 		a.dig_timer -= dt
@@ -1690,8 +1693,9 @@ func _step_ant(a, dt: float) -> void:
 			sp *= LADEN_K if a.carry > 0.0 else OUT_K
 		elif a.spoil > 0.0:
 			sp *= SPOIL_K
-		var climb = not und and a.tx == a.x and a.ty != a.y
-		if climb:
+		var climb = false
+		if not und and a.tx == a.x and a.ty != a.y:
+			climb = true
 			var lost = sp * (1.0 - CLIMB_K)
 			sp -= lost
 			if a.task != Task.NURSE:
@@ -1700,9 +1704,8 @@ func _step_ant(a, dt: float) -> void:
 		# getting up to speed: the mean of the ramp over this tick, so the step size does not change how far an ant gets. The ground lost (here and
 		# on a climb) is owed, but not by nurses, whose walking gets nothing done; it is made up at full speed on the level.
 		var gait = a.scout
-		var r0i = (gait >> Loco.RAMP_SHIFT) & 255
-		if r0i < 255:
-			var r0 = r0i / 255.0
+		if (gait & Loco.RAMP_MASK) != Loco.RAMP_MASK:
+			var r0 = ((gait >> Loco.RAMP_SHIFT) & 255) / 255.0
 			var r1 = r0 + dt / RAMP_T
 			var avg = (r0 + r1) * 0.5
 			if r1 >= 1.0:
@@ -1758,7 +1761,7 @@ func _step_ant(a, dt: float) -> void:
 		if (moved or a.tz != a.z) and a.dig_timer <= 0.0:
 			dist = a.hop if a.hop > 0.0 else (1.4142 if (a.tx != a.x and a.ty != a.y) else 1.0)
 			a.t = min(over / dist, 1.6)
-			if und and occ.size() == grid.PLANES * grid.WH:
+			if und and occ.size() > 0:
 				_mark_step(a)
 		else:
 			a.scout = a.scout & Loco.NO_RAMP      # standing: it will set off slowly
@@ -1861,6 +1864,8 @@ func _mark_step(a) -> void:
 	if g.under[j] != 1:
 		return
 	var i = a.tz * g.WH + j
+	if i >= occ.size():
+		return                  # (the world has just grown: _descend makes a new map)
 	var q = int(time * 10.0)
 	var o = occ[i]
 	var me = a.id & 4095
@@ -1948,6 +1953,8 @@ func _on_arrive(a) -> void:
 				_descend(a, grid.dist_home)
 	# moments an ant stands still: at the pile with its mandibles full, at home having handed the food over, having just taken up a new job, and
 	# (sometimes) with its head out of the nest mouth before it steps out
+	if _pause_req <= 0.0 and a.carry == c0 and a.task == task0 and a.ty >= a.y:
+		return                  # (nothing of the kind: most steps)
 	if a.task == Task.DEFEND or a.squad != 0 or a.dig_timer > 0.0:
 		return
 	if a.carry > 0.0 and c0 <= 0.0:

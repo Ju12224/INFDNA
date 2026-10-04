@@ -12,10 +12,11 @@ extends Reference
 # made one cell at a time.
 #
 # How it looks (the gait, colony_sim._step_ant applies it): an ant keeps its line. Among the cells that lead closer it takes the one that turns least
-# from its last step, so it does not zig-zag down a shaft or step back and forth; it prefers a cell no other ant is about to enter (a crowd spreads over
-# floor, ceiling and the other plane instead of piling into one spot); it sets off from standing slowly and gets up to speed in a fraction of a second,
-# slows for a sharp turn, and squeezes through a hole to the other tunnel plane at a crawl. A long hop at high game speed stays a straight walk (two
-# neighbouring directions at most), so the line drawn from its start to its end never cuts through the rock at a bend.
+# from its last step, so it does not zig-zag down a shaft or step back and forth; it walks on the floor rather than upside down on the roof when it
+# can; it prefers a cell no other ant is about to enter (a crowd spreads over floor, walls and the other plane instead of piling into one spot); it
+# sets off from standing slowly and gets up to speed in a fraction of a second, slows for a sharp turn, and squeezes through a hole to the other tunnel
+# plane at a crawl. A long hop at high game speed stays a straight walk (two neighbouring directions at most), so the line drawn from its start to
+# its end never cuts through the rock at a bend. Nurses potter: a short walk one way along the floor, a stand, another walk (shuffle_home).
 #
 # Raiders walk by surface_step too (always one cell at a time).
 
@@ -29,6 +30,7 @@ const OY = [-1, -1, -1, 0, 0, 1, 1, 1]
 const DIR_MASK = 15
 const PLANE_STEP = 9
 const RAMP_SHIFT = 4
+const RAMP_MASK = 255 << 4
 const NO_RAMP = ~(255 << 4)
 const DEBT_SHIFT = 12
 const DEBT_MASK = 4095 << 12
@@ -53,12 +55,6 @@ const ROOF_PEN = 4            # ... and for a cell with more rock above it than 
 const PLANE_HOP = 2.2         # a crossing to the other tunnel plane takes as long as walking this many cells (the ant squeezes through the hole)
 const NURSE_W = [6, 4, 1, 0, 0]   # a nurse's next step, weighted by how sharply it turns: on along the floor, never straight back mid-walk
 
-
-# The step code of a move (dx, dy): signs only, so a long hop has the code of its general direction.
-static func dir_code(dx: int, dy: int) -> int:
-	var sx = 1 if dx > 0 else (-1 if dx < 0 else 0)
-	var sy = 1 if dy > 0 else (-1 if dy < 0 else 0)
-	return DIR_OF[(sy + 1) * 3 + sx + 1]
 
 
 # One hop along the open ground in the ant's heading: up to `limit` cells (and never more than the game speed allows). Moves the target cell (tx, ty).
@@ -188,6 +184,10 @@ static func descend(sim, a, f: PoolIntArray, macro: bool = true, ant: bool = fal
 			var nx = cx + OX[i]
 			var ny = cy + OY[i]
 			var sc = v * 16 + rng.randi_range(0, 3)
+			if prev != 0:
+				sc += TURN_PEN[TURN[pt + i]]
+			if sc >= best_s:
+				continue                # the penalties below only add: it cannot win
 			if not g.walled(nx, ny, cz):
 				sc += 6
 			if ny + 1 < H:
@@ -198,8 +198,6 @@ static func descend(sim, a, f: PoolIntArray, macro: bool = true, ant: bool = fal
 					sc += ROOF_PEN
 				elif up == dn:
 					sc += 1
-			if prev != 0:
-				sc += TURN_PEN[TURN[pt + i]]
 			if crowd:
 				var o = occ[base + d]
 				if (o >> 12) > qnow and (o & 4095) != me:
@@ -307,7 +305,6 @@ static func shuffle_home(sim, a, reach: int = 8) -> bool:
 				var o = occ[base + d]
 				if (o >> 12) > qnow and (o & 4095) != me:
 					w = (w + 2) / 3        # a cell another ant stands in or is entering
-
 			wt[i] = w
 			total += w
 		if total > 0 or prev == 0:
