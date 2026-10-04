@@ -5,6 +5,7 @@ extends Node2D
 #   of the ground, ant hill, entrance holes)
 # and, added by colony_scene after this node: Overlay (props, food, queen), ants.
 
+const AL = preload("res://mods-unpacked/Judah-InfDNA/content/colony/art_lib.gd")
 const INK = Color("#15121a")
 const GroundView = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ground_view.gd")
 const NestDecor = preload("res://mods-unpacked/Judah-InfDNA/content/colony/nest_decor.gd")
@@ -973,6 +974,33 @@ func _lump(ci: CanvasItem, c: Vector2, rx: float, ry: float, col: Color, seed_v:
 	ci.draw_colored_polygon(pts, col)
 
 
+# Honey under a beehive (colony_sim._drop_honey): the owner's honeycomb pieces, more of them the more there is, on a honey puddle; a fallen
+# hive's honey is a big spill (the broken hive itself is drawn by hive_art.gd).
+const HONEY_PIECES = ["comb_three", "comb_one", "comb_chunk", "comb_cell", "comb_bit", "comb_drip", "comb_big"]
+
+
+func _draw_honey(ci: CanvasItem, pile: Dictionary, base: Vector2) -> void:
+	var lib = AL.get_lib()
+	var share = clamp(pile["amount"] / max(1.0, pile["max"]), 0.0, 1.0)
+	if share <= 0.0:
+		return
+	var big = pile.get("fallen", false)
+	var pud = lib.tex("hive/puddle_a.png" if big else "hive/puddle_b.png")
+	if pud != null:
+		var pw = (110.0 if big else 46.0) * (0.6 + 0.4 * share)
+		var ph = pw * pud.get_height() / float(pud.get_width())
+		ci.draw_texture_rect(pud, Rect2(base + Vector2(-pw * 0.5, -ph * 0.6), Vector2(pw, ph)), false)
+	var n = int(clamp(ceil(share * (7.0 if big else 4.0)), 1, 7))
+	for i in n:
+		var t = lib.tex("hive/%s.png" % HONEY_PIECES[(i + int(pile["x"])) % HONEY_PIECES.size()])
+		if t == null:
+			continue
+		var w = (22.0 if big else 16.0) * (0.8 + 0.4 * _hash(pile["x"] * 1.7 + i))
+		var h = w * t.get_height() / float(t.get_width())
+		var off = Vector2((i - (n - 1) * 0.5) * w * 0.8, -(i % 2) * 6.0 - 4.0)
+		ci.draw_texture_rect(t, Rect2(base + off - Vector2(w * 0.5, h), Vector2(w, h)), false)
+
+
 func _draw_pile(ci: CanvasItem, pile: Dictionary) -> void:
 	var g = sim.grid
 	var C = g.CELL
@@ -984,6 +1012,9 @@ func _draw_pile(ci: CanvasItem, pile: Dictionary) -> void:
 		var gl = 0.2 + 0.08 * sin(_t * 3.0)
 		ci.draw_circle(base + Vector2(0, -16), 52.0, Color(1.0, 0.85, 0.3, gl * 0.6))
 		ci.draw_circle(base + Vector2(0, -16), 30.0, Color(1.0, 0.92, 0.55, gl))
+	if pile.get("kind", "") == "honey":
+		_draw_honey(ci, pile, base)
+		return
 	if pile.get("kind", "") == "fruit":
 		var ft = _tex.get(FRUIT_TEX)
 		var nf = int(clamp(ceil(pile["amount"] / 10.0), 1, 5))

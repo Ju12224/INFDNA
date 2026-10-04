@@ -8,6 +8,7 @@ extends Reference
 # walks behind a flower, one in a front lane walks in front of it. Slice SLICES is the foreground,
 # drawn over every unit. Lane 0 is the back of the band, lane 1 the front lip (the dirt outline).
 
+const HiveArt = preload("res://mods-unpacked/Judah-InfDNA/content/colony/hive_art.gd")
 const MK = preload("res://mods-unpacked/Judah-InfDNA/content/colony/mesh_kit.gd")
 const AL = preload("res://mods-unpacked/Judah-InfDNA/content/colony/art_lib.gd")
 const WF = preload("res://mods-unpacked/Judah-InfDNA/core/world_features.gd")
@@ -471,6 +472,8 @@ func draw_slice(ci: CanvasItem, s: int) -> void:
 		if fe.has("spr"):
 			if fe["spr"].has("tree"):
 				_draw_tree(ci, fe["spr"], fe["by"], z, sway, gust)
+				if fe.has("fid"):
+					HiveArt.draw(ci, fe, sim, day, _t, sway)        # a beehive on this tree (hive_art.gd)
 			else:
 				_draw_sprite(ci, fe["spr"], xf)
 		if fe["mesh"] != null:
@@ -667,7 +670,7 @@ func _sprite_entry(f: Dictionary, spr: Dictionary, sh) -> Dictionary:
 	var lane: float = f["lane"]
 	var b = _base_point(f)
 	var sz: Vector2 = spr["size"]
-	return {"mesh": null, "shade": sh.build(), "slice": slice_of(lane), "x0": b.x - sz.x * 0.6, "x1": b.x + sz.x * 0.6, "sway": spr.get("sway", 0.0), "by": b.y, "spr": spr}
+	return {"mesh": null, "shade": sh.build(), "slice": slice_of(lane), "x0": b.x - sz.x * 0.6, "x1": b.x + sz.x * 0.6, "sway": spr.get("sway", 0.0), "by": b.y, "spr": spr, "fid": f.get("id")}
 
 
 func _tint(lane: float) -> Color:

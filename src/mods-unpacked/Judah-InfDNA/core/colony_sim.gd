@@ -10,6 +10,7 @@ extends Reference
 # Evolution: new ants inherit from workers chosen by tournament on
 # fitness rate (food delivered + digging per second alive), then mutate.
 
+const Hives = preload("res://mods-unpacked/Judah-InfDNA/core/hives.gd")
 const Genome = preload("res://mods-unpacked/Judah-InfDNA/core/genome.gd")
 const Arc = preload("res://mods-unpacked/Judah-InfDNA/core/arc.gd")
 const UG = preload("res://mods-unpacked/Judah-InfDNA/core/underground.gd")
@@ -271,6 +272,8 @@ var _announced := {}
 var _toast_timer := 5.0
 var planner
 var trees: Array = []            # [{"x", "lane", "t"}] Brotato fruit trees on the surface
+var hives := {}                  # tree feature id -> {"x", "lane", "seed", "taken", "fallen", "regrow", "bee_cd"} (core/hives.gd)
+var _hive_bees := []             # [[raider, born]] guard bees out of their hive
 var rocks: Array = []            # decorative [{"x", "lane", "s"}]
 var food_cap := 80.0
 var rot_rate := 0.0              # food/s currently rotting (HUD)
@@ -2062,6 +2065,8 @@ func _forage(a) -> void:
 			a.rich = clamp(p["amount"] / max(1.0, p["max"]), 0.0, 1.0)
 			a.jack = p.get("kind", "") == "jackpot"
 			p["amount"] -= take
+			if p.has("hive"):
+				_hive_taken(p["hive"], take, p["x"])
 			# far piles are richer: seeds, honeydew, whole carcasses. The load is worth more the farther it came
 			# from (up to x2.2 past 720 cells), which pays for the long walk home.
 			a.carry = take * (1.0 + clamp(abs(p["x"] - ex) / 600.0, 0.0, 1.2)) * ((1.3 + 0.6 * mod("harvest_power")) if (harvest_t > 0.0 and p["x"] == harvest_x) else 1.0)
@@ -3894,7 +3899,12 @@ func _step_economy(dt: float) -> void:
 		tr["t"] -= dt * float(rule("fruit_boost", 1.0)) * _s_fruit
 		if tr["t"] <= 0.0:
 			tr["t"] = rng.randf_range(22.0, 34.0)       # the giant fruit trees are the landscape's oases (a few feed a small colony; a big one must range)
-			_drop_fruit(tr["x"])
+			var hv = hives.get(tr["id"])
+			if hv != null and not hv["fallen"]:
+				_drop_honey(tr["x"], tr["id"])
+			else:
+				_drop_fruit(tr["x"])
+	_step_hives(dt)
 
 
 # ---- Fungus gardens, the way leafcutters really keep them: the garden grows in stages after the room is dug (spores, then white
@@ -3977,6 +3987,8 @@ func _sync_trees(dt: float, force: bool = false) -> void:
 			"tree":
 				_tree_ids[f["id"]] = true
 				trees.append({"x": f["x"], "lane": f["lane"], "t": rng.randf_range(5.0, 25.0), "id": f["id"]})
+				if Hives.has_hive(float(f["seed"])):
+					hives[f["id"]] = {"x": f["x"], "lane": f["lane"], "seed": float(f["seed"]), "taken": 0.0, "fallen": false, "regrow": 0.0, "bee_cd": 0.0}
 				landmarks.append({"id": f["id"], "kind": "tree", "x": f["x"], "found": false})
 			"cliff":
 				_tree_ids[f["id"]] = true
@@ -4047,6 +4059,63 @@ func _discover(lm: Dictionary) -> void:
 	banner = "Discovered: %s" % {"tree": "a giant fruit tree", "cave": "a cave hoard", "vista": "a cliff vista"}.get(lm["kind"], "a landmark")
 	banner_t = 3.0
 	_sfx("repelled")
+
+
+# A hive tree drops honeycomb under its hive (the ants carry it home; every load scars the hive, see _hive_taken).
+func _drop_honey(x: int, hive_id) -> void:
+	for p in piles:
+		if p.get("kind", "") == "honey" and p.get("hive") == hive_id:
+			p["amount"] = min(p["amount"] + Hives.DROP, Hives.DROP_MAX)
+			return
+	piles.append({"x": x, "amount": Hives.DROP, "max": Hives.DROP_MAX, "kind": "honey", "hive": hive_id})
+
+
+func _hive_taken(hive_id, amount: float, x: int) -> void:
+	var h = hives.get(hive_id)
+	if h == null or h["fallen"]:
+		return
+	h["taken"] += amount
+	if h["bee_cd"] <= 0.0 and EnemyDefs.DEFS.has("bee"):
+		# the bees come out to defend their honey: a few guards that hold the tree, then go back in
+		h["bee_cd"] = Hives.BEE_COOLDOWN
+		for k in 2:
+			_spawn_enemy("bee", 1, 0, int(h["x"]))
+			var b = enemies.back()
+			b.x = int(h["x"]) + rng.randi_range(-3, 3)
+			b.tx = b.x
+			b.y = grid.surf_y(b.x) - 1
+			b.ty = b.y
+			b.lane = float(h["lane"])
+			_hive_bees.append([b, time])
+	if h["taken"] >= Hives.FALL_AT:
+		h["fallen"] = true
+		h["regrow"] = Hives.REGROW
+		for p in piles:
+			if p.get("hive") == hive_id:
+				p.erase("hive")          # what is left under it is just honey now
+		piles.append({"x": int(h["x"]), "amount": Hives.FALLEN_HONEY, "max": Hives.FALLEN_HONEY, "kind": "honey", "fallen": true})
+		fx.append({"kind": "text", "pos": grid.center(int(h["x"]), grid.surf_y(int(h["x"])) - 6), "t": 0.0, "text": "HONEY!", "color": Color("#ffc53a")})
+		toasts.append({"text": "A beehive fell: honey for the taking.", "t": 5.0})
+
+
+func _step_hives(dt: float) -> void:
+	for id in hives:
+		var h = hives[id]
+		h["bee_cd"] = max(0.0, h["bee_cd"] - dt)
+		if h["fallen"]:
+			h["regrow"] -= dt
+			if h["regrow"] <= 0.0:
+				h["fallen"] = false
+				h["taken"] = 0.0
+	var i = _hive_bees.size() - 1
+	while i >= 0:
+		var b = _hive_bees[i][0]
+		if not enemies.has(b):
+			_hive_bees.remove(i)
+		elif time - float(_hive_bees[i][1]) > Hives.BEE_LIFE and not b.engaged:
+			enemies.erase(b)          # back into the hive
+			_hive_bees.remove(i)
+		i -= 1
 
 
 func _drop_fruit(x: int) -> void:
