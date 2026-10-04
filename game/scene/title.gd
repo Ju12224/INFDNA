@@ -47,6 +47,7 @@ var _wild_btn: Button
 var _wild_row: HBoxContainer
 var _lab_lbl: Label
 var _leaving := false
+var _scroll: ScrollContainer
 
 
 func _ready() -> void:
@@ -89,6 +90,7 @@ func _build_left() -> Control:
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	gp.add_child(scroll)
+	_scroll = scroll
 	var grid := GridContainer.new()
 	grid.columns = COLS
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -223,6 +225,7 @@ func _select(i: int) -> void:
 	var q = _roster[_sel]
 	for k in _btns.size():
 		_btns[k].set_pressed_no_signal(k == _sel)
+	_scroll.call_deferred("ensure_control_visible", _btns[_sel])
 	_name.text = q["name"]
 	_tag.text = q["tag"]
 	_rule.text = q["rule_text"]
@@ -231,7 +234,7 @@ func _select(i: int) -> void:
 	for c in _perks.get_children():
 		c.queue_free()
 	for pk in perks(q):
-		_perks.add_child(Kit.label(("+  " if pk[1] else "-  ") + pk[0], 16, Kit.GOOD if pk[1] else Kit.BAD, 3))
+		_perks.add_child(Kit.label(pk[0], 16, Kit.GOOD if pk[1] else Kit.BAD, 3))
 	var rec = _records.get(q["id"])
 	_best.text = ("Your best with her: %s, %d raids, %d ants" % [RunLog.clock(float(rec.get("time", 0.0))), int(rec.get("raids", 0)), int(rec.get("ants", 0))]) if rec is Dictionary else "No run with her yet."
 

@@ -6,6 +6,7 @@ extends SceneTree
 #   spawn  raider kinds (core/enemy_defs.gd), placed on the surface from dx cells right of the entrance, gap cells apart
 #   bird   1 = a bird over the spawned row; fall = 1 a bird falling there; carcass = 1 a carcass pile
 #   fx     1 = one of every fight effect over the row; piles = 1 = one pile of every kind; stun = 1 snares every raider
+#   kin    1 = the rival is a Wild line of our own ants (its redant/redsoldier/redmajor are drawn from its genome)
 #   under  kinds put in the tunnels instead (at the queen chamber)
 #   hive   0..3: look at the hive nearest the nest at that stage (whole, dripping, torn open, fallen); lift = camera height over its tree
 
@@ -45,6 +46,11 @@ func _setup() -> void:
 	var x = ex + int(_args["dx"])
 	var gap = int(_args["gap"])
 	sim.enemies.clear()
+	if _args.has("kin"):
+		# the rival made a Wild line of our own ants (core/wild.gd), so its red ants are drawn as our kit in its colours
+		sim.rival.genome = sim.queen_genome.copy()
+		sim.rival._mods = load("res://core/wild.gd").kin_mods(sim.rival.genome)
+		sim.rival._defs.clear()
 	if _args.has("spawn"):
 		for kind in str(_args["spawn"]).split(","):
 			sim._spawn_enemy(kind, 1, x)

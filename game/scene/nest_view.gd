@@ -99,12 +99,15 @@ const ICONS = {"brood": "ui/chamber_brood.png", "food": "ui/chamber_food.png", "
 const BADGE_Z0 = 1.1           # the badges fade in from this camera zoom ...
 const BADGE_Z1 = 0.7           # ... and are full from this one out
 const BADGE_PX = 44.0          # their size on screen ...
+const BADGE_Z_ABOVE = 25       # z above this view's own (30 + 25: over the ants at 40 and the effects at 50, under the interface)
 const BADGE_MAX = 84.0         # ... but never wider than this many world px (zoomed far out the rooms are close together)
 
 # ---- the anthill
 const MOUND_K = 0.28           # world px per picture px (the small mound's hole comes out about as tall as an ant on the surface)
 const MOUND_LANE = 0.62        # the lane ants walk into a mouth on (units_view.gd ENTRANCE_LANE, read from it when it has one)
 const MOUND_GROW = [0, 220, 900]   # spoil grains on the surface (world_grid.mound_cells) for the small, medium and large mound
+const MOUND_COVER = 0.6        # the anthill spans this share of the spoil heap round the main mouth ...
+const MOUND_MAX = 1.5          # ... growing to at most this much over its own size
 const HAZE = Color(0.88, 0.92, 0.97)
 
 var colony
@@ -128,12 +131,20 @@ var _shaft_key := "-"
 var _shaft_list := []
 var _lo := 0                   # columns the nest spans (props and shafts are looked for only there)
 var _hi := 0
+var _egg_floor := {}           # Vector3(egg pos, plane) -> world y of the drawn floor under it (cleared on every props check)
+var _badges: Node2D            # the chamber badges: a child drawn above the ants (zoomed out they are what the view is for)
+var _heap_w := 0.0             # width of the spoil heap round the main mouth, world px
 var props_rebuilds := 0
 var props_ms := 0.0
 
 
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	_badges = Node2D.new()
+	_badges.name = "badges"
+	_badges.z_index = BADGE_Z_ABOVE
+	_badges.draw.connect(_draw_badges)
+	add_child(_badges)
 	_pman = Art.manifest("props_manifest.json").get("items", {})
 	var kit = Art.manifest("antkit_manifest.json").get("pieces", {})
 	var names := []
@@ -209,8 +220,11 @@ func _process(delta: float) -> void:
 	_check_t -= delta
 	if _check_t <= 0.0:
 		_check_t = CHECK_EVERY
+		_egg_floor.clear()
 		_props_check(delta)
+		_heap_w = _heap_width(g)
 	queue_redraw()
+	_badges.queue_redraw()
 
 
 func _draw() -> void:
@@ -221,7 +235,6 @@ func _draw() -> void:
 	_draw_props(vr)
 	_draw_brood(vr)
 	_draw_mounds(vr)
-	_draw_badges(vr)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
@@ -793,7 +806,12 @@ func _draw_egg(g, e: Dictionary, prog: float) -> void:
 		y -= 1
 		n += 1
 	var wx = (pos.x + 0.5) * C
-	var feet = Vector2(wx, _floor_y(g, wx, y, z) + 0.5)
+	var fk = Vector3(pos.x, pos.y, z)
+	var fy = _egg_floor.get(fk)
+	if fy == null:
+		fy = _floor_y(g, wx, y, z)
+		_egg_floor[fk] = fy
+	var feet = Vector2(wx, fy + 0.5)
 	var shade := 1.0
 	var alpha := 1.0
 	if z == 1:
@@ -809,20 +827,31 @@ func _draw_egg(g, e: Dictionary, prog: float) -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
-# World y of the floor as the soil draws it, under world x, from row `row` down (at most 8 rows): the soil shader's edge is the 0.5
-# contour of the solid mask (a texel per cell, filtered between cell centres), which rounds off steps and corners, so the top of the
-# solid cell is not where the drawn floor is on a slope.
+# World y of the floor as the soil draws it, under world x, from row `row` down (at most 8 rows). The soil shader's edge is the 0.5
+# contour of its mask, and the mask (world_grid._paint) is the solid cells blurred 1-2-1 both ways, a texel per cell, filtered between
+# cell centres: flat floors stay on the cell line, but steps and corners are rounded off, so the top of the solid cell is not where
+# the drawn floor is on a slope.
 static func _floor_y(g, wx: float, row: int, z: int) -> float:
 	var fx = wx / C - 0.5
 	var x0 = int(floor(fx))
 	var tx = fx - x0
-	var prev = lerp(1.0 if g.is_solid(x0, row, z) else 0.0, 1.0 if g.is_solid(x0 + 1, row, z) else 0.0, tx)
+	var prev = lerp(_mask(g, x0, row, z), _mask(g, x0 + 1, row, z), tx)
 	for r in range(row, row + 8):
-		var v = lerp(1.0 if g.is_solid(x0, r + 1, z) else 0.0, 1.0 if g.is_solid(x0 + 1, r + 1, z) else 0.0, tx)
+		var v = lerp(_mask(g, x0, r + 1, z), _mask(g, x0 + 1, r + 1, z), tx)
 		if prev < 0.5 and v >= 0.5:
 			return (r + (0.5 - prev) / (v - prev) + 0.5) * C
 		prev = v
 	return (row + 1) * C
+
+
+# The soil mask's value at a cell (see _floor_y).
+static func _mask(g, x: int, y: int, z: int) -> float:
+	var acc := 0
+	for dy in range(-1, 2):
+		for dx in range(-1, 2):
+			if g.is_solid(x + dx, y + dy, z):
+				acc += (2 - abs(dx)) * (2 - abs(dy))
+	return acc / 16.0
 
 
 # ------------------------------------------------------------------------------------------------------------ the anthill
@@ -846,6 +875,8 @@ func _draw_mounds(vr: Rect2) -> void:
 		var hx = (en.x + 0.5) * C
 		var gy = Band.lane_y(g.surf_y(int(en.x)) * C, lane)
 		var s = MOUND_K * Band.persp(lane)
+		if i == 0:
+			s *= clamp(MOUND_COVER * _heap_w / (m["w"] * MOUND_K), 1.0, MOUND_MAX)   # a wide heap carries a bigger anthill
 		var hole: Vector2 = m["hole"]
 		var r = Rect2(Vector2(hx, gy) - hole * s, Vector2(m["w"], m["h"]) * s)
 		if not vr.intersects(r):
@@ -853,9 +884,24 @@ func _draw_mounds(vr: Rect2) -> void:
 		draw_texture_rect(m["tex"], r, false, tint)
 
 
+# Width of the spoil heap round the main mouth: the columns either side of it with dirt piled on the original ground.
+static func _heap_width(g) -> float:
+	var ex = int(g.entrance.x)
+	var l = ex
+	while l > ex - 150 and (g.mound_h(l - 1) > 0 or g.chimneys.has(l - 1)):
+		l -= 1
+	var r = ex
+	while r < ex + 150 and (g.mound_h(r + 1) > 0 or g.chimneys.has(r + 1)):
+		r += 1
+	return (r - l + 1) * C
+
+
 # ------------------------------------------------------------------------------------------------------------ chamber badges
 # Zoomed out, each room shows what it is: the owner's chamber icon over its middle, at a steady size on screen.
-func _draw_badges(vr: Rect2) -> void:
+func _draw_badges() -> void:
+	if colony == null or colony.sim == null:
+		return
+	var vr = colony.view_rect(MARGIN)
 	var z = colony.zoom()
 	var a = smoothstep(BADGE_Z0, BADGE_Z1, z)
 	if a <= 0.01 or _icons.is_empty():
@@ -871,4 +917,4 @@ func _draw_badges(vr: Rect2) -> void:
 		if not vr.has_point(p) or not _icons.has(it[0]):
 			continue
 		var k = 1.0 if it[2] == 0 else 0.7
-		draw_texture_rect(_icons[it[0]], Rect2(p - Vector2(sz, sz) * 0.5, Vector2(sz, sz)), false, Color(k, k, k, a))
+		_badges.draw_texture_rect(_icons[it[0]], Rect2(p - Vector2(sz, sz) * 0.5, Vector2(sz, sz)), false, Color(k, k, k, a))

@@ -3667,7 +3667,7 @@ func _step_threat(dt: float) -> void:
 		for e in enemies:
 			if _alerts(e) and grid.can_walk(e.x, e.y, e.z):   # passive prey and far-off wanderers are not a threat
 				src.append(Vector3(e.x, e.y, e.z))
-		dist_threat = grid._bfs(src, 260) if not src.is_empty() else PackedInt32Array()
+		dist_threat = grid._bfs(src, 260, dist_threat) if not src.is_empty() else PackedInt32Array()
 	# alarm: idle and digging ants reconsider quickly while raiders are present
 	_alarm_timer -= dt
 	if _alert_n > 0 and _alarm_timer <= 0.0:

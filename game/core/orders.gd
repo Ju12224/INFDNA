@@ -362,6 +362,6 @@ static func _foe(sim, a, sq):
 
 static func _field(sim, sq) -> PackedInt32Array:
 	if sq["field"].size() == 0 or sim.time - float(sq["field_t"]) > 6.0:
-		sq["field"] = sim.grid._bfs([Vector3(int(sq["x"]), int(sq["y"]), int(sq["z"]))])
+		sq["field"] = sim.grid._bfs([Vector3(int(sq["x"]), int(sq["y"]), int(sq["z"]))], -1, sq.get("field", PackedInt32Array()))
 		sq["field_t"] = sim.time
 	return sq["field"]

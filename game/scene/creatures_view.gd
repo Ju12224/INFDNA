@@ -41,6 +41,7 @@ const FAR_MAX = 1.6
 const BOSS_MIN_PX = 72.0             # a boss is never shorter than this on screen, at any zoom
 const BOSS_ART = ["voidmaw", "anteater", "spider"]   # bosses besides the roster's "boss" class (the Emperor Scorpion, the Void Maw)
 const RETREAT_ALPHA = 0.75
+const LOD_PX = 9.0                   # a rig shorter than this on screen draws only its body
 const HURT_FLASH = true
 # the roster's art names -> rig names (anything else is its own name)
 const RIG_OF = {"voidmaw": "void", "redant": "redant_small"}
@@ -264,6 +265,11 @@ func _rig(ci: CanvasItem, name: String, feet: Vector2, scale: float, facing: flo
 	var base = Transform2D(rot, feet) * Transform2D(Vector2(facing * s, 0), Vector2(0, s), Vector2.ZERO)
 	if flash:
 		mod = _flash(mod)
+	if r["height"] * s * colony.zoom() < LOD_PX:
+		# a few pixels on screen (zoomed far out): the body alone reads the same and costs one draw instead of a dozen
+		_put(ci, base, btex, r["body"]["pos"] - fv, Vector2.ZERO, 0.0, mod)
+		ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		return true
 	var fly = r.has("wings")
 	var gait = 2.2 if fly else (6.0 if moving else 1.6)
 	var amp = 0.1 if fly else (0.13 if moving else 0.025)
@@ -860,7 +866,7 @@ func _draw_hives(sim, x0: int, x1: int, vr: Rect2) -> void:
 		if tr.is_empty():
 			continue
 		var box: Rect2 = tr["canopy"]
-		if box.end.x < vr.position.x or box.position.x > vr.end.x:
+		if box.end.x < vr.position.x or box.position.x > vr.end.x or box.position.y > vr.end.y or tr["foot"].y + 60.0 < vr.position.y:
 			continue
 		var sd = float(h["seed"])
 		var lane = float(f["lane"])
@@ -946,6 +952,8 @@ func _draw_rival(r, vr: Rect2) -> void:
 	if px + W < vr.position.x or px - W > vr.end.x:
 		return
 	var gy = Band.lane_y(_ground(px, 3), RIVAL_LANE)
+	if gy - W > vr.end.y or gy + 60.0 < vr.position.y:
+		return
 	var alive = r.alive()
 	var mounds = Art.manifest("anthill/anthill_manifest.json").get("mounds", [])
 	var pick = null
@@ -992,6 +1000,8 @@ func _draw_pile(p: Dictionary) -> void:
 		return
 	var px = (float(x) + 0.5) * C
 	var base = Vector2(px, Band.lane_y(_ground(px), PILE_LANE))
+	if not colony.view_rect(80.0).has_point(base):
+		return
 	var mod = _lane_tint(PILE_LANE)
 	var ps = Band.persp(PILE_LANE)
 	var share = clamp(float(p["amount"]) / max(1.0, float(p["max"])), 0.0, 1.0)
@@ -1049,6 +1059,8 @@ func _draw_carcass(p: Dictionary) -> void:
 		return
 	var e = 1.0 - rot
 	var base = _carcass_base(int(p["x"]))
+	if not colony.view_rect(240.0).has_point(base):
+		return
 	var ps = Band.persp(BIRD_LANE)
 	var face = int(p.get("face", 1))
 	var spin = float(p.get("spin", 0.0))

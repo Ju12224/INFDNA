@@ -17,6 +17,8 @@ const BAR_K = 0.55                     # the frame's size in the bar
 const FONT = 18
 const SPEED_LABELS = ["1x", "3x", "10x"]
 const ARC_ICONS = ["", "ui/dominion.png", "ui/tremors.png", "ui/void.png"]
+const RAID_ICON = "ui/raid.png"         # not drawn yet (art list): the raid chip is text until it is
+const BOSS_ICON = "ui/boss.png"         # not drawn yet (art list)
 const MSG_MIN = 2.6                    # seconds a message stays at least (when more are waiting)
 const MSG_MAX = 6.0                    # ... and at most
 const MSG_QUEUE = 4
@@ -25,7 +27,7 @@ const MSG_ICONS = [
 	[["QUEEN", "queen"], "ui/queen.png"],
 	[["VOID", "Void", "pit"], "ui/void.png"],
 	[["Raid", "raid", "raiders", "attack", "Strike"], "ui/soldier.png"],
-	[["anteater", "bird", "Bird", "spider"], "ui/crown_red.png"],
+	[["anteater", "bird", "Bird", "spider", "Maw"], BOSS_ICON],
 	[["shudders", "GROUND", "ground", "Tremor", "boom", "lurches", "earth"], "ui/tremors.png"],
 	[["Dominion", "meadow belongs"], "ui/dominion.png"],
 	[["strain", "Evolution", "body plan", "First", "evolved", "mutat"], "ui/brood.png"],
@@ -82,7 +84,7 @@ func _build_bar() -> void:
 	bar.offset_top = 4
 	bar.mouse_filter = Control.MOUSE_FILTER_STOP     # clicks on the bar never reach the world under it
 	add_child(bar)
-	var row = Kit.hbox(18)
+	var row = Kit.hbox(14)
 	row.alignment = BoxContainer.ALIGNMENT_BEGIN
 	bar.add_child(row)
 	_chip(row, "food", "ui/food.png", "Food in the stores / room in the food chambers")
@@ -91,7 +93,7 @@ func _build_bar() -> void:
 	_chip(row, "queen", "ui/queen.png", "The queen's health. If she falls, the colony falls.")
 	_chip(row, "season", "", "Season and day. A season lasts five minutes at 1x; winter is lean.")
 	_chip(row, "will", "ui/hivemind.png", "Will: the Director's meter. It fills over time and pays for the powers (right-click the ground).")
-	_chip(row, "raid", "ui/crown_red.png", "Raids: the one under way, or how long until the next")
+	_chip(row, "raid", RAID_ICON, "Raids: the one under way, or how long until the next")
 	_chip(row, "arc", "", "The arc: how far the colony's monsters have taken the meadow")
 	_arc_icon = Kit.icon("ui/dominion.png", 30)
 	_chips["arc"].add_child(_arc_icon)
@@ -143,7 +145,7 @@ func _bar_button(parent: Node, text: String, tip: String) -> Button:
 
 func _build_message() -> void:
 	_msg_panel = Kit.panel("frame_small", 0.6, Vector2(10, 0))
-	_msg_panel.position = Vector2(0, 64)
+	_msg_panel.position = Vector2(0, 74)
 	_msg_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_msg_panel)
 	_msg_box = Kit.hbox(8)
@@ -224,12 +226,13 @@ func _refresh_bar(sim) -> void:
 	_v["queen"].add_theme_color_override("font_color", Kit.BAD if hurt else (Kit.GOLD if qf < 0.7 else Kit.INK))
 	var day = colony.day
 	var yr = Seasons.year(sim.time)
-	_v["season"].text = "%s%s, day %d" % [Seasons.NAMES[day.season], (" (year %d)" % yr) if yr > 1 else "", day.day_n]
+	_v["season"].text = "%s, day %d" % [Seasons.NAMES[day.season], day.day_n]
+	_chips["season"].tooltip_text = "Year %d. A season lasts five minutes at 1x; winter is lean." % yr
 	_v["will"].text = "%d / %d" % [int(sim.will), int(sim.will_max())]
 	var raid_on = sim._raid_active or not sim.raid_queue.is_empty()
 	if raid_on:
 		var n = sim.hostile_count() + sim.raid_queue.size()
-		_v["raid"].text = "Raid %d: %d left" % [sim.raid_n, n]
+		_v["raid"].text = "Raid %d: %d" % [sim.raid_n, n]
 		_v["raid"].add_theme_color_override("font_color", Kit.BAD)
 	else:
 		var s = int(max(0.0, sim.raid_timer))

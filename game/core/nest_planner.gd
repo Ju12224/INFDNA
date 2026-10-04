@@ -206,7 +206,7 @@ func dist_for(job, t: Vector2, now: float) -> PackedInt32Array:
 			jobs.erase(job)   # unreachable dig face: abandon so the blueprint never stalls
 			stats["blocked"] += 1
 			return PackedInt32Array()
-		job["dist"] = grid._bfs(src)
+		job["dist"] = grid._bfs(src, -1, job.get("dist", PackedInt32Array()))
 		job["src"] = t
 		job["built"] = now
 	return job["dist"]

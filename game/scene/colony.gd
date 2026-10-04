@@ -95,6 +95,7 @@ func _add_view(view_name: String, path: String, parent: Node, z: int) -> void:
 func _new_colony() -> void:
 	colonies += 1
 	sim = Sim.new(randi() % 1000000, Run.queen_id, Run.heirloom, Run.kin)
+	Run.equip(sim)
 	grid = sim.grid
 	BugReport.colony_started()
 	var e = grid.center(int(grid.entrance.x), int(grid.entrance.y))

@@ -32,7 +32,7 @@ func _scene_is(path: String) -> bool:
 
 func _process(_delta: float) -> bool:
 	_wait += 1
-	if _wait < 5:
+	if _wait < 8:
 		return false
 	_wait = 0
 	match _step:
@@ -50,6 +50,8 @@ func _process(_delta: float) -> bool:
 			hud._close_menu()
 			_check(not paused, "Resume unpauses")
 			current_scene.sim.queen_hp = 0.0
+			current_scene.sim.collapsed = true           # as the sim's own check would, without waiting for its next step
+			current_scene.sim.collapse_reason = "The queen has fallen."
 		2:
 			_check(_scene_is(Run.RUN_END), "the fall opens the end-of-run screen")
 			var lab = load("res://core/shop_items.gd").lab_load()
