@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Cut the owner's sky sheets (RGBA with real transparency) into game/art/sky/*.png and list them in sky_manifest.json.
 
-art_src/clouds.png: every separate shape is one cloud, named by shape: big (puffy cumulus, tall), flat (long stratus, more than
+art_src/clouds.png, clouds_2.png, clouds_3.png: every separate shape is one cloud, named by shape: big (puffy cumulus, tall), flat (long stratus, more than
 3x wider than tall) and wisp (small). art_src/sun_moon_stars.png: the three biggest shapes are the sun (the yellow one), the full
 moon and the crescent (the one that fills least of its box); the rest are stars, biggest first. On both sheets small specks join
 the shape whose nearest pixel is closest. art_src/hills_far.png, hills_mid.png and hills_near.png: landscape strips, each trimmed of the frame line ChatGPT drew
@@ -16,7 +16,7 @@ from PIL import Image
 from scipy import ndimage
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
-SRC = os.path.join(ROOT, "art_src", "clouds.png")
+CLOUD_SHEETS = ["clouds.png", "clouds_2.png", "clouds_3.png"]
 SRC_SUN = os.path.join(ROOT, "art_src", "sun_moon_stars.png")
 # landscape strips, back to front: sheet, and the frame line ChatGPT drew round it (columns off the left and right, rows off the bottom)
 HILLS = {"far": ("hills_far.png", (2, 2, 4)), "mid": ("hills_mid.png", (3, 3, 4)), "near": ("hills_near.png", (2, 2, 4))}
@@ -59,17 +59,21 @@ def save(rgba, shape, name):
 
 
 def cut_clouds():
-    rgba, found = shapes(SRC)
-    found.sort(key=lambda f: (round(f[0] / 200), f[1]))      # rows top to bottom, then left to right
     counts = {"big": 0, "flat": 0, "wisp": 0}
     clouds = []
-    for f in found:
-        w, h = f[3] - f[1] + 1, f[2] - f[0] + 1
-        kind = "flat" if w > 3 * h else ("big" if h >= BIG_H else "wisp")
-        e = save(rgba, f, "cloud_%s_%d" % (kind, counts[kind]))
-        counts[kind] += 1
-        e["kind"] = kind
-        clouds.append(e)
+    for sheet in CLOUD_SHEETS:
+        path = os.path.join(ROOT, "art_src", sheet)
+        if not os.path.exists(path):
+            continue
+        rgba, found = shapes(path)
+        found.sort(key=lambda f: (round(f[0] / 200), f[1]))      # rows top to bottom, then left to right
+        for f in found:
+            w, h = f[3] - f[1] + 1, f[2] - f[0] + 1
+            kind = "flat" if w > 3 * h else ("big" if h >= BIG_H else "wisp")
+            e = save(rgba, f, "cloud_%s_%d" % (kind, counts[kind]))
+            counts[kind] += 1
+            e["kind"] = kind
+            clouds.append(e)
     return clouds
 
 
