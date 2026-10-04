@@ -55,7 +55,7 @@ func _ready() -> void:
 	get_tree().auto_accept_quit = false             # closing the window goes through _notification (the report is written)
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	Kit.sky(self, 0.31)
-	_roster = Queens.roster()
+	_roster = Queens.featured()
 	_records = RunLog.load_all()
 	for i in _roster.size():
 		if _roster[i]["id"] == Run.queen_id:

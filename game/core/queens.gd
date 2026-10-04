@@ -27,6 +27,18 @@ static func icon_path(q: Dictionary) -> String:
 
 
 # id -> entry. Order here is the order on the select screen.
+# The eight queens offered on the title screen (owner's call: eight detailed queens, the rest later). Each plays differently:
+# the plain baseline, fighting that heals, farming, digging, lightning, armour, evolution and long expeditions.
+const FEATURED = ["well_rounded", "vampire", "farmer", "dwarf", "mage", "knight", "mutant", "explorer"]
+
+
+static func featured() -> Array:
+	var r := []
+	for id in FEATURED:
+		r.append(find(id))
+	return r
+
+
 static func roster() -> Array:
 	var r := []
 	r.append(_q("well_rounded", "The Founder", "#8a4b2e", "The plain queen. No perks, no flaws.",
