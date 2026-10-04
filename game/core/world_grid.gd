@@ -87,6 +87,8 @@ var _prof_l := PackedInt32Array()   # base surface y for x = -1, -2, ...
 var _mound := {}                # x -> rows of spoil piled on the base surface
 var _grain_acc := 0.0
 var _chunk_img := {}            # k -> [front, aux] images of chunks that overlap the sim range
+var _far_img := {}              # k -> [front, aux] images of chunks outside it (nothing is dug there), oldest first
+const FAR_KEEP = 96             # how many of those are kept (each pair is about 120 KB)
 var _neg := PackedInt32Array()      # all -1, PLANES * WH: copied (COW) as a BFS start
 var _air_col: Image
 var _nest_x := 130
@@ -836,6 +838,9 @@ func chunk_images(k: int) -> Array:
 		return _chunk_img[k]
 	var cw = CHUNK + 2 * PAD
 	var x0 = k * CHUNK - PAD
+	var in_sim = max(x0, ox) <= min(x0 + cw - 1, ox + W - 1)
+	if not in_sim and _far_img.has(k):
+		return _far_img[k]          # pristine ground never changes: building it is the slow part
 	var front = Image.create_empty(cw, H, false, Image.FORMAT_RGBA8)
 	front.fill(Color(1, 1, 0, 1))
 	var aux = Image.create_empty(cw, H, false, Image.FORMAT_RGBA8)
@@ -872,6 +877,10 @@ func chunk_images(k: int) -> Array:
 	if lo <= hi:
 		_paint_dug(pair, k, lo - 1, hi + 1)
 		_chunk_img[k] = pair
+	else:
+		_far_img[k] = pair
+		if _far_img.size() > FAR_KEEP:
+			_far_img.erase(_far_img.keys()[0])
 	return pair
 
 

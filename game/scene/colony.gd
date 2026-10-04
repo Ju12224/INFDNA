@@ -22,6 +22,7 @@ const ZOOM_START = 2.5
 const ZOOM_STEP = 1.15
 const PAN_KEYS = 900.0    # screen pixels per second
 const REPORT_EVERY = 60.0
+const SKY_ROOM = 2400.0   # world px of sky the camera may show above the ground line
 const SKY_LAYER = -10
 const UI_LAYER = 10
 const SKY_VIEW = "res://scene/sky_view.gd"
@@ -104,6 +105,7 @@ func _process(delta: float) -> void:
 		_new_colony()
 	day.update(sim.time, sim.rain, sim.overcast, force_ph)
 	_pan_keys(delta)
+	_clamp_camera()
 	_report_t += delta
 	if _report_t >= REPORT_EVERY:
 		_report_t = 0.0
@@ -146,11 +148,24 @@ func _unhandled_input(event: InputEvent) -> void:
 				speed = SPEEDS[2]
 
 
+# The view never goes below the bottom of the world (nothing is drawn there) nor far up into empty sky.
+func _clamp_camera() -> void:
+	var half = get_viewport_rect().size.y * 0.5 / zoom()
+	var bottom = grid.H * WorldGrid.CELL
+	var top = ground_y() - SKY_ROOM
+	cam.position.y = clamp(cam.position.y, top + half, max(top + half, bottom - half))
+
+
 # Zoom by k, keeping the world point under the mouse where it is.
 func _zoom_at(screen_pos: Vector2, k: float) -> void:
 	var before = _screen_to_world(screen_pos)
-	cam.zoom = Vector2.ONE * clamp(zoom() * k, ZOOM_MIN, ZOOM_MAX)
+	cam.zoom = Vector2.ONE * clamp(zoom() * k, min_zoom(), ZOOM_MAX)
 	cam.position += before - _screen_to_world(screen_pos)
+
+
+# Zoomed out no further than the world is tall (sky room included), so nothing empty shows below the bedrock.
+func min_zoom() -> float:
+	return max(ZOOM_MIN, get_viewport_rect().size.y / (grid.H * WorldGrid.CELL - ground_y() + SKY_ROOM))
 
 
 func _screen_to_world(p: Vector2) -> Vector2:

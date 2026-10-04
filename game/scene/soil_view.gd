@@ -28,9 +28,10 @@ uniform sampler2D aux_tex : filter_linear;
 uniform sampler2D surf_tex : filter_nearest;
 uniform sampler2D dirt_tex : filter_linear_mipmap, repeat_enable;
 uniform vec4 ink : source_color = vec4(0.082, 0.071, 0.102, 1.0);
-const vec3 DIRT_AVG = vec3(0.29, 0.235, 0.2);   // the dirt picture's mean colour: dividing by it lets a tint recolour it
+const vec3 DIRT_AVG = vec3(0.29, 0.235, 0.2);   // the dirt picture's mean colour
 const vec2 SOIL = vec2(80.0, 64.0);             // cells the dirt picture covers before it repeats
-const vec2 SUN = vec2(0.35, 0.94);            // the light falls down and a little to the right
+const vec2 TILES = vec2(5.0, 5.0);              // the picture is 5 x 5 of the owner's tiles (tools/art/make_dirt_atlas.py)
+const vec2 SUN = vec2(0.35, 0.94);              // the light falls down and a little to the right
 const vec3 STONE = vec3(0.5, 0.49, 0.5);
 const vec3 BONE = vec3(0.9, 0.84, 0.7);
 const vec3 LUMA = vec3(0.299, 0.587, 0.114);
@@ -41,6 +42,21 @@ vec4 surf_at(float ux) {
 	float px = ux * tsize.x - 0.5;
 	float i0 = floor(px);
 	return mix(texture(surf_tex, vec2((i0 + 0.5) / tsize.x, 0.5)), texture(surf_tex, vec2((i0 + 1.5) / tsize.x, 0.5)), px - i0);
+}
+
+// The owner's dirt at a cell position, divided by its mean so a stratum's colour can tint it. The tiles in the picture
+// do not quite meet at their edges, which showed as a faint grid; near an edge the picture is crossfaded with itself
+// shifted half a tile (mid-tile there), so every edge falls where its weight is zero.
+vec3 dirt(vec2 wc) {
+	vec2 uv = wc / SOIL;
+	vec2 q = uv * TILES;
+	vec2 w = smoothstep(0.0, 0.08, abs(q - round(q)));
+	vec2 h = 0.5 / TILES;
+	vec3 c = texture(dirt_tex, uv).rgb * w.x * w.y
+		+ texture(dirt_tex, uv + vec2(h.x, 0.0)).rgb * (1.0 - w.x) * w.y
+		+ texture(dirt_tex, uv + vec2(0.0, h.y)).rgb * w.x * (1.0 - w.y)
+		+ texture(dirt_tex, uv + h).rgb * (1.0 - w.x) * (1.0 - w.y);
+	return c / DIRT_AVG;
 }
 
 // the stratum's colour at dd cells below the original ground (seams as in WorldGrid.SEAMS)
@@ -91,9 +107,9 @@ void fragment() {
 	float under = wc.y - sv.r * 255.0;  // cells below the ground as it is now
 	vec3 strat = strata(d + sv.b * 16.0 - 8.0);
 	// (every dirt lookup up here, outside the branches, so the mipmaps see smooth derivatives)
-	vec3 face = texture(dirt_tex, wc / SOIL).rgb / DIRT_AVG;
-	vec3 spoil = texture(dirt_tex, (wc * 1.35 + 7.0) / SOIL).rgb / DIRT_AVG;
-	vec3 rear = texture(dirt_tex, (wc + cam * 0.24) / SOIL).rgb / DIRT_AVG;
+	vec3 face = dirt(wc);
+	vec3 spoil = dirt(wc * 1.35 + 7.0);
+	vec3 rear = dirt(wc + cam * 0.24);
 
 	// ---- front: the cut face
 	vec3 col = mix(spoil * vec3(0.44, 0.31, 0.2), face * strat, smoothstep(-0.6, 0.4, d));
