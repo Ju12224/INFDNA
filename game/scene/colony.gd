@@ -19,7 +19,11 @@ const SPEEDS = [1.0, 3.0, 10.0]
 const ZOOM_MIN = 0.15
 const ZOOM_MAX = 6.0
 const ZOOM_START = 2.5
-const ZOOM_STEP = 1.15
+const ZOOM_STEP = 1.18
+const ZOOM_EASE = 12.0    # how fast the zoom closes on its target (per second): smooth, never a jump
+const ZOOM_MAX_RATE = 2.5  # at most e^2.5 (about 12x) zoom change per second
+const PAN_EASE = 14.0     # the same for key panning
+const GLIDE_DRAG = 5.0    # how fast a flung drag slows down
 const PAN_KEYS = 900.0    # screen pixels per second
 const REPORT_EVERY = 60.0
 const SKY_ROOM = 2400.0   # world px of sky the camera may show above the ground line
@@ -48,6 +52,9 @@ var force_ph := -1.0      # >= 0 pins the time of day (screenshots)
 var _acc := 0.0
 var _report_t := 0.0
 var _drag := false
+var _zoom_target := ZOOM_START
+var _zoom_anchor := Vector2.ZERO   # screen point the zoom keeps still (the mouse when it was rolled)
+var _vel := Vector2.ZERO           # world px per second: key panning and the glide after a drag
 
 
 func _ready() -> void:
@@ -104,7 +111,7 @@ func _process(delta: float) -> void:
 	if sim.collapsed:
 		_new_colony()
 	day.update(sim.time, sim.rain, sim.overcast, force_ph)
-	_pan_keys(delta)
+	_move_camera(delta)
 	_clamp_camera()
 	_report_t += delta
 	if _report_t >= REPORT_EVERY:
@@ -112,7 +119,18 @@ func _process(delta: float) -> void:
 		BugReport.write("running")
 
 
-func _pan_keys(delta: float) -> void:
+# The camera eases toward where it is told to be: the zoom closes on its target around the point under the mouse, key panning
+# speeds up and slows down softly, and a drag let go of keeps gliding for a moment.
+func _move_camera(delta: float) -> void:
+	var z = zoom()
+	if abs(z - _zoom_target) > 0.0005:
+		# eased in log space (every doubling takes the same time) and capped, so a long zoom is a steady glide
+		var step = (log(_zoom_target) - log(z)) * (1.0 - exp(-ZOOM_EASE * delta))
+		var cap = ZOOM_MAX_RATE * delta
+		var nz = z * exp(clamp(step, -cap, cap))
+		var before = _screen_to_world(_zoom_anchor)
+		cam.zoom = Vector2.ONE * nz
+		cam.position += before - _screen_to_world(_zoom_anchor)
 	var d := Vector2.ZERO
 	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
 		d.x -= 1
@@ -123,7 +141,11 @@ func _pan_keys(delta: float) -> void:
 	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
 		d.y += 1
 	if d != Vector2.ZERO:
-		cam.position += d * PAN_KEYS * delta / zoom()
+		_vel = _vel.lerp(d.normalized() * PAN_KEYS / zoom(), 1.0 - exp(-PAN_EASE * delta))
+	elif not _drag:
+		_vel = _vel.lerp(Vector2.ZERO, 1.0 - exp(-GLIDE_DRAG * delta))
+	if not _drag:
+		cam.position += _vel * delta
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -134,8 +156,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			_zoom_at(event.position, 1.0 / ZOOM_STEP)
 		elif event.button_index in [MOUSE_BUTTON_MIDDLE, MOUSE_BUTTON_RIGHT]:
 			_drag = event.pressed
+			if _drag:
+				_vel = Vector2.ZERO
 	elif event is InputEventMouseMotion and _drag:
 		cam.position -= event.relative / zoom()
+		_vel = _vel.lerp(-event.relative / zoom() / max(get_process_delta_time(), 0.001), 0.3)
 	elif event is InputEventKey and event.pressed and not event.echo:
 		match event.keycode:
 			KEY_SPACE:
@@ -156,11 +181,10 @@ func _clamp_camera() -> void:
 	cam.position.y = clamp(cam.position.y, top + half, max(top + half, bottom - half))
 
 
-# Zoom by k, keeping the world point under the mouse where it is.
+# Zoom by k (eased over the next frames), keeping the world point under the mouse where it is.
 func _zoom_at(screen_pos: Vector2, k: float) -> void:
-	var before = _screen_to_world(screen_pos)
-	cam.zoom = Vector2.ONE * clamp(zoom() * k, min_zoom(), ZOOM_MAX)
-	cam.position += before - _screen_to_world(screen_pos)
+	_zoom_target = clamp(_zoom_target * k, min_zoom(), ZOOM_MAX)
+	_zoom_anchor = screen_pos
 
 
 # Zoomed out no further than the world is tall (sky room included), so nothing empty shows below the bedrock.
@@ -206,6 +230,7 @@ func debug_setup(args: Dictionary) -> void:
 		sim.step(STEP)
 	if args.has("zoom"):
 		cam.zoom = Vector2.ONE * float(args["zoom"])
+		_zoom_target = float(args["zoom"])
 	var at = str(args.get("at", ""))
 	if at == "nest":
 		cam.position = grid.center(int(grid.chamber.x), int(grid.chamber.y))
