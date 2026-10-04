@@ -1122,43 +1122,83 @@ func _bfs(sources: Array, max_d: int = -1) -> PackedInt32Array:
 		if dist[si] != 0:
 			dist[si] = 0
 			queue.append(si)
-	var wk = walk
-	var lk = link
-	var w = W
-	var wh = WH
-	var h = H
-	var offs = [-w - 1, -w, -w + 1, -1, 1, w - 1, w, w + 1]
-	var head := 0
-	while head < queue.size():
-		var i = queue[head]
+	# (typed and unrolled: on the 3072-column world the surface alone is thousands of cells, and this runs every
+	# NAV_INTERVAL while the colony digs)
+	var wk: PackedByteArray = walk
+	var lk: PackedByteArray = link
+	var w: int = W
+	var wh: int = WH
+	var h: int = H
+	var cap: int = max_d if max_d >= 0 else (1 << 30)
+	var head: int = 0
+	var tail: int = queue.size()
+	while head < tail:
+		var i: int = queue[head]
 		head += 1
-		var nd = dist[i] + 1
-		if max_d >= 0 and nd > max_d:
+		var nd: int = dist[i] + 1
+		if nd > cap:
 			continue        # depth cap: cells past it stay -1
-		var z = 1 if i >= wh else 0
-		var r = i - z * wh
-		var x = r % w
-		var y = r / w
+		var z: int = 1 if i >= wh else 0
+		var r: int = i - z * wh
+		var y: int = r / w
+		var x: int = r - y * w
 		if x > 0 and x < w - 1 and y > 0 and y < h - 1:
-			for o in offs:
-				var j = i + o
-				if wk[j] == 1 and dist[j] == -1:
-					dist[j] = nd
-					queue.append(j)
+			var j: int = i - w - 1
+			if wk[j] == 1 and dist[j] == -1:
+				dist[j] = nd
+				queue.append(j)
+				tail += 1
+			j += 1
+			if wk[j] == 1 and dist[j] == -1:
+				dist[j] = nd
+				queue.append(j)
+				tail += 1
+			j += 1
+			if wk[j] == 1 and dist[j] == -1:
+				dist[j] = nd
+				queue.append(j)
+				tail += 1
+			j = i - 1
+			if wk[j] == 1 and dist[j] == -1:
+				dist[j] = nd
+				queue.append(j)
+				tail += 1
+			j = i + 1
+			if wk[j] == 1 and dist[j] == -1:
+				dist[j] = nd
+				queue.append(j)
+				tail += 1
+			j = i + w - 1
+			if wk[j] == 1 and dist[j] == -1:
+				dist[j] = nd
+				queue.append(j)
+				tail += 1
+			j += 1
+			if wk[j] == 1 and dist[j] == -1:
+				dist[j] = nd
+				queue.append(j)
+				tail += 1
+			j += 1
+			if wk[j] == 1 and dist[j] == -1:
+				dist[j] = nd
+				queue.append(j)
+				tail += 1
 		else:
-			var base = z * wh
+			var base: int = z * wh
 			for d in N8:
-				var nx = x + int(d.x)
-				var ny = y + int(d.y)
+				var nx: int = x + int(d.x)
+				var ny: int = y + int(d.y)
 				if nx < 0 or ny < 0 or nx >= w or ny >= h:
 					continue
-				var j2 = base + ny * w + nx
+				var j2: int = base + ny * w + nx
 				if wk[j2] == 1 and dist[j2] == -1:
 					dist[j2] = nd
 					queue.append(j2)
+					tail += 1
 		if lk[r] == 1:
-			var j3 = (1 - z) * wh + r
+			var j3: int = (1 - z) * wh + r
 			if wk[j3] == 1 and dist[j3] == -1:
 				dist[j3] = nd
 				queue.append(j3)
+				tail += 1
 	return dist

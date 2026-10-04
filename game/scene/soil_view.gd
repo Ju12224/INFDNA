@@ -14,7 +14,8 @@ const Art = preload("res://scene/art.gd")
 
 const DIRT = "terrain/dirt_soil.png"
 const BUILDS_PER_FRAME = 2    # new chunks per frame at most, so scrolling never hitches...
-const BUILD_MS = 4            # ...and no second one once a frame has spent this long building (a chunk can take a while)
+const BUILD_US = 4000         # ...and none started once a frame has spent this long building (one takes 1-4 ms), so a frame
+                              # spends at most about 8 ms here. Spare time builds the grid's images of chunks off screen ahead.
 const NEAR = 1.0              # chunks are built this many chunk widths beyond the screen...
 const FAR = 3.0               # ...and freed beyond this many
 
@@ -209,21 +210,34 @@ func _process(_delta: float) -> void:
 		if (k + 1) * span < far.position.x or k * span > far.end.x:
 			_drop(k)
 	var near = colony.view_rect(span * NEAR)
+	var k_lo = WorldGrid.chunk_of(g.sim_l())       # the world's chunks: there is no ground past its edges
+	var k_hi = WorldGrid.chunk_of(g.sim_r())
 	var todo := []
-	for k in range(floori(near.position.x / span), floori(near.end.x / span) + 1):
+	for k in range(max(k_lo, floori(near.position.x / span)), min(k_hi, floori(near.end.x / span)) + 1):
 		if not _chunks.has(k) or _stale.has(k):
 			todo.append(k)
 	var mid = colony.cam_center().x / span - 0.5
 	todo.sort_custom(func(a, b): return absf(a - mid) < absf(b - mid))
-	var t0 = Time.get_ticks_msec()
+	var t0 = Time.get_ticks_usec()
+	var built := 0
 	for k in todo.slice(0, BUILDS_PER_FRAME):
-		if Time.get_ticks_msec() - t0 > BUILD_MS:
+		if Time.get_ticks_usec() - t0 > BUILD_US:
 			break
 		if _chunks.has(k):
 			_upload(k)
 		else:
 			_make(k)
 		_stale.erase(k)
+		built += 1
+	# nothing left to show: build the grid's images of the next chunks out from the view, so panning finds them ready
+	if built == todo.size():
+		var c0 = clampi(roundi(mid), k_lo, k_hi)
+		for d in range(0, k_hi - k_lo + 1):
+			if Time.get_ticks_usec() - t0 > BUILD_US:
+				break
+			for k in [c0 + d, c0 - d - 1]:
+				if k >= k_lo and k <= k_hi and not g.has_chunk_images(k) and Time.get_ticks_usec() - t0 <= BUILD_US:
+					g.chunk_images(k)
 	var c = colony.cam_center() / WorldGrid.CELL
 	if c != _cam:
 		_cam = c
