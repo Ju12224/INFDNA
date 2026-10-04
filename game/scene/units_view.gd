@@ -68,6 +68,8 @@ const SPREAD_GAP = 0.42                    # body lengths between ants crowding 
 const SPREAD_MAX = 3.5                     # cells: at most this far from where the sim keeps it
 const SPREAD_RATE = 5.0
 const SPREAD_STEP = 1.2                    # cells: the drawn ground may step this much between neighbours in a crowd
+const BODY_MID = 0.36                      # the middle of an ant's body stands this many body lengths above its feet
+const SQUEEZE = 1.2                        # cells: in a tight passage its feet may reach this far into the wall
 # flight (winged ants over open ground) and walking
 const AIR_RATE = 3.5
 const AIR_LIFT = 30.0                      # world px at full height (times the lane's perspective)
@@ -117,6 +119,7 @@ var _q_eggs := 0
 var _q_lay := 0.0
 var _q_face := 1.0
 var _q_x := 0.0
+var draw_us := 0            # how long the last _draw took (tests read it)
 var _lane_alpha := Callable()   # band.gd's lane_alpha(lane), if it has one (the depth zoom cuts lanes): surface ants fade with it
 
 
@@ -187,6 +190,7 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
+	var t0 = Time.get_ticks_usec()
 	var sim = colony.sim
 	var g = colony.grid
 	_g = g
@@ -240,7 +244,7 @@ func _draw() -> void:
 		if st[S_SURF] >= 0.5:
 			lanes[clampi(int(st[S_LANE] * LANE_BUCKETS), 0, LANE_BUCKETS - 1)].append(it)
 		else:
-			_place(a, p, st)
+			_place(a, p, st, _len_of(a) * far * lerp(1.0, BACK_SCALE, float(a.tz if a.t > 0.5 else a.z)))
 			var z = a.tz if a.t > 0.5 else a.z
 			var key = ((int(p.x / C) >> 1) * 8192 + (int(p.y / C) >> 1)) * 2 + z
 			var c = crowd.get(key)
@@ -264,6 +268,7 @@ func _draw() -> void:
 		for it in bucket:
 			_draw_ant(it[0], it[1], it[2], far, poses, sel)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	draw_us = Time.get_ticks_usec() - t0
 
 
 func _new_state(a, p: Vector2, surf: float, lane: float) -> Array:
@@ -369,8 +374,10 @@ func _ground(p: Vector2, z: int, q: int) -> float:
 
 
 # Where an underground ant's feet are drawn (S_OX, S_OY: from its sim position) and its tilt (S_ROT): on the drawn ground below its
-# feet along its body's down; where there is none (it stands on a crumb the soil view does not draw), upright on the floor below.
-func _place(a, p: Vector2, st: Array) -> void:
+# feet along its body's down; in a passage narrower than the ant, its body in the middle of it (the legs reach into the walls rather
+# than its back sticking through the far one); where there is no drawn ground (it stands on a crumb the soil view does not draw),
+# upright on the floor below. `length`: its drawn body length.
+func _place(a, p: Vector2, st: Array, length: float) -> void:
 	var z = a.tz if a.t > 0.5 else a.z
 	var rot: float = a.rot
 	var down = Vector2(-sin(rot), cos(rot))
@@ -378,6 +385,10 @@ func _place(a, p: Vector2, st: Array) -> void:
 	var d = _ground(p, z, q)
 	var off: Vector2
 	if d < NONE:
+		var hc = BODY_MID * length
+		var d2 = _ground(p, z, (q + DIRS / 2) % DIRS)
+		if d2 < NONE and d + d2 < 2.0 * hc:
+			d = min((d - d2) * 0.5 + hc, d + SQUEEZE * C)
 		off = down * d
 	else:
 		var dd = _ground(p, z, DIRS)
@@ -415,7 +426,9 @@ func _spread(items: Array, far: float) -> void:
 		var along = Vector2(cos(rot), sin(rot))
 		var z = a.tz if a.t > 0.5 else a.z
 		var q = posmod(int(round(down.angle() / TAU * DIRS)), DIRS)
-		var base = Vector2(st[S_OX], st[S_OY]).dot(down)
+		var base = _ground(p, z, q)
+		if base >= NONE:
+			continue
 		# the furthest the ground carries it toward the spot it wants, in up to three tries
 		var off = cur
 		for tries in 3:

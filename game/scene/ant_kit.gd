@@ -139,6 +139,8 @@ var _key_of := {}             # genome uid * 4 + caste -> [look key, world lengt
 var _queue := []              # look keys waiting for a bake
 var _busy := false
 var _frame := 0
+var bake_us := 0              # the last bake's cost on this thread (layout + readback), and the worst so far
+var bake_max_us := 0
 var _L := []                  # _build's output: per layer, [piece info, Transform2D (painter units), Color, ink]
 
 
@@ -914,6 +916,7 @@ func _bake_next() -> void:
 	if lk == null or lk["tex"] != null:
 		return
 	_busy = true
+	var t0 = Time.get_ticks_usec()
 	var sp: Dictionary = job[1]
 	var poses := []
 	var info := {}
@@ -967,7 +970,9 @@ func _bake_next() -> void:
 	vp.render_target_update_mode = SubViewport.UPDATE_ONCE
 	vp.add_child(canvas)
 	add_child(vp)
+	var t1 = Time.get_ticks_usec()
 	await RenderingServer.frame_post_draw
+	var t2 = Time.get_ticks_usec()
 	var img = vp.get_texture().get_image()
 	vp.queue_free()
 	_busy = false
@@ -985,6 +990,8 @@ func _bake_next() -> void:
 	lk["mid"] = info["mid"] * k
 	lk["top"] = info["top"] * k
 	lk["tex"] = ImageTexture.create_from_image(img)
+	bake_us = (t1 - t0) + (Time.get_ticks_usec() - t2)
+	bake_max_us = max(bake_max_us, bake_us)
 
 
 # ------------------------------------------------------------------------------------------------ tests and tools
@@ -995,4 +1002,4 @@ func stats() -> Dictionary:
 	for lk in _looks.values():
 		if lk["tex"] != null:
 			baked += 1
-	return {"looks": _looks.size(), "baked": baked, "queued": _queue.size()}
+	return {"looks": _looks.size(), "baked": baked, "queued": _queue.size(), "bake_ms": bake_us / 1000.0, "bake_max_ms": bake_max_us / 1000.0}

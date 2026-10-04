@@ -37,6 +37,7 @@ const C = WorldGrid.CELL
 const ANT_PX = 25.0            # an ordinary worker underground, nose to tail (units_view.gd: size 74 comes out about 24.7 px)
 const PROP_WORKER = 40.0       # props_manifest game sizes are for a worker this long (its worker_ref_px)
 const CHECK_EVERY = 0.5        # seconds between checks of what the props depend on
+const BUILD_MS = 2.0           # rebuilding furnishing stops for the frame once it has taken this long (after one unit at least)
 const REFRESH_EVERY = 20.0     # ... and between rebuilds for tunnels dug through floors since
 const MARGIN = 120.0           # world px past the view a room's things can still reach into it
 
@@ -115,17 +116,19 @@ var _specs := {}               # name -> spec (null: no such picture): {tex, src
 var _brood := {}               # antkit piece name -> {tex, w, h, base (picture px), long}
 var _icons := {}               # purpose -> texture
 var _mounds := []              # [{tex, w, h, hole: Vector2 (picture px, the hole's floor under its centre)}], small to large
-var _props := []               # [{tex, src (picture px), rect (world px), mirror, mod}]
+var _units := {}               # unit name -> {key, props, occ}: the furnishing of one room (or the hall, the shafts ...), see _props_check
+var _want := {}                # unit name -> [key it should have, its chamber or null]
+var _order := []               # unit names in the order they are furnished and drawn
+var _stale := []               # unit names waiting to be rebuilt
+var _drawn := []               # every unit's props, gathered: [{tex, src (picture px), rect (world px), mirror, mod}]
+var _props := []               # the props of the unit being built
+var _epoch := 0                # bumps when enough has been dug that floors are looked at again
+var _tier_now := 0
 var _occ := []                 # footprints placed so far in a rebuild
-var _prop_key := ""
 var _check_t := 0.0
 var _refresh_t := 0.0
 var _open_ver := -1
 var _food_lv := 0
-var _geo_key := ""             # the nest's layout (rooms, levels, mouths): floors and shafts are cached per layout
-var _floor_cache := {}
-var _shaft_key := "-"
-var _shaft_list := []
 var _lo := 0                   # columns the nest spans (props and shafts are looked for only there)
 var _hi := 0
 var _egg_floor := {}           # Vector3(egg pos, plane) -> world y of the drawn floor under it (cleared on every props check)
@@ -133,7 +136,6 @@ var _badges: Node2D            # the chamber badges: a child drawn above the ant
 var _heap_w := 0.0             # width of the spoil heap round the main mouth, world px
 var props_rebuilds := 0
 var props_ms := 0.0
-var prof := {}                 # ms per part of the last props rebuild (tests)
 
 
 func _ready() -> void:
@@ -205,22 +207,25 @@ func _process(delta: float) -> void:
 	var g = colony.grid
 	if g != _grid:
 		_grid = g
+		_units = {}
+		_want = {}
+		_order = []
+		_stale = []
 		_props = []
 		_occ = []
-		_prop_key = ""
-		_geo_key = ""
-		_floor_cache = {}
-		_shaft_key = "-"
-		_shaft_list = []
 		_food_lv = 0
 		_open_ver = -1
+		_epoch = 0
 		_check_t = 0.0
+		_refresh_t = REFRESH_EVERY
 	_check_t -= delta
 	if _check_t <= 0.0:
 		_check_t = CHECK_EVERY
 		_egg_floor.clear()
-		_props_check(delta)
+		_props_check()
 		_heap_w = _heap_width(g)
+	if not _stale.is_empty():
+		_build_some()
 	queue_redraw()
 	_badges.queue_redraw()
 
@@ -254,9 +259,12 @@ func _tier() -> int:
 	return int(round((v[1] + v[2] + v[3]) / 3.0))
 
 
-# Twice a second: has anything the props depend on changed? (The larder level has a little hysteresis, so stores hovering at a
-# step do not refurnish the room back and forth.)
-func _props_check(_delta: float) -> void:
+# Twice a second: what should each part of the nest hold now? The furnishing is kept in units (a room, the queen's chamber, the
+# entrance hall, the other mouths, the shafts), each with a key made of what it depends on; a unit whose key changed is rebuilt, a
+# few a frame (_build_some), so a fuller larder refurnishes only the stores. (The larder level has a little hysteresis, so stores
+# hovering at a step do not refurnish back and forth.) When enough has been dug since the last look, every unit is looked at again,
+# one after another: a tunnel may have gone through a floor.
+func _props_check() -> void:
 	var sim = colony.sim
 	var g = colony.grid
 	var f = clamp(sim.food / max(1.0, sim.food_cap), 0.0, 1.0) * 6.0
@@ -272,24 +280,7 @@ func _props_check(_delta: float) -> void:
 		_refresh_t = REFRESH_EVERY
 		if abs(g.open_under - _open_ver) >= 30:
 			_open_ver = g.open_under
-			_geo_key = ""                  # tunnels dug through floors since: find the floors again
-	var key = "%d|%d|%d|%d|%d|%d|%d|%d|%d" % [sim.planner.chambers.size(), _tier(), _food_lv, crumbs, _steps(sim.raid_n, [1, 3, 5, 7, 8]),
-		lab, sim.planner.open_levels(), g.entrances.size(), _open_ver]
-	if key == _prop_key:
-		return
-	_prop_key = key
-	var t0 = Time.get_ticks_usec()
-	_props_rebuild()
-	props_ms = (Time.get_ticks_usec() - t0) / 1000.0
-	props_rebuilds += 1
-
-
-# ------------------------------------------------------------------------------------------------------------ props: what and where
-func _props_rebuild() -> void:
-	var sim = colony.sim
-	var g = colony.grid
-	_props = []
-	_occ = []
+			_epoch += 1
 	_lo = int(g.entrance.x) - 70
 	_hi = int(g.entrance.x) + 70
 	for en in g.entrances:
@@ -298,79 +289,162 @@ func _props_rebuild() -> void:
 	for c in sim.planner.chambers:
 		_lo = min(_lo, int(c["center"].x - c["rx"]) - 25)
 		_hi = max(_hi, int(c["center"].x + c["rx"]) + 25)
-	var gk = "%d|%d|%d|%d|%d|%d" % [sim.planner.chambers.size(), sim.planner.open_levels(), g.entrances.size(), _lo, _hi, _open_ver]
-	if gk != _geo_key:
-		_geo_key = gk
-		_floor_cache = {}
-	var tq = Time.get_ticks_usec()
-	var tier = _tier()
-	var raids = sim.raid_n
-	var own = sim.owned
-	var ex = int(g.entrance.x)
-	var esy = g.surf_y(ex)
-	# the rooms: what they are for first, in the middle of the floor, then their kit from the walls in
-	var armour = own.has("helmet") or own.has("glass") or own.has("vest") or own.has("tardigrade")
+	_tier_now = _tier()
+	var tier = _tier_now
+	var want := {}
+	var order := []
 	for c in sim.planner.chambers:
 		if int(c.get("z", 0)) != 0:
 			continue
-		var p = str(c["purpose"])
-		var cx = float(c["center"].x)
-		var rx = float(c["rx"])
-		var sd = cx * 7.13 + float(c["center"].y) * 3.71
-		var fl = _floors(int(cx - rx) - 1, int(cx + rx) + 1, int(c["center"].y - c["ry"]) - 1, int(c["center"].y + c["ry"] * 1.5) + 3, int(c["floor"]) + 1)
-		var mid = int(round(cx))
-		var floor_w = fl.size() * C
-		match p:
-			"food":
-				_furnish(fl, _piles(floor_w), sd + 1.0, [], mid)
-			"farm":
-				var nf = int(clamp(floor(floor_w * 0.6 / FUNGUS_W), 1, MAX_FUNGUS))
-				var fu := []
-				for i in nf:
-					fu.append(["fungus", 0.85 + 0.25 * _h(sd + i * 3.3)])
-				_furnish(fl, fu, sd + 2.0, [], mid)
-			"midden":
-				_furnish(fl, [["midden", 1.0]] + ([["midden", 0.7]] if floor_w > 70.0 else []), sd + 3.0, [], mid)
-		var kit: Array = ROOM_KIT.get(p, [])
-		var items := []
-		if p == "food":
-			if tier >= 1:
-				var n = int(round(_food_lv / 6.0 * (1 + tier))) + (1 if own.has("piggy") and _food_lv > 0 else 0)
-				for i in int(min(n, kit.size())):
-					items.append(kit[i] if ITEM_TIER.get(kit[i], 0) <= tier else "crate")
-		else:
-			var n2 = tier + (1 if p in WORKSHOPS or p == "midden" else 0) - (1 if p == "brood" or p == "farm" else 0)
-			for i in int(clamp(n2, 0, kit.size())):
-				if ITEM_TIER.get(kit[i], 0) <= tier:
-					items.append(kit[i])
-			if p == "brood" and own.has("medikit") and not "bucket" in items:
-				items.append("bucket")
-			if p == "armory" and armour and not "helmet_riveted" in items:
-				items.append("helmet_riveted")
-		if tier >= 4 and int(c.get("level", 0)) >= 4:
-			items.append(DEEP_IRON[int(_h(sd + 11.0) * DEEP_IRON.size()) % DEEP_IRON.size()])
-			if tier >= 5:
-				items.append(DEEP_IRON[int(_h(sd + 13.0) * DEEP_IRON.size()) % DEEP_IRON.size()])
-		_furnish(fl, items, sd, [])
-		if tier >= 4 and p == "architects":
-			_hang_lantern(c["center"], rx, sd)
-	prof["rooms"] = (Time.get_ticks_usec() - tq) / 1000.0
-	tq = Time.get_ticks_usec()
-	# the queen's chamber
+		var n = "room:%d,%d" % [int(c["center"].x * 10.0), int(c["center"].y * 10.0)]
+		var food = str(c["purpose"]) == "food"
+		want[n] = ["%s|%d|%d|%d|%d|%d" % [c["purpose"], tier, _food_lv if food else 0, crumbs if food else 0, lab, _epoch], c]
+		order.append(n)
+	var raid_steps = _steps(sim.raid_n, [1, 3, 5, 7, 8])
+	want["queen"] = ["%d|%d" % [tier, _epoch], null]
+	want["hall"] = ["%d|%d|%d" % [raid_steps, lab, _epoch], null]
+	want["mouths"] = ["%d|%d|%d" % [g.entrances.size(), raid_steps, _epoch], null]
+	want["shafts"] = ["%d|%d|%d|%d|%d|%d|%d|%d" % [tier, lab, _epoch, sim.planner.chambers.size(), sim.planner.open_levels(), g.entrances.size(), _lo, _hi], null]
+	order += ["queen", "hall", "mouths", "shafts"]
+	var gone := false
+	for n in _units.keys():
+		if not want.has(n):
+			_units.erase(n)
+			gone = true
+	for n in order:
+		if (not _units.has(n) or _units[n]["key"] != want[n][0]) and not n in _stale:
+			_stale.append(n)
+	_want = want
+	_order = order
+	if gone:
+		_flatten()
+
+
+# Rebuild stale units until BUILD_MS is spent (at least one), then gather what is drawn.
+func _build_some() -> void:
+	var t0 = Time.get_ticks_usec()
+	var built := false
+	while not _stale.is_empty() and (not built or Time.get_ticks_usec() - t0 < BUILD_MS * 1000.0):
+		var n = _stale.pop_front()
+		if not _want.has(n):
+			continue
+		_build_unit(n)
+		built = true
+	props_ms = (Time.get_ticks_usec() - t0) / 1000.0
+	props_rebuilds += 1
+	if built:
+		_flatten()
+
+
+func _flatten() -> void:
+	var out := []
+	for n in _order:
+		if _units.has(n):
+			out.append_array(_units[n]["props"])
+	_drawn = out
+
+
+# Furnish one unit: everything else that stands is in the way (_occ), what this unit adds becomes its props and footprints.
+func _build_unit(n: String) -> void:
+	_occ = []
+	for m in _order:
+		if m != n and _units.has(m):
+			_occ.append_array(_units[m]["occ"])
+	var occ0 = _occ.size()
+	_props = []
+	var w = _want[n]
+	if n.begins_with("room:"):
+		_furnish_room(w[1])
+	else:
+		match n:
+			"queen":
+				_furnish_queen()
+			"hall":
+				_furnish_hall()
+			"mouths":
+				_furnish_mouths()
+			"shafts":
+				if _tier_now >= 2:
+					var own = colony.sim.owned
+					_ladders(_tier_now, own.has("tools") or own.has("dynamite") or own.has("burrow"))
+	_units[n] = {"key": w[0], "props": _props, "occ": _occ.slice(occ0)}
+	_props = []
+	_occ = []
+
+
+# A room: what it is for first, in the middle of the floor, then its kit from the walls in.
+func _furnish_room(c: Dictionary) -> void:
+	var own = colony.sim.owned
+	var tier = _tier_now
+	var armour = own.has("helmet") or own.has("glass") or own.has("vest") or own.has("tardigrade")
+	var p = str(c["purpose"])
+	var cx = float(c["center"].x)
+	var rx = float(c["rx"])
+	var sd = cx * 7.13 + float(c["center"].y) * 3.71
+	var fl = _floors(int(cx - rx) - 1, int(cx + rx) + 1, int(c["center"].y - c["ry"]) - 1, int(c["center"].y + c["ry"] * 1.5) + 3, int(c["floor"]) + 1)
+	var mid = int(round(cx))
+	var floor_w = fl.size() * C
+	match p:
+		"food":
+			_furnish(fl, _piles(floor_w), sd + 1.0, [], mid)
+		"farm":
+			var nf = int(clamp(floor(floor_w * 0.6 / FUNGUS_W), 1, MAX_FUNGUS))
+			var fu := []
+			for i in nf:
+				fu.append(["fungus", 0.85 + 0.25 * _h(sd + i * 3.3)])
+			_furnish(fl, fu, sd + 2.0, [], mid)
+		"midden":
+			_furnish(fl, [["midden", 1.0]] + ([["midden", 0.7]] if floor_w > 70.0 else []), sd + 3.0, [], mid)
+	var kit: Array = ROOM_KIT.get(p, [])
+	var items := []
+	if p == "food":
+		if tier >= 1:
+			var n = int(round(_food_lv / 6.0 * (1 + tier))) + (1 if own.has("piggy") and _food_lv > 0 else 0)
+			for i in int(min(n, kit.size())):
+				items.append(kit[i] if ITEM_TIER.get(kit[i], 0) <= tier else "crate")
+	else:
+		var n2 = tier + (1 if p in WORKSHOPS or p == "midden" else 0) - (1 if p == "brood" or p == "farm" else 0)
+		for i in int(clamp(n2, 0, kit.size())):
+			if ITEM_TIER.get(kit[i], 0) <= tier:
+				items.append(kit[i])
+		if p == "brood" and own.has("medikit") and not "bucket" in items:
+			items.append("bucket")
+		if p == "armory" and armour and not "helmet_riveted" in items:
+			items.append("helmet_riveted")
+	if tier >= 4 and int(c.get("level", 0)) >= 4:
+		items.append(DEEP_IRON[int(_h(sd + 11.0) * DEEP_IRON.size()) % DEEP_IRON.size()])
+		if tier >= 5:
+			items.append(DEEP_IRON[int(_h(sd + 13.0) * DEEP_IRON.size()) % DEEP_IRON.size()])
+	_furnish(fl, items, sd, [])
+	if tier >= 4 and p == "architects":
+		_hang_lantern(c["center"], rx, sd)
+
+
+# The queen's chamber: her middle stays clear (she lies there).
+func _furnish_queen() -> void:
+	var g = colony.grid
+	var tier = _tier_now
+	if tier < 2:
+		return
 	var qc = g.chamber
 	var qr = g.chamber_r
-	if tier >= 2:
-		var qk: Array = ROOM_KIT["queen"]
-		var qi := []
-		for i in int(clamp(tier - 1, 0, qk.size())):
-			if ITEM_TIER.get(qk[i], 0) <= tier:
-				qi.append(qk[i])
-		# her middle stays clear (she lies there)
-		var keep = [Vector2((qc.x + 0.5 - qr.x * 0.45) * C, (qc.x + 0.5 + qr.x * 0.45) * C)]
-		_furnish(_floors(int(qc.x - qr.x) - 1, int(qc.x + qr.x) + 1, int(qc.y - qr.y) - 1, int(qc.y + qr.y) + 3, int(qc.y + qr.y)), qi, qc.x * 5.3 + qc.y, keep)
-		if tier >= 4:
-			_hang_lantern(qc, qr.x, qc.x * 5.3 + 4.0)
-	# the entrance hall: the first floors under the main mouth, above the queen's chamber
+	var qk: Array = ROOM_KIT["queen"]
+	var qi := []
+	for i in int(clamp(tier - 1, 0, qk.size())):
+		if ITEM_TIER.get(qk[i], 0) <= tier:
+			qi.append(qk[i])
+	var keep = [Vector2((qc.x + 0.5 - qr.x * 0.45) * C, (qc.x + 0.5 + qr.x * 0.45) * C)]
+	_furnish(_floors(int(qc.x - qr.x) - 1, int(qc.x + qr.x) + 1, int(qc.y - qr.y) - 1, int(qc.y + qr.y) + 3, int(qc.y + qr.y)), qi, qc.x * 5.3 + qc.y, keep)
+	if tier >= 4:
+		_hang_lantern(qc, qr.x, qc.x * 5.3 + 4.0)
+
+
+# The entrance hall: the first floors under the main mouth, above the queen's chamber.
+func _furnish_hall() -> void:
+	var sim = colony.sim
+	var g = colony.grid
+	var raids = sim.raid_n
+	var own = sim.owned
 	var hall := []
 	if raids >= 1:
 		hall.append("palisade")
@@ -382,22 +456,25 @@ func _props_rebuild() -> void:
 		hall.append("x_stakes")
 	if raids >= 8:
 		hall.append("cage")
-	if not hall.is_empty():
-		var yb = esy + 26
-		if abs(qc.x - ex) < qr.x + 6:
-			yb = min(yb, int(qc.y - qr.y) - 1)
-		_furnish(_floors(ex - 26, ex + 26, esy + 3, yb, esy + 3), hall, ex * 7.1, [Vector2(ex - 1.5, ex + 2.5) * C], ex)
+	if hall.is_empty():
+		return
+	var ex = int(g.entrance.x)
+	var esy = g.surf_y(ex)
+	var yb = esy + 26
+	if abs(g.chamber.x - ex) < g.chamber_r.x + 6:
+		yb = min(yb, int(g.chamber.y - g.chamber_r.y) - 1)
+	_furnish(_floors(ex - 26, ex + 26, esy + 3, yb, esy + 3), hall, ex * 7.1, [Vector2(ex - 1.5, ex + 2.5) * C], ex)
+
+
+# The other mouths: a fence after the first raid.
+func _furnish_mouths() -> void:
+	var g = colony.grid
+	if colony.sim.raid_n < 1:
+		return
 	for i in range(1, g.entrances.size()):
-		if raids >= 1:
-			var en = g.entrances[i]
-			var sy2 = g.surf_y(int(en.x))
-			_furnish(_floors(int(en.x) - 16, int(en.x) + 16, sy2 + 3, sy2 + 22, sy2 + 3), ["fence"], en.x * 3.3, [Vector2(en.x - 1.5, en.x + 2.5) * C], int(en.x))
-	prof["queen+hall"] = (Time.get_ticks_usec() - tq) / 1000.0
-	tq = Time.get_ticks_usec()
-	# shafts: ladders at the foot of the tall straight ones, a hoist over the tallest
-	if tier >= 2:
-		_ladders(tier, own.has("tools") or own.has("dynamite") or own.has("burrow"))
-	prof["shafts"] = (Time.get_ticks_usec() - tq) / 1000.0
+		var en = g.entrances[i]
+		var sy2 = g.surf_y(int(en.x))
+		_furnish(_floors(int(en.x) - 16, int(en.x) + 16, sy2 + 3, sy2 + 22, sy2 + 3), ["fence"], en.x * 3.3, [Vector2(en.x - 1.5, en.x + 2.5) * C], int(en.x))
 
 
 # The food piles of one store: as many as the larder is full (all the stores show the same fill), the last one smaller; a few
@@ -417,14 +494,10 @@ func _piles(floor_w: float) -> Array:
 
 
 # Floor columns of a box: for every column, the open cell with solid ground under it nearest to row pref_y, and the open headroom
-# above it in cells: {x: [floor_row, headroom]}. Cached per box until the nest's layout changes.
+# above it in cells: {x: [floor_row, headroom]}.
 func _floors(xa: int, xb: int, ya: int, yb: int, pref_y: int) -> Dictionary:
-	var ck = "%d,%d,%d,%d,%d" % [xa, xb, ya, yb, pref_y]
-	if _floor_cache.has(ck):
-		return _floor_cache[ck]
 	var g = colony.grid
 	var out := {}
-	_floor_cache[ck] = out
 	var W: int = g.W
 	var ox: int = g.ox
 	var solid = g.solid
@@ -635,11 +708,8 @@ func _hang_lantern(center: Vector2, rx: float, sd: float) -> void:
 
 
 # Shafts: straight vertical runs of open cells at least LADDER_RUN tall that end on a floor and are narrow (a shaft, not a room),
-# one per shaft (the tallest column of it), tallest first: [[x, floor row, run, open cells left, right]]. Cached per layout.
+# one per shaft (the tallest column of it), tallest first: [[x, floor row, run, open cells left, right]].
 func _shaft_spots() -> Array:
-	if _geo_key == _shaft_key:
-		return _shaft_list
-	_shaft_key = _geo_key
 	var sim = colony.sim
 	var g = colony.grid
 	var W: int = g.W
@@ -684,7 +754,6 @@ func _shaft_spots() -> Array:
 		if not merged:
 			groups.append(sp.duplicate())
 	groups.sort_custom(func(a, b): return a[2] > b[2])
-	_shaft_list = groups
 	return groups
 
 
@@ -742,7 +811,7 @@ static func _h(x: float) -> float:
 
 
 func _draw_props(vr: Rect2) -> void:
-	for p in _props:
+	for p in _drawn:
 		var r: Rect2 = p["rect"]
 		if not vr.intersects(r):
 			continue
