@@ -6,3 +6,9 @@
 4. Do not re-read a file already inspected in this chat unless it has been modified since.
 
 These rules apply to agents launched from this project too: put them in every agent prompt.
+
+## Agents (owner's choice)
+
+- Launch agents on the cheaper model by default (`model: "sonnet"`). Use the stronger model only for a hard job (for example
+  the part-kit ants renderer), and say why when doing it.
+- Run about 2–3 agents at a time, not 7.
