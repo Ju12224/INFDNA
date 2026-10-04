@@ -3,7 +3,7 @@ extends Camera2D
 # The world is infinite sideways, so x is never clamped.
 
 var world_size := Vector2(1560, 900)
-var min_zoom := 0.28
+var min_zoom := 0.24
 var max_zoom := 1.0
 var _drag := false
 var _shake := 0.0

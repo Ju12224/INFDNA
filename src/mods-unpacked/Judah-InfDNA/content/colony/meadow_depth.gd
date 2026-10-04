@@ -34,10 +34,12 @@ const INNER = 3                   # rows that can hide a unit (the fringe in fro
 # back row 0.2 (behind the empty-handed trail), middle 0.533 (just in front of the food piles), front 0.867 (in front of the fight
 # lane), and a fringe at 1.067 in front of the lip.
 const ROW_B = [33, 38, 43, 46]
-const HEIGHT = [92.0, 108.0, 104.0, 84.0]   # tallest blades, px before perspective
-const SOLID = [0.6, 0.64, 0.64, 0.0]       # share of the height that is a closed wall of grass at the foot
-const Z_HI = [0.44, 0.70, 1.08, 1.75]       # camera zoom at which a row begins to part (zoom < 1 is a magnified view) ...
-const Z_LO = [0.33, 0.52, 0.82, 1.35]       # ... and has gone
+const HEIGHT = [130.0, 150.0, 146.0, 118.0]  # tallest blades, px before perspective (tall enough to hide the lanes behind across the deep band)
+const SOLID = [0.62, 0.66, 0.66, 0.0]      # share of the height that is a closed wall of grass at the foot
+# The rows open one at a time, front first, as the camera comes in: at the usual zoom they all stand (the colony is mostly hidden, symbols
+# mark what goes on), each further step in shows one more row's lanes.
+const Z_HI = [0.37, 0.48, 0.62, 0.80]       # camera zoom at which a row begins to part (zoom < 1 is a magnified view) ...
+const Z_LO = [0.30, 0.39, 0.50, 0.64]       # ... and has gone
 const FADE_IN = 0.45              # a freshly built row fades in (never pops)
 const ANT_H = 34.0                # px an ant stands at perspective 1 (the tallest caste)
 const DL = GroundView.DEPTH * GroundView.LANE_K
@@ -563,7 +565,7 @@ func _set_range(e: Dictionary, gch: Dictionary) -> void:
 	for v in gch["sy"]:
 		lo = min(lo, v)
 		hi = max(hi, v)
-	e["y0"] = lo - DL - 150.0
+	e["y0"] = lo - DL - 200.0
 	e["y1"] = hi + 60.0
 
 

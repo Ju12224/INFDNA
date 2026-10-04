@@ -11,6 +11,7 @@ extends Node2D
 const MK = preload("res://mods-unpacked/Judah-InfDNA/content/colony/mesh_kit.gd")
 const AL = preload("res://mods-unpacked/Judah-InfDNA/content/colony/art_lib.gd")
 const Seasons = preload("res://mods-unpacked/Judah-InfDNA/core/seasons.gd")
+const GV = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ground_view.gd")
 
 var cam
 var grid
@@ -27,18 +28,13 @@ var _budget := 3
 
 const CW = 1200.0            # layer-space chunk width
 const BOTTOM = 700.0         # layers hang this far below the anchor so no sky shows under them
+const LIFT = GV.DEPTH - 128.0   # the bases below were set for a 128 px ground band: a deeper band lifts every layer by the difference
 const HAZE = Color("#f0e4c8")
 const NIGHT_STOPS = [Color("#060a22"), Color("#0d1744"), Color("#1a2a5e"), Color("#2b3a6c"), Color("#41507d")]
 const DUSK_STOPS = [Color("#43478a"), Color("#8a69a2"), Color("#e8957c"), Color("#f6ad79"), Color("#ffc98a")]
 const SKY_STOPS = [[-2200.0, Color("#5c9ccb")], [-1100.0, Color("#86bee0")], [-500.0, Color("#bcdbe0")], [-180.0, Color("#e8e6cf")], [-40.0, Color("#f6e6c0")]]
 
 # f = parallax; base = px above the anchor (clear of the 128 px ground band); amp = relief
-# autumn leaves [dark, mid, light] for orange, red and gold trees
-const AUTUMN = [
-	[Color("#8a3f16"), Color("#c8661e"), Color("#e8892b")],
-	[Color("#6e1d17"), Color("#a82f22"), Color("#cf4a2e")],
-	[Color("#8a6a10"), Color("#c79a1c"), Color("#e8c23a")],
-]
 const SNOW_WHITE = Color("#f1f6f8")
 const LAYERS = [
 	{"f": 0.07, "base": 520.0, "amp": 320.0, "kind": "peaks", "col": Color("#b4c8dc"), "hz": 0.50},
@@ -228,7 +224,7 @@ func _relief(x: float, sd: float, kind: String) -> float:
 
 func _ridge_y(i: int, x: float) -> float:
 	var L = LAYERS[i]
-	return anchor.y - L["base"] - _relief(x, L["f"] * 13.7, L["kind"]) * L["amp"]
+	return anchor.y - LIFT - L["base"] - _relief(x, L["f"] * 13.7, L["kind"]) * L["amp"]
 
 
 func _layer(v: Rect2, i: int) -> void:
@@ -259,7 +255,7 @@ func _layer(v: Rect2, i: int) -> void:
 	# ambient ants marching along the farmland and hedge ridges (the idea comes from the v0.22 sky)
 	if (i == 3 or i == 6) and s > 0.38 and (perf == null or perf.backdrop >= 2):
 		_bg_ants(i, s, p0, p1)
-	if (i == 3 or i == 4) and (perf == null or perf.backdrop >= 2):
+	if i >= 3 and (perf == null or perf.backdrop >= 2):
 		_mist_trees(i, p0, p1)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if _cache.size() > 160:
@@ -329,12 +325,7 @@ func _build(i: int, ci: int):
 			_pines(mk, i, x0, 20.0, 34.0, 62.0, 0.5, col.darkened(0.12))
 		"fields":
 			_fields(mk, pts, i, x0, step, col)
-		"pines":
-			_pines(mk, i, x0, 16.0, 52.0, 96.0, 0.9, col)
-		"forest":
-			_leafy(mk, i, x0, 30.0, 58.0, 100.0, col)
-		"hedge":
-			_hedge(mk, i, x0, col)
+	# the near layers' trees are the owner's pictures (_mist_trees), not drawn shapes
 	if kind == "forest" or kind == "hedge" or kind == "pines":
 		_meadow(mk, i, x0, col, hz)
 	return mk.build()
@@ -405,11 +396,12 @@ func _mist_trees(i: int, p0: float, p1: float) -> void:
 	var haze = Color(1, 1, 1).linear_interpolate(Color(0.74, 0.84, 0.9), clamp(hz * 2.6, 0.0, 0.8))
 	var leaf = day.leaf if day != null else 1.0
 	var au = day.autumn if day != null else 0.0
-	for ci in range(int(floor(p0 / MIST_SPAN)) - 1, int(ceil(p1 / MIST_SPAN)) + 1):
+	var span = MIST_SPAN if i < 5 else MIST_SPAN * 0.55     # the near forest and hedge layers stand thicker
+	for ci in range(int(floor(p0 / span)) - 1, int(ceil(p1 / span)) + 1):
 		var hh = _hh(ci * 41.3, f * 7.7)
 		if hh < 0.38:
 			continue
-		var x = ci * MIST_SPAN + _hh(ci, 3.3 + f) * MIST_SPAN * 0.8
+		var x = ci * span + _hh(ci, 3.3 + f) * span * 0.8
 		var r = _hh(ci * 7.1, 5.0 + f)
 		var name = "oak1"
 		var hgt = 190.0 + 90.0 * _hh(ci, 9.0)
@@ -526,7 +518,7 @@ func _pollen(v: Rect2) -> void:
 
 func _snow(mk, pts: PoolVector2Array, step: float, i: int, x0: float) -> void:
 	var L = LAYERS[i]
-	var thresh = anchor.y - L["base"] - L["amp"] * (Seasons.blend(day.sea_t, [0.58, 0.8, 0.6, 0.2]) if day != null else 0.66)
+	var thresh = anchor.y - LIFT - L["base"] - L["amp"] * (Seasons.blend(day.sea_t, [0.58, 0.8, 0.6, 0.2]) if day != null else 0.66)
 	var white = Color("#f1f6f8").linear_interpolate(HAZE, L["hz"] * 0.35)
 	var blue = Color("#cfdde6").linear_interpolate(HAZE, L["hz"] * 0.35)
 	for k in range(0, pts.size() - 1):
@@ -581,85 +573,6 @@ func _pines(mk, i: int, x0: float, spacing: float, hmin: float, hmax: float, den
 					mk.tri(b + Vector2(-capw, y0 - hh * 0.17), b + Vector2(capw, y0 - hh * 0.17), tip, snow_c)
 		x += spacing * (0.75 + 0.6 * _hh(x, 13.0))
 		k += 1
-
-
-func _leafy(mk, i: int, x0: float, spacing: float, hmin: float, hmax: float, col: Color) -> void:
-	var hz: float = LAYERS[i]["hz"]
-	var t = day.sea_t if day != null else 0.0
-	var leafk = Seasons.leaf(t)
-	var aut = Seasons.autumn(t)
-	var snowk = day.snow if day != null else 0.0
-	var blossom = 1.0 - smoothstep(0.05, 0.2, Seasons.phase(t))
-	var base = LAYERS[i]["col"]
-	var trunk = Color("#5a4230").linear_interpolate(HAZE, hz)
-	var x = x0 + 6.0
-	while x < x0 + CW:
-		var hh = hmin + (hmax - hmin) * _hh(x * 0.19, 21.0)
-		var b = Vector2(x, _ridge_y(i, x) + 8.0)
-		var tw = hh * 0.055
-		mk.quad(b + Vector2(-tw, 0), b + Vector2(tw, 0), b + Vector2(tw * 0.6, -hh * 0.5), b + Vector2(-tw * 0.6, -hh * 0.5), trunk)
-		if leafk < 0.999 and _hh(x, 25.0) > leafk:
-			_bare_tree(mk, b, hh, hz, snowk, x)
-			x += spacing * (0.7 + 0.7 * _hh(x, 22.0))
-			continue
-		var c = col
-		if aut > 0.0 and _hh(x, 26.0) < 0.82:
-			var A = AUTUMN[int(_hh(x, 27.0) * 2.99)]
-			c = base.linear_interpolate(A[1], aut)
-		var dark = c.darkened(0.22).linear_interpolate(HAZE, hz * 0.3)
-		var mid = c.linear_interpolate(HAZE, hz * 0.3)
-		var lite = c.lightened(0.16).linear_interpolate(HAZE, hz * 0.3)
-		var cc = b + Vector2(0, -hh * 0.68)
-		var r = hh * 0.34
-		mk.blob(cc + Vector2(-r * 0.2, r * 0.2), r * 1.05, r * 0.85, x, 0.1, dark, 10)
-		mk.blob(cc + Vector2(r * 0.55, r * 0.1), r * 0.8, r * 0.7, x + 1.0, 0.1, dark, 9)
-		mk.blob(cc + Vector2(-r * 0.55, r * 0.1), r * 0.8, r * 0.7, x + 2.0, 0.1, dark, 9)
-		mk.blob(cc + Vector2(0, 0), r * 0.92, r * 0.74, x + 3.0, 0.1, mid, 10)
-		mk.blob(cc + Vector2(r * 0.25, -r * 0.2), r * 0.52, r * 0.42, x + 4.0, 0.12, lite, 8)
-		if blossom > 0.05 and _hh(x, 28.0) > 0.4:
-			for q in 4:
-				mk.ellipse(cc + Vector2((_hh(x, 30.0 + q) - 0.5) * r * 1.8, (_hh(x, 40.0 + q) - 0.6) * r * 1.2), 2.4, 2.1, Color("#fbd1de").linear_interpolate(HAZE, hz * 0.3), 6)
-		x += spacing * (0.7 + 0.7 * _hh(x, 22.0))
-
-
-# A tree with no leaves: the trunk, a handful of boughs, and snow along the top of them.
-func _bare_tree(mk, b: Vector2, hh: float, hz: float, snowk: float, x: float) -> void:
-	var wood = Color("#5a4230").linear_interpolate(HAZE, hz)
-	var top = b + Vector2(0, -hh * 0.5)
-	for k in 5:
-		var ang = -PI * 0.5 + (k - 2) * 0.42 + (_hh(x, 50.0 + k) - 0.5) * 0.25
-		var ln = hh * (0.34 + 0.2 * _hh(x, 60.0 + k))
-		var tip = top + Vector2(cos(ang), sin(ang)) * ln
-		var wd = max(1.4, hh * 0.028)
-		var nrm = Vector2(-sin(ang), cos(ang)) * wd
-		mk.quad(top - nrm, top + nrm, tip + nrm * 0.3, tip - nrm * 0.3, wood)
-		for q in 2:
-			var sp = top.linear_interpolate(tip, 0.5 + 0.2 * q)
-			var sa = ang + (0.7 if q == 0 else -0.8)
-			mk.quad(sp - nrm * 0.6, sp + nrm * 0.6, sp + Vector2(cos(sa), sin(sa)) * ln * 0.4, sp + Vector2(cos(sa), sin(sa)) * ln * 0.4, wood)
-		if snowk > 0.3:
-			var mid = top.linear_interpolate(tip, 0.55)
-			mk.ellipse(mid + Vector2(0, -wd * 1.2), ln * 0.2, wd * 1.2, SNOW_WHITE.linear_interpolate(HAZE, hz * 0.35), 6)
-
-
-func _hedge(mk, i: int, x0: float, col: Color) -> void:
-	var hz: float = LAYERS[i]["hz"]
-	var dark = col.darkened(0.2)
-	var lite = col.lightened(0.14)
-	var x = x0
-	while x < x0 + CW:
-		var h1 = _hh(x, 31.0)
-		var r = 18.0 + 14.0 * h1
-		var b = Vector2(x, _ridge_y(i, x) + 10.0)
-		mk.blob(b + Vector2(0, -r * 0.2), r, r * 0.85, x, 0.1, dark, 9)
-		mk.blob(b + Vector2(-r * 0.1, -r * 0.35), r * 0.82, r * 0.7, x + 1.0, 0.1, col, 9)
-		mk.blob(b + Vector2(-r * 0.3, -r * 0.55), r * 0.36, r * 0.3, x + 2.0, 0.1, lite, 7)
-		if day != null and day.snow > 0.3:
-			mk.blob(b + Vector2(-r * 0.1, -r * 0.8), r * 0.72, r * 0.22, x + 5.0, 0.1, SNOW_WHITE.linear_interpolate(HAZE, hz * 0.35), 8)
-		if _hh(x, 32.0) > 0.78 and (day == null or day.snow < 0.3):
-			for k in 3:
-				mk.ellipse(b + Vector2((k - 1) * r * 0.5, -r * (0.2 + 0.35 * _hh(x, 33.0 + k))), 2.6, 2.6, Color("#d8473b") if _hh(x, 34.0) > 0.5 else Color("#f3d34a"), 6)
-		x += 22.0 + 12.0 * _hh(x, 35.0)
 
 
 func _fields(mk, pts: PoolVector2Array, i: int, x0: float, step: float, col: Color) -> void:

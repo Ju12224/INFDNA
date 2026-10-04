@@ -64,15 +64,18 @@ static func _bones(ci: CanvasItem, pts: PoolVector2Array, widths: PoolRealArray,
 				ci.draw_circle(b, wb, c)
 
 
+# Creature names whose rig in the art manifests has another name.
+const RIG_NAMES = {"voidmaw": "void", "redant": "redant_small"}
+
+
 # Entry point used by enemy_view. `lift` raises flyers off the ground (px, before scale).
 static func draw(art: String, ci: CanvasItem, feet: Vector2, scale: float, shade: float, alpha: float, t: float, facing: int, id: int, moving: bool, flash: bool, lift: float, mouth: float = -1.0) -> void:
 	# the drawn creatures (the owner's art, rigged in rig_art.gd); the procedural ones below are the fallback when the art files are not there
-	if art == "spider" or art == "voidmaw":
-		var key = "spider" if art == "spider" else "void"
-		if Rig.available(key):
-			var m = mouth if mouth >= 0.0 else 0.18 + 0.12 * sin(t * 1.7 + id)
-			Rig.draw(ci, key, feet, scale, facing, t + id * 0.7, moving, m, Color(shade, shade, shade, alpha), flash)
-			return
+	var key = RIG_NAMES.get(art, art)
+	if Rig.available(key):
+		var m = mouth if mouth >= 0.0 else 0.18 + 0.12 * sin(t * 1.7 + id)
+		Rig.draw(ci, key, feet - Vector2(0.0, lift * scale), scale, facing, t + id * 0.7, moving, m, Color(shade, shade, shade, alpha), flash)
+		return
 	ci.draw_set_transform(feet, 0.0, Vector2(facing * scale, scale))
 	match art:
 		"spider":

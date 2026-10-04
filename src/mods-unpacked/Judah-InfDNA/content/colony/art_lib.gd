@@ -26,7 +26,35 @@ func manifest() -> Dictionary:
 			f.close()
 			if res.error == OK and res.result is Dictionary:
 				_man = res.result
+		# the other rigged creatures (spider format): critters and the fauna (beetles, scorpion, centipede, moth, hornet, red ants, queen)
+		for extra in [["critter_manifest.json", ""], ["fauna_rig_manifest.json", "fauna_rig/"]]:
+			if f.open(DIR + extra[0], File.READ) != OK:
+				continue
+			var r2 = JSON.parse(f.get_as_text())
+			f.close()
+			if r2.error != OK or not (r2.result is Dictionary):
+				continue
+			for k in r2.result.keys():
+				var e = r2.result[k]
+				if not (e is Dictionary) or not e.has("body") or _man.has(k):
+					continue
+				_fix_paths(e, extra[1])
+				_man[k] = e
 	return _man
+
+
+# Rig files listed without their folder get it prepended (the fauna rig manifest names files relative to its own folder).
+static func _fix_paths(e: Dictionary, pre: String) -> void:
+	if pre == "":
+		return
+	for key in ["body", "cavity", "glow"]:
+		if e.has(key) and e[key] is Dictionary and str(e[key].get("file", "")).find("/") < 0:
+			e[key]["file"] = pre + str(e[key]["file"])
+	for key in ["parts", "wings", "jaws"]:
+		if e.has(key) and e[key] is Array:
+			for p in e[key]:
+				if p is Dictionary and str(p.get("file", "")).find("/") < 0:
+					p["file"] = pre + str(p["file"])
 
 
 func tex(file: String):

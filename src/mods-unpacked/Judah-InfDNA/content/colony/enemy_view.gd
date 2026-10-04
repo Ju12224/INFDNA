@@ -5,6 +5,7 @@ extends Node2D
 const EnemyDefs = preload("res://mods-unpacked/Judah-InfDNA/core/enemy_defs.gd")
 const CreatureArt = preload("res://mods-unpacked/Judah-InfDNA/content/colony/creature_art.gd")
 const Lib = preload("res://mods-unpacked/Judah-InfDNA/content/colony/art_lib.gd")
+const Rig = preload("res://mods-unpacked/Judah-InfDNA/content/colony/rig_art.gd")
 const Critters = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ground_critters.gd")
 const SPINE_N = 18           # joints in a worm's spine
 const INK = Color("#15121a")
@@ -207,12 +208,24 @@ func _draw_emerging(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade:
 
 # The meadow's critters (prey: they run, they never bite). Ground ones walk with legs keyed to the distance travelled; the grasshopper
 # hops; butterflies and honeybees flutter above the grass, out of reach of anything without wings.
+const CRITTER_RIGS = {"ladybird": "ladybug", "snail": "snail", "caterpillar": "caterpillar", "bee": "bee", "dragonfly": "dragonfly"}
 const BUTTERFLY_WINGS = [Color("#f2c14e"), Color("#e8728f"), Color("#7fb7e8"), Color("#f29b4e"), Color("#c9a6f2")]
 
 
 func _draw_critter(ci: CanvasItem, e, feet: Vector2, depth_scale: float, shade: float, alpha: float, moving: bool) -> void:
 	var kind = str(e.def["critter"])
 	var a = alpha * (0.75 if e.state == 2 else 1.0)
+	var rig = CRITTER_RIGS.get(kind, "")
+	if rig != "" and Rig.available(rig):
+		# the owner's drawn critter (rig_art.gd): fliers hover above the grass, the rest walk on it
+		var fly = e.def.get("fly", false)
+		var lift = (30.0 + 8.0 * sin(_t * 2.1 + e.id)) * depth_scale if fly else 0.0
+		ci.draw_set_transform(feet, 0.0, Vector2(1.0, 0.3))
+		ci.draw_circle(Vector2.ZERO, (6.0 if fly else 9.0) * depth_scale, Color(0.05, 0.1, 0.03, 0.15 * a))
+		ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		var sh = shade * (0.6 if e.flash > 0.0 else 1.0)
+		Rig.draw(ci, rig, feet - Vector2(0.0, lift), depth_scale, e.facing, _t + e.id * 0.7, moving or fly, 0.2, Color(sh, sh, sh, a), e.flash > 0.0)
+		return
 	if kind == "butterfly" or kind == "bee":
 		var lift = (34.0 + 10.0 * sin(_t * 2.1 + e.id)) * depth_scale
 		ci.draw_set_transform(feet, 0.0, Vector2(1.0, 0.3))
