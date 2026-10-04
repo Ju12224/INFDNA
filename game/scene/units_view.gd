@@ -39,6 +39,7 @@ const TURN_MIN = 0.35
 const FOODS = ["crumb", "seeds", "berries"]
 const FOOD_REF = 40.0                      # fauna_manifest sizes food for a worker this long
 const JAW_DOWN = 0.12                      # held food sits this far below the nose, in body lengths
+const KIT_BASE = Color(0.60, 0.52, 0.46)  # the kit's drab mean fill: genome colour / this tints a picture, as the old painter did
 const HURT = Color(1.0, 0.45, 0.45)
 const HURT_T = 0.12                        # a bite sets a.hurt to this
 const QUEEN_HURT_T = 0.6
@@ -178,11 +179,17 @@ func _draw_ant(a, p: Vector2, st: Vector3, far: float) -> void:
 		col *= Color.WHITE.lerp(HURT, clamp(a.hurt / HURT_T, 0.0, 1.0))
 	var face = st.z if abs(st.z) > TURN_MIN else (TURN_MIN if st.z >= 0.0 else -TURN_MIN)
 	draw_set_transform(feet, a.rot, Vector2(face * s, s))
-	draw_texture(b["tex"], -b["feet"], col)
+	draw_texture(b["tex"], -b["feet"], col * _tint(a.genome.color))
 	if a.carry > 0.0 and not _foods.is_empty():
 		var food = _foods[a.id % _foods.size()]
 		var size: Vector2 = food["size"] * b["length"] / FOOD_REF
 		draw_texture_rect(food["tex"], Rect2(b["jaw"] - size * 0.5, size), false, col)
+
+
+static func _tint(c: Color) -> Color:
+	if c.v < 0.3:
+		c = Color.from_hsv(c.h, c.s, 0.3)      # near-black lines still show their shading against the ink
+	return Color(c.r / KIT_BASE.r, c.g / KIT_BASE.g, c.b / KIT_BASE.b)
 
 
 # 1 where a back-plane ant has front dirt between it and us.
@@ -212,4 +219,4 @@ func _draw_queen(vr: Rect2, far: float) -> void:
 	if not vr.has_point(feet):
 		return
 	draw_set_transform(feet, 0.0, Vector2(s, s))
-	draw_texture(b["tex"], -b["feet"], Color.WHITE.lerp(HURT, clamp(sim.queen_flash / QUEEN_HURT_T, 0.0, 1.0)))
+	draw_texture(b["tex"], -b["feet"], _tint(sim.queen_genome.color) * Color.WHITE.lerp(HURT, clamp(sim.queen_flash / QUEEN_HURT_T, 0.0, 1.0)))
