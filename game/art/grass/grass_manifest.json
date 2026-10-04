@@ -1,0 +1,10 @@
+{
+ "_about": "The owner's grass strips, cut by tools/art/make_grass.py; each tiles side by side. Sizes in pixels.",
+ "strips": {
+  "back": {
+   "file": "grass/grass_back.png",
+   "w": 3072,
+   "h": 403
+  }
+ }
+}
