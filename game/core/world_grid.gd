@@ -140,8 +140,7 @@ func _init(w: int, h: int, seed_value: int) -> void:
 	for v in s0:
 		_prof_r.append(v)
 
-	_air_col = Image.new()
-	_air_col.create(1, H, false, Image.FORMAT_RGBA8)
+	_air_col = Image.create_empty(1, H, false, Image.FORMAT_RGBA8)
 	_air_col.fill(Color(0, 0, 0, 1))
 
 	_nest_x = ex
@@ -837,11 +836,9 @@ func chunk_images(k: int) -> Array:
 		return _chunk_img[k]
 	var cw = CHUNK + 2 * PAD
 	var x0 = k * CHUNK - PAD
-	var front = Image.new()
-	front.create(cw, H, false, Image.FORMAT_RGBA8)
+	var front = Image.create_empty(cw, H, false, Image.FORMAT_RGBA8)
 	front.fill(Color(1, 1, 0, 1))
-	var aux = Image.new()
-	aux.create(cw, H, false, Image.FORMAT_RGBA8)
+	var aux = Image.create_empty(cw, H, false, Image.FORMAT_RGBA8)
 	aux.fill(Color(1, 0, 0, 1))
 	# pristine columns: air above, one smooth transition, solid below
 	for c in cw:
@@ -850,16 +847,12 @@ func chunk_images(k: int) -> Array:
 		front.blit_rect(_air_col, Rect2(0, 0, 1, max(0, s - 2)), Vector2(c, 0))
 		aux.blit_rect(_air_col, Rect2(0, 0, 1, max(0, s - 2)), Vector2(c, 0))
 	var pair = [front, aux]
-	false # front.lock() # TODOConverter3To4, Image no longer requires locking, `false` helps to not break one line if/else, so it can freely be removed
-	false # aux.lock() # TODOConverter3To4, Image no longer requires locking, `false` helps to not break one line if/else, so it can freely be removed
 	for c in cw:
 		var x = x0 + c
 		var s = surf_y(x)
 		for y in range(max(0, s - 2), min(H, s + 3)):
 			front.set_pixel(c, y, _pix(x, y))
 			aux.set_pixel(c, y, _pix_aux(x, y))
-	false # front.unlock() # TODOConverter3To4, Image no longer requires locking, `false` helps to not break one line if/else, so it can freely be removed
-	false # aux.unlock() # TODOConverter3To4, Image no longer requires locking, `false` helps to not break one line if/else, so it can freely be removed
 	# stones
 	var sts = stones_in(x0 - 2, x0 + cw + 1)
 	_smap = {}
@@ -886,13 +879,10 @@ func chunk_images(k: int) -> Array:
 # B = strata wave offset ((off + 8) / 16). The shaders use these for strata and the mound.
 func chunk_surf_image(k: int) -> Image:
 	var cw = CHUNK + 2 * PAD
-	var img = Image.new()
-	img.create(cw, 1, false, Image.FORMAT_RGBA8)
-	false # img.lock() # TODOConverter3To4, Image no longer requires locking, `false` helps to not break one line if/else, so it can freely be removed
+	var img = Image.create_empty(cw, 1, false, Image.FORMAT_RGBA8)
 	for c in cw:
 		var x = k * CHUNK - PAD + c
 		img.set_pixel(c, 0, Color(surf_y(x) / 255.0, base_y(x) / 255.0, clamp((strata_off(x) + 8.0) / 16.0, 0.0, 1.0), 1))
-	false # img.unlock() # TODOConverter3To4, Image no longer requires locking, `false` helps to not break one line if/else, so it can freely be removed
 	return img
 
 
@@ -924,14 +914,10 @@ func _paint(pair: Array, k: int, x0: int, y0: int, x1: int, y1: int) -> void:
 	var cw = CHUNK + 2 * PAD
 	var front: Image = pair[0]
 	var aux: Image = pair[1]
-	false # front.lock() # TODOConverter3To4, Image no longer requires locking, `false` helps to not break one line if/else, so it can freely be removed
-	false # aux.lock() # TODOConverter3To4, Image no longer requires locking, `false` helps to not break one line if/else, so it can freely be removed
 	for y in range(max(0, y0 - 1), min(H - 1, y1 + 1) + 1):
 		for x in range(max(cx0, x0 - 1), min(cx0 + cw - 1, x1 + 1) + 1):
 			front.set_pixel(x - cx0, y, _pix(x, y))
 			aux.set_pixel(x - cx0, y, _pix_aux(x, y))
-	false # front.unlock() # TODOConverter3To4, Image no longer requires locking, `false` helps to not break one line if/else, so it can freely be removed
-	false # aux.unlock() # TODOConverter3To4, Image no longer requires locking, `false` helps to not break one line if/else, so it can freely be removed
 
 
 func _pix(x: int, y: int) -> Color:

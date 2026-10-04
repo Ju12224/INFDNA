@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://6l3ndvpxyam0"
-path="res://.godot/imported/dirt_soil.png-60a7f7661613bd64613c3b2a5fff92ab.ctex"
+uid="uid://dhd8okdm2h7b0"
+path="res://.godot/imported/cloud_wisp_1.png-b1a803919e26ee3280f7f5b9c72bf663.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://art/terrain/dirt_soil.png"
-dest_files=["res://.godot/imported/dirt_soil.png-60a7f7661613bd64613c3b2a5fff92ab.ctex"]
+source_file="res://art/sky/cloud_wisp_1.png"
+dest_files=["res://.godot/imported/cloud_wisp_1.png-b1a803919e26ee3280f7f5b9c72bf663.ctex"]
 
 [params]
 
@@ -23,7 +23,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=true
+mipmaps/generate=false
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""

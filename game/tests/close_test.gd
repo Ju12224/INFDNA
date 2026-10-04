@@ -7,7 +7,7 @@ var _main
 
 
 func _init() -> void:
-	_main = load("res://main.tscn").instantiate()
+	_main = load("res://scene/colony.tscn").instantiate()
 	root.add_child(_main)
 
 
