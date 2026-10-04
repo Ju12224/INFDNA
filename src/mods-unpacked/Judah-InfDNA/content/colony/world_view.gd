@@ -481,13 +481,29 @@ func _draw_inner() -> void:
 			var col = POOL_COLORS.get(c["purpose"], Color(1.0, 0.8, 0.5))
 			var fl = 0.16 + 0.03 * sin(_t * 0.7 + c["center"].x)
 			inner.draw_texture_rect(gt, Rect2(cc - Vector2(w, h) * 0.5, Vector2(w, h)), false, Color(col.r, col.g, col.b, fl))
+	var vr = _vis_rect()
 	for c in sim.planner.chambers:
-		if c.get("z", 0) == 0:
+		if c.get("z", 0) == 0 and _chamber_seen(c, vr):
 			_draw_chamber(inner, c)
 	for e in sim.eggs:
-		if e.get("z", 0) == 0:
+		if e.get("z", 0) == 0 and vr.has_point(e["pos"] * C):
 			_draw_egg(inner, e, Color.white)
 	_draw_motes(inner)
+
+
+# What the camera sees (world px, with a margin). The rooms, eggs and piles out of sight are not drawn: the fungus farms alone
+# cost 14-23 ms a frame when every room was drawn every frame.
+func _vis_rect() -> Rect2:
+	if cam == null:
+		return Rect2(-1e7, -1e7, 2e7, 2e7)
+	var vs = get_viewport_rect().size * cam.zoom
+	return Rect2(cam.get_camera_screen_center() - vs * 0.5, vs).grow(140.0)
+
+
+func _chamber_seen(c: Dictionary, vr: Rect2) -> bool:
+	var C = sim.grid.CELL
+	var half = Vector2(c["rx"] + 3.0, c["ry"] + 3.0) * C
+	return vr.intersects(Rect2((c["center"] + Vector2(0.5, 0.5)) * C - half, half * 2.0))
 
 
 const POOL_COLORS = {"food": Color(1.0, 0.82, 0.45), "brood": Color(1.0, 0.72, 0.62), "farm": Color(0.6, 1.0, 0.55), "midden": Color(0.7, 0.8, 0.4),
@@ -549,11 +565,13 @@ func _draw_motes(ci: CanvasItem) -> void:
 # Back-plane rooms sit behind the front dirt: their contents are drawn over it, dimmed,
 # like the back tunnels themselves.
 func _draw_back_rooms(ci: CanvasItem) -> void:
+	var vr = _vis_rect()
+	var C = sim.grid.CELL
 	for c in sim.planner.chambers:
-		if c.get("z", 0) == 1:
+		if c.get("z", 0) == 1 and _chamber_seen(c, vr):
 			_draw_chamber(ci, c, BACK_MOD)
 	for e in sim.eggs:
-		if e.get("z", 0) == 1:
+		if e.get("z", 0) == 1 and vr.has_point(e["pos"] * C):
 			_draw_egg(ci, e, BACK_MOD)
 
 
@@ -701,9 +719,12 @@ func draw_overlay(ci: CanvasItem) -> void:
 		_draw_trails(ci)
 	_draw_mold_warnings(ci)
 	_draw_back_rooms(ci)
-	# food piles
+	# food piles (only those near the view: they sit on the surface, so the column decides)
+	var pvr = _vis_rect().grow(160.0)
 	for pile in sim.piles:
-		_draw_pile(ci, pile)
+		var pxw = (float(pile["x"]) + 0.5) * sim.grid.CELL
+		if pxw >= pvr.position.x and pxw <= pvr.end.x:
+			_draw_pile(ci, pile)
 	# queen: paces her chamber, breathes, squeezes when she lays, shuffles her legs
 	var qx = _queen_offset()
 	var qv = _queen_offset(0.1) - qx

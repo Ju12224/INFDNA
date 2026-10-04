@@ -18,7 +18,7 @@ const Kit = preload("res://mods-unpacked/Judah-InfDNA/content/colony/ui_kit.gd")
 const MS_PLAIN = 12.0
 const MS_RICH = 70.0
 const APEX_GOLD = Color(1.0, 0.82, 0.32)
-const APEX_TAG_ZOOM = 0.8      # the APEX tags show over every Apex ant in view only this close (camera zoom below it; farther out meadow_depth marks them); the selected one always
+const APEX_TAG_ZOOM = 0.4      # the APEX tags show over every Apex ant in view only this close (camera zoom below it; farther out meadow_depth marks them); the selected one always
 
 const CASTE_COLORS = [Color("#6cc644"), Color("#c9863b"), Color("#e8483b")]
 const CASTE_ICONS = ["res://items/all/fruit_basket/fruit_basket_icon.png", "res://items/all/improved_tools/improved_tools_icon.png",
@@ -272,7 +272,7 @@ func _draw() -> void:
 		if selected != null and sim.apex_ids.has(selected.id) and sim.apex[0] != selected:
 			order = [selected] + sim.apex
 		for ap in order:
-			if (ap == selected or z < APEX_TAG_ZOOM) and ap.genome.mutation_score() >= MS_PLAIN:
+			if (ap == selected or (z < APEX_TAG_ZOOM and sim.apex_ids.get(ap.id, 9) == 0)) and ap.genome.mutation_score() >= MS_PLAIN:   # close up only the top one is tagged (the others keep their glow): no pile of labels
 				var ax = (ap.x + 0.5) * C0
 				var ay = (ap.y + 0.5) * C0
 				if ax >= vr.position.x and ax <= vr.end.x and ay >= vr.position.y and ay <= vr.end.y:

@@ -25,7 +25,7 @@ from scipy import ndimage as ndi
 LIGHT = np.array([0.62, -0.58, 0.53], np.float32)          # where the sun is: upper right, toward the viewer (image y points down)
 LIGHT /= np.linalg.norm(LIGHT)
 CLOSE = 2                                                    # resolution of the close-up line and detail layers, x the picture
-SWAY_N = 8                                                   # the sway grid has (SWAY_N + 1) x (SWAY_N + 1) points over the picture
+SWAY_N = 6                                                   # the sway grid has (SWAY_N + 1) x (SWAY_N + 1) points over the picture
 
 
 # ------------------------------------------------------------------ small helpers

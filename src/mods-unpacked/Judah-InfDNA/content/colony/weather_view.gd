@@ -69,6 +69,8 @@ func _puddles(tl: Vector2, vp: Vector2, z: float) -> void:
 		var col = int(floor(px / C))
 		var ps = GroundView.persp(lane)
 		var p = Vector2(px, GroundView.lane_y(ground.smooth_px(col), lane))
+		if p.y < tl.y - 90.0 or p.y > tl.y + vp.y * z + 90.0:
+			continue          # the meadow is out of view (the camera is down in the nest, or up in the sky)
 		# a puddle fills with the first rain, so the smaller ones appear a little later and dry first
 		var size = clamp((wet - (h - 0.4) * 0.6) * 2.2, 0.0, 1.0)
 		if size <= 0.02:

@@ -105,7 +105,11 @@ func _pump() -> void:
 
 func _read_job(file: String) -> void:
 	var img = Image.new()
-	_job_img = img if img.load(DIR + file) == OK else null
+	if img.load(DIR + file) == OK:
+		img.generate_mipmaps()          # here, not on the main thread when the texture is made
+		_job_img = img
+	else:
+		_job_img = null
 
 
 # A creature entry of the manifest ({} when there is none).

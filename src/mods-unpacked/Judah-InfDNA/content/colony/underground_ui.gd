@@ -52,7 +52,11 @@ var _dark := 0.0
 var _goal = null
 var _goal_zoom := 0.0
 var bare := false            # view mode: no depth gauge and no room labels (the nest panel, U, still opens)
-var _drawn_key = null        # what the last drawing showed (see _process): no redraw while it holds
+var _drawn_c := Vector2(INF, INF)   # what the last drawing showed (see _process): no redraw while it holds
+var _drawn_p := Vector2(INF, INF)
+var _drawn_z := -1.0
+var _drawn_food := -1
+var _drawn_eggs := -1
 var _dark_drawn := -1.0
 var _dirty := true
 
@@ -92,10 +96,21 @@ func _process(delta: float) -> void:
 				_goal = null
 	# Redraw only when something on it moved: the camera (labels, gauge marker), the vignette's depth, the twice-a-second counts,
 	# the larder or the brood the labels show; the open nest panel shows live numbers and is redrawn every frame.
-	var sim = scene.sim
-	var key = [get_viewport().get_canvas_transform(), scene.cam.position, int(clamp(sim.food / max(1.0, sim.food_cap), 0.0, 1.0) * 100.0), sim.eggs.size()]
-	if panel_open or _dirty or key != _drawn_key or abs(_dark - _dark_drawn) > 0.002 or (_dark < 0.01) != (_dark_drawn < 0.01):
-		_drawn_key = key
+	var cam2 = scene.cam
+	var cc = cam2.get_camera_screen_center()
+	var cp = cam2.position
+	var cz = cam2.zoom.x
+	var redraw = panel_open or _dirty or cc != _drawn_c or cp != _drawn_p or cz != _drawn_z or abs(_dark - _dark_drawn) > 0.002 or (_dark < 0.01) != (_dark_drawn < 0.01)
+	if not redraw and cz <= 0.9 and not bare:
+		var sim = scene.sim       # the room labels are up: they show the larder's fill and the eggs
+		redraw = int(clamp(sim.food / max(1.0, sim.food_cap), 0.0, 1.0) * 100.0) != _drawn_food or sim.eggs.size() != _drawn_eggs
+	if redraw:
+		_drawn_c = cc
+		_drawn_p = cp
+		_drawn_z = cz
+		if scene.sim != null:
+			_drawn_food = int(clamp(scene.sim.food / max(1.0, scene.sim.food_cap), 0.0, 1.0) * 100.0)
+			_drawn_eggs = scene.sim.eggs.size()
 		_dark_drawn = _dark
 		_dirty = false
 		_ui.update()

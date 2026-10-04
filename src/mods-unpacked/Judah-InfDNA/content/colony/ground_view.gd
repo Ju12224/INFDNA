@@ -21,10 +21,10 @@ const CLOSE_DETAIL_LO = 0.42  # bark furrows, moss and rim leaves are full stren
 const CLOSE_DETAIL_HI = 0.95
 const SHADE_FAR = 0.3         # the share of the soft light and shadow that stays on a tree seen from afar
 const SWAY_Z = 0.95           # at and below this zoom the clumps of a canopy move each their own way (beyond it the whole tree bends as one)
-const SWAY_N = 8              # the canopy moves on a (SWAY_N + 1)^2 grid of points (the manifest's `sway` says how much each one is leaf)
+const SWAY_N = 6              # the canopy moves on a (SWAY_N + 1)^2 grid of points (the manifest's `sway` says how much each one is leaf)
 const FOG_K = 0.14            # depth fog on the trees: the share of haze on the farthest (trees stand in lanes 0.1 to 0.45; less close up, where it would wash out the detail)
 const FOG_COL = Color(0.8, 0.87, 0.91)
-const LEAF_Z = 1.3            # falling leaves are drawn at and below this zoom
+const LEAF_Z = 1.05           # falling leaves are drawn at and below this zoom
 const DEPTH = 128.0          # thickness of the walkable band, px
 const LANE_K = 0.9           # a unit at lane l stands (1 - l) * DEPTH * LANE_K above the front lip
 const CH = 48                # columns per cached chunk
@@ -405,21 +405,20 @@ func _draw_tree(ci: CanvasItem, sp: Dictionary, by: float, z: float, sway: float
 func _grid_points(sp: Dictionary, sway: float, by: float, amp: float) -> PoolVector2Array:
 	var p0: PoolVector2Array = sp["g_p0"]
 	var w: PoolRealArray = sp["g_w"]
-	var gph: PoolRealArray = sp["g_ph"]
+	var ph1: PoolRealArray = sp["g_ph"]
+	var ph2: PoolRealArray = sp["g_ph2"]
 	var out := PoolVector2Array()
 	out.resize(p0.size())
 	var t1 = _t * 1.7
 	var t2 = _t * 2.3
+	var ay = amp * 0.4
 	for k in p0.size():
 		var p = p0[k]
-		var x = p.x - sway * (by - p.y)
-		var y = p.y
 		var wk = w[k]
 		if wk > 0.0:
-			var a = gph[k]
-			x += wk * amp * sin(t1 + a)
-			y += wk * amp * 0.4 * sin(t2 + a * 1.3)
-		out[k] = Vector2(x, y)
+			out[k] = Vector2(p.x - sway * (by - p.y) + wk * amp * sin(t1 + ph1[k]), p.y + wk * ay * sin(t2 + ph2[k]))
+		else:
+			out[k] = Vector2(p.x - sway * (by - p.y), p.y)
 	return out
 
 
@@ -457,7 +456,7 @@ func _draw_leaves(ci: CanvasItem, sp: Dictionary, by: float, z: float, gust: flo
 	if leaf < 0.15:
 		return
 	var vis = 1.0 - smoothstep(LEAF_Z * 0.75, LEAF_Z, z)
-	var n = int(round((lf["n"] + 9.0 * au * lf["n"] / 3.0) * vis))
+	var n = int(round((lf["n"] + 2.0 * au * lf["n"]) * vis))
 	if n <= 0:
 		return
 	var cb: Rect2 = lf["box"]
@@ -646,9 +645,13 @@ func _grid_setup(spr: Dictionary, grid: Array, sd: float) -> void:
 			p0.append(pos + Vector2(size.x * i / n, size.y * j / n))
 			w.append(float(row[i]) if row.size() > i else 0.0)
 			gph.append(2.4 * sin(i * 1.37 + sd) + 2.1 * sin(j * 1.91 + sd * 1.3) + 1.4 * sin((i + j) * 0.83 + sd * 0.7))
+	var gph2 := PoolRealArray()
+	for v in gph:
+		gph2.append(v * 1.3)
 	spr["g_p0"] = p0
 	spr["g_w"] = w
 	spr["g_ph"] = gph
+	spr["g_ph2"] = gph2
 	spr["g_amp"] = 0.0045 * size.y
 
 
