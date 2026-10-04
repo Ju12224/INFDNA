@@ -4,7 +4,7 @@
 art_src/clouds.png: every separate shape is one cloud, named by shape: big (puffy cumulus, tall), flat (long stratus, more than
 3x wider than tall) and wisp (small). art_src/sun_moon_stars.png: the three biggest shapes are the sun (the yellow one), the full
 moon and the crescent (the one that fills least of its box); the rest are stars, biggest first. On both sheets small specks join
-the shape whose nearest pixel is closest. art_src/hills_far.png and hills_mid.png: landscape strips, each trimmed of the frame line ChatGPT drew
+the shape whose nearest pixel is closest. art_src/hills_far.png, hills_mid.png and hills_near.png: landscape strips, each trimmed of the frame line ChatGPT drew
 round it and laid next to a mirrored copy of itself, so it repeats with no seam. The sky layer uses them all.
 Needs Pillow, numpy and scipy:  python3 tools/art/make_sky.py
 """
@@ -19,7 +19,7 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 SRC = os.path.join(ROOT, "art_src", "clouds.png")
 SRC_SUN = os.path.join(ROOT, "art_src", "sun_moon_stars.png")
 # landscape strips, back to front: sheet, and the frame line ChatGPT drew round it (columns off the left and right, rows off the bottom)
-HILLS = {"far": ("hills_far.png", (2, 2, 4)), "mid": ("hills_mid.png", (3, 3, 4))}
+HILLS = {"far": ("hills_far.png", (2, 2, 4)), "mid": ("hills_mid.png", (3, 3, 4)), "near": ("hills_near.png", (2, 2, 4))}
 OUT = os.path.join(ROOT, "game", "art", "sky")
 SPECK = 400          # shapes smaller than this (pixels) are bits of a bigger cloud
 MARGIN = 3
