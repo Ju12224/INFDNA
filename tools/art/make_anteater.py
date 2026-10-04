@@ -1,60 +1,55 @@
 #!/usr/bin/env python3
-"""Cut the owner's anteater (art_src/anteater_*.png, RGBA with real transparency) into the pieces the game animates.
+"""Cut the owner's anteater parts sheet (art_src/anteater_parts.png, RGBA with real transparency) into the pieces the game animates.
 
-body: the whole animal with head and tail and no legs (anteater_body.png), facing right.
-legs: the two clawed legs (anteater_leg_b.png, the bigger, for the near side; anteater_leg_a.png for the far side), turned from the
-diagonal they are drawn on to hang down with the claws hooked forward. Each leg swings from its top (the pivot, in the manifest).
-Output: content/art/anteater/{body,leg_near,leg_far}.png and anteater_manifest.json (sizes, leg pivots, where the legs join the body).
+The sheet holds four parts, facing right: the body with the head (no legs, no tail), the shoulder with both clawed front legs, the haunch
+with both hind legs, and the bushy tail (its base at the right end). They are assembled as drawn (OFFSETS: where each part's top left sits
+relative to the body's, in sheet px) and animated by creature_art.gd: the tail sways from its base, the front and the hind legs step in
+turn from the shoulder and the hip, the body bobs with the stride.
+Output: content/art/anteater/{tail,hind,front,body}.png at half size and anteater_manifest.json (version 2).
 
-Needs Pillow and numpy:  python3 tools/art/make_anteater.py
+Needs Pillow, numpy and scipy:  python3 tools/art/make_anteater.py
 """
 import json
 import os
 
 import numpy as np
 from PIL import Image
+from scipy import ndimage
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
-SRC = os.path.join(ROOT, "art_src")
+SRC = os.path.join(ROOT, "art_src", "anteater_parts.png")
 OUT = os.path.join(ROOT, "src", "mods-unpacked", "Judah-InfDNA", "content", "art", "anteater")
-K = 0.5                    # game files at half the drawing's size
-TURN = -32.0               # degrees (PIL: negative turns clockwise): from the drawn diagonal to hanging down
-# where the legs join the body, as a share of the body picture (x from the tail end, y from the top); far legs a little behind
-JOINS = {"front_near": [0.700, 0.80], "front_far": [0.665, 0.77], "hind_near": [0.330, 0.80], "hind_far": [0.295, 0.77]}
-
-
-def clean(im):
-    a = np.asarray(im.convert("RGBA")).copy()
-    a[..., 3][a[..., 3] < 10] = 0
-    im = Image.fromarray(a, "RGBA")
-    return im.crop(im.getchannel("A").point(lambda q: 255 if q > 8 else 0).getbbox())
-
-
-def half(im):
-    return im.resize((max(1, int(round(im.width * K))), max(1, int(round(im.height * K)))), Image.LANCZOS)
-
-
-def leg(name):
-    im = clean(Image.open(os.path.join(SRC, name)))
-    im = clean(im.rotate(TURN, resample=Image.BICUBIC, expand=True))
-    im = half(im)
-    a = np.asarray(im)[..., 3]
-    # the pivot: the middle of the top tenth of the leg (the shoulder fur), a little down so the joint hides under the body
-    rows = max(1, im.height // 10)
-    ys, xs = np.nonzero(a[:rows] > 128)
-    px = float(xs.mean()) if xs.size else im.width * 0.3
-    return im, [px / im.width, 0.08]
+K = 0.5
+# part -> (box on the sheet, offset from the body's top left, pivot as a share of the part, how it moves)
+PARTS = [
+    ("tail", (786, 576, 1524, 989), (-640, 90), (0.93, 0.42)),
+    ("hind", (70, 539, 766, 992), (-40, 250), (0.48, 0.12)),
+    ("front", (932, 82, 1518, 558), (470, 230), (0.28, 0.1)),
+    ("body", (8, 47, 930, 503), (0, 0), (0.5, 0.85)),
+]
 
 
 def main():
+    sheet = Image.open(SRC).convert("RGBA")
+    rgba = np.asarray(sheet)
+    lab, n = ndimage.label(rgba[..., 3] > 8, structure=np.ones((3, 3), int))
+    cent = ndimage.center_of_mass(np.ones_like(lab), lab, range(1, n + 1))
     os.makedirs(OUT, exist_ok=True)
-    body = half(clean(Image.open(os.path.join(SRC, "anteater_body.png"))))
-    body.save(os.path.join(OUT, "body.png"), optimize=True)
-    man = {"body": {"file": "anteater/body.png", "w": body.width, "h": body.height}, "joins": JOINS}
-    for key, src in (("leg_near", "anteater_leg_b.png"), ("leg_far", "anteater_leg_a.png")):
-        im, piv = leg(src)
-        im.save(os.path.join(OUT, key + ".png"), optimize=True)
-        man[key] = {"file": "anteater/" + key + ".png", "w": im.width, "h": im.height, "pivot": piv}
+    parts = []
+    xs, ys = [], []
+    for name, (x0, y0, x1, y1), off, piv in PARTS:
+        keep = [i for i, (cy, cx) in enumerate(cent, start=1) if x0 <= cx <= x1 and y0 <= cy <= y1]
+        m = np.isin(lab, keep)
+        a = rgba[y0:y1, x0:x1].copy()
+        a[..., 3] = np.where(m[y0:y1, x0:x1], a[..., 3], 0)
+        im = Image.fromarray(a, "RGBA")
+        im = im.resize((int(round(im.width * K)), int(round(im.height * K))), Image.LANCZOS)
+        im.save(os.path.join(OUT, name + ".png"), optimize=True)
+        w, h = x1 - x0, y1 - y0
+        parts.append({"name": name, "file": "anteater/" + name + ".png", "w": w, "h": h, "off": list(off), "pivot": list(piv)})
+        xs += [off[0], off[0] + w]
+        ys += [off[1], off[1] + h]
+    man = {"version": 2, "parts": parts, "x0": min(xs), "x1": max(xs), "ground": max(ys) - 4}
     with open(os.path.join(OUT, "anteater_manifest.json"), "w") as f:
         json.dump(man, f, indent=1)
     print(json.dumps(man))

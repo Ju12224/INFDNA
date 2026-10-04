@@ -1,43 +1,64 @@
 {
- "body": {
-  "file": "anteater/body.png",
-  "w": 766,
-  "h": 288
- },
- "joins": {
-  "front_near": [
-   0.7,
-   0.8
-  ],
-  "front_far": [
-   0.665,
-   0.77
-  ],
-  "hind_near": [
-   0.33,
-   0.8
-  ],
-  "hind_far": [
-   0.295,
-   0.77
-  ]
- },
- "leg_near": {
-  "file": "anteater/leg_near.png",
-  "w": 278,
-  "h": 506,
-  "pivot": [
-   0.45963436236780303,
-   0.08
-  ]
- },
- "leg_far": {
-  "file": "anteater/leg_far.png",
-  "w": 195,
-  "h": 440,
-  "pivot": [
-   0.5454514867308744,
-   0.08
-  ]
- }
+ "version": 2,
+ "parts": [
+  {
+   "name": "tail",
+   "file": "anteater/tail.png",
+   "w": 738,
+   "h": 413,
+   "off": [
+    -640,
+    90
+   ],
+   "pivot": [
+    0.93,
+    0.42
+   ]
+  },
+  {
+   "name": "hind",
+   "file": "anteater/hind.png",
+   "w": 696,
+   "h": 453,
+   "off": [
+    -40,
+    250
+   ],
+   "pivot": [
+    0.48,
+    0.12
+   ]
+  },
+  {
+   "name": "front",
+   "file": "anteater/front.png",
+   "w": 586,
+   "h": 476,
+   "off": [
+    470,
+    230
+   ],
+   "pivot": [
+    0.28,
+    0.1
+   ]
+  },
+  {
+   "name": "body",
+   "file": "anteater/body.png",
+   "w": 922,
+   "h": 456,
+   "off": [
+    0,
+    0
+   ],
+   "pivot": [
+    0.5,
+    0.85
+   ]
+  }
+ ],
+ "x0": -640,
+ "x1": 1056,
+ "ground": 702
 }
