@@ -24,7 +24,7 @@ const FALL = 0.8              # share of a streak's lap spent falling; the rest 
 const RAIN_LEN = 80.0         # screen px height of the nearest streak at zoom 1
 const SPLASH_W = 30.0         # world px width of the nearest splash, at its widest
 const FLAKE_W = 14.0          # world px width of the nearest flake
-const SNOW_W = 170.0          # world px width of a lying-snow piece in the front lane
+const SNOW_W = 150.0          # world px width of a lying-snow piece in the front lane
 const SNOW_LIMIT = 12         # pieces per lane at most: zoomed out they grow instead of multiplying
 const PUDDLE_W = 120.0
 const PUDDLE_SPAN = 340.0     # world px between puddle slots (a lane's x axis)
@@ -403,7 +403,7 @@ func _snow_row(it: CanvasItem, n: int, lane: float, la: float, sn: float) -> voi
 	w = maxf(w, view.size.x / (SNOW_LIMIT * 0.62))           # zoomed out the pieces get bigger instead of more
 	view = view.grow(w)
 	var step = w * 0.62
-	var hh = 0.6 * w * _cap.get_height() / _cap.get_width()     # a low drift: the piece is squashed a little
+	var hh = 0.85 * w * _cap.get_height() / _cap.get_width()     # a low drift: the piece is squashed a little
 	var col: Color = colony.day.tint
 	col.a = la
 	var i0 = int(floor(view.position.x / step))
@@ -414,10 +414,10 @@ func _snow_row(it: CanvasItem, n: int, lane: float, la: float, sn: float) -> voi
 		var k = clampf((sn * 1.3 - a * 0.9) * 3.0, 0.0, 1.0)
 		if k <= 0.02:
 			continue
-		var x = (i + 0.5 + (b - 0.5) * 0.5) * step
-		var gy = _lane_ground(x, n, lane)
-		var sw = w * (0.9 + 0.3 * b)
-		var sh = hh * (0.85 + 0.3 * a) * k
+		var x = (i + 0.5 + (b - 0.5) * 0.7) * step
+		var gy = _lane_ground(x, n, lane) + (a - 0.5) * hh * 0.5
+		var sw = w * (0.75 + 0.6 * b)
+		var sh = hh * (0.65 + 0.55 * a) * k
 		var rect = Rect2(x - 0.5 * sw, gy - 0.82 * sh, sw, sh)
 		if a > 0.5:
 			it.draw_set_transform(Vector2(x * 2.0, 0.0), 0.0, Vector2(-1.0, 1.0))

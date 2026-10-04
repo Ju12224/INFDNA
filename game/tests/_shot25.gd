@@ -24,7 +24,12 @@ func _init() -> void:
 func _process(_delta: float) -> bool:
 	_frames += 1
 	if _frames == 1 and _node.has_method("debug_setup"):
-		_node.debug_setup(_args)            # e.g. t=300 zoom=1.5 at=nest ph=0.0 (see scene/colony.gd)
+		_node.debug_setup(_args)
+		for v in str(_args.get("hide", "")).split(",", false):
+			if _node.views.has(v):
+				_node.views[v].visible = false
+		if _args.has("nocover"):
+			_node.views["surface"]._cover.visible = false            # e.g. t=300 zoom=1.5 at=nest ph=0.0 (see scene/colony.gd)
 	if _frames == 2 and _args.has("set") and "sim" in _node:
 		for kv in str(_args["set"]).split(","):          # set=arc_stage:2,raid_n:12 - sim fields, to show the top bar's rarer states
 			var p = kv.split(":")
