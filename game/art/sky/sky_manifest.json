@@ -119,6 +119,11 @@
    "file": "sky/hills_far.png",
    "w": 3064,
    "h": 514
+  },
+  "mid": {
+   "file": "sky/hills_mid.png",
+   "w": 3060,
+   "h": 401
   }
  }
 }
