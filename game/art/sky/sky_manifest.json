@@ -1,61 +1,117 @@
 {
- "_about": "The owner's sky art, cut by tools/art/make_clouds.py (and later sky tools). Sizes in pixels.",
+ "_about": "The owner's sky art, cut by tools/art/make_sky.py. Sizes in pixels.",
  "clouds": [
   {
    "name": "cloud_big_0",
    "file": "sky/cloud_big_0.png",
-   "kind": "big",
    "w": 755,
-   "h": 394
+   "h": 394,
+   "kind": "big"
   },
   {
    "name": "cloud_big_1",
    "file": "sky/cloud_big_1.png",
-   "kind": "big",
    "w": 720,
-   "h": 363
+   "h": 363,
+   "kind": "big"
   },
   {
    "name": "cloud_big_2",
    "file": "sky/cloud_big_2.png",
-   "kind": "big",
    "w": 704,
-   "h": 342
+   "h": 342,
+   "kind": "big"
   },
   {
    "name": "cloud_flat_0",
    "file": "sky/cloud_flat_0.png",
-   "kind": "flat",
    "w": 781,
-   "h": 170
+   "h": 170,
+   "kind": "flat"
   },
   {
    "name": "cloud_flat_1",
    "file": "sky/cloud_flat_1.png",
-   "kind": "flat",
    "w": 723,
-   "h": 122
+   "h": 122,
+   "kind": "flat"
   },
   {
    "name": "cloud_wisp_0",
    "file": "sky/cloud_wisp_0.png",
-   "kind": "wisp",
    "w": 526,
-   "h": 186
+   "h": 186,
+   "kind": "wisp"
   },
   {
    "name": "cloud_wisp_1",
    "file": "sky/cloud_wisp_1.png",
-   "kind": "wisp",
    "w": 374,
-   "h": 148
+   "h": 148,
+   "kind": "wisp"
   },
   {
    "name": "cloud_wisp_2",
    "file": "sky/cloud_wisp_2.png",
-   "kind": "wisp",
    "w": 305,
-   "h": 144
+   "h": 144,
+   "kind": "wisp"
+  }
+ ],
+ "sun": {
+  "name": "sun",
+  "file": "sky/sun.png",
+  "w": 643,
+  "h": 656
+ },
+ "moon_full": {
+  "name": "moon_full",
+  "file": "sky/moon_full.png",
+  "w": 553,
+  "h": 553
+ },
+ "moon_crescent": {
+  "name": "moon_crescent",
+  "file": "sky/moon_crescent.png",
+  "w": 564,
+  "h": 550
+ },
+ "stars": [
+  {
+   "name": "star_0",
+   "file": "sky/star_0.png",
+   "w": 265,
+   "h": 316
+  },
+  {
+   "name": "star_1",
+   "file": "sky/star_1.png",
+   "w": 195,
+   "h": 217
+  },
+  {
+   "name": "star_2",
+   "file": "sky/star_2.png",
+   "w": 183,
+   "h": 182
+  },
+  {
+   "name": "star_3",
+   "file": "sky/star_3.png",
+   "w": 147,
+   "h": 150
+  },
+  {
+   "name": "star_4",
+   "file": "sky/star_4.png",
+   "w": 122,
+   "h": 147
+  },
+  {
+   "name": "star_5",
+   "file": "sky/star_5.png",
+   "w": 114,
+   "h": 117
   }
  ]
 }
