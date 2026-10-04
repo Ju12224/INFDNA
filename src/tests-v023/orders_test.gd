@@ -157,6 +157,11 @@ func _init():
 		for a in young:
 			if ug.size() < 8 and a.carry <= 0.0 and a.spoil <= 0.0 and a.dig_timer <= 0.0 and a.squad == 0:
 				ug.append(a)
+		sim.food = max(sim.food, sim.food_cap * 0.6 + 50.0)     # the "larder is empty" stand-down must not free the squad mid-test
+		var ids := {}
+		for a in ug:
+			ids[a.id] = true
+		sim.attn_sel = ids                                       # as if the player had them selected (no off-screen stand-down)
 		var r4 = Orders.issue(sim, ug, "move", int(cc.x), int(cc.y), int(chamber.get("z", 0)))
 		ok(r4["ok"], "an underground move order is accepted: " + r4["msg"])
 		run(sim, 90.0)
