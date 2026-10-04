@@ -172,6 +172,20 @@ func look(gn, caste: int):
 	return lk if lk["tex"] != null else null
 
 
+# This genome and caste's look, baked or not ("tex" is null until it is; the bake is queued), or null without the kit. The view keeps
+# it per ant and sets "used" to _frame while it draws it.
+func request(gn, caste: int):
+	if not ok:
+		return null
+	var e = _entry(gn, caste)
+	var lk = _looks.get(e[0])
+	if lk == null:
+		lk = {"tex": null, "used": _frame}
+		_looks[e[0]] = lk
+		_queue.append([e[0], e[2], caste])
+	return lk
+
+
 # Body length in world px (tail to nose, before caste and depth scaling) the old view drew this genome at: its painter laid the body
 # out over T painter units (the segments' widths, the waist and neck) and drew 0.132 * T * min(1, 310 / (T + 120)) px of it.
 func world_len(gn, caste: int) -> float:

@@ -58,6 +58,8 @@ const FAR_MAX = 1.6
 const MARGIN = 80.0                        # world px past the view an ant can still reach into it
 const LANE_BUCKETS = 16
 const POSE_ZOOM = 0.6                      # zoomed out below this the poses are too small to see and are skipped
+const GROUND_ZOOM = 0.5                    # ... and below this a cell is a pixel or two: ants stand where the sim keeps them
+const _NO_POSE = [Vector2.ZERO, 0.0, 1.0, 1.0, 1.0]
 # the drawn ground (underground)
 const REACH = 2.2                          # cells: how far along its body's down an ant looks for the drawn ground
 const DROP = 10.0                          # cells: with none there, how far below it looks for a floor to stand on
@@ -99,7 +101,16 @@ const S_NEXT = 15      # seconds to the next groom
 const S_SPOT_X = 16    # where it was drawn: body middle and radius (ant_spot)
 const S_SPOT_Y = 17
 const S_SPOT_R = 18
-const S_N = 19
+const S_LOOK = 19      # its look (ant_kit.gd; "tex" is null until baked), or null without the kit
+const S_WLEN = 20      # body length, world px, caste scale included (before depth and zoom)
+const S_TINT = 21      # the strain's colour over the drab kit
+const S_WINGS = 22     # true: winged
+const S_GKEY = 23      # cell, plane and direction the ground answers below are for
+const S_GD = 24        # from that cell's centre: drawn ground along its down, along its up, straight down (or NONE)
+const S_GD2 = 25
+const S_GDROP = 26
+const S_GT = 27        # when they were looked up
+const S_N = 28
 
 const DIRS = 16
 
@@ -197,12 +208,13 @@ func _draw() -> void:
 	if _t - _gc_t > GROUND_LIFE * 4.0 or _gc.size() > 60000:
 		_gc = {}                    # entries expire one by one; this only stops the cache growing
 		_gc_t = _t
-	var vr = colony.view_rect(MARGIN)
+	var vr: Rect2 = colony.view_rect(MARGIN)
 	vr.position.y -= Band.DEPTH * Band.LANE_K + AIR_LIFT    # a surface ant is drawn up to this far above its cell
 	vr.size.y += Band.DEPTH * Band.LANE_K + AIR_LIFT
-	var zoom = colony.zoom()
-	var far = clamp(sqrt(FAR_ZOOM / zoom), 1.0, FAR_MAX)
+	var zoom: float = colony.zoom()
+	var far: float = clamp(sqrt(FAR_ZOOM / zoom), 1.0, FAR_MAX)
 	var poses = zoom >= POSE_ZOOM
+	var ground = zoom >= GROUND_ZOOM
 	var ks = 1.0 - exp(-_dt * SURF_RATE)
 	var kl = 1.0 - exp(-_dt * LANE_RATE)
 	var ctl = colony.views.get("controls")
@@ -216,11 +228,13 @@ func _draw() -> void:
 			piles.append(p["x"])
 	_foes = PackedVector2Array()
 	if poses:
+		var fr = vr.grow(60.0)
 		for e in sim.enemies:
 			if e.state != 2:
 				var ep = sim.enemy_pos(e)
-				if vr.grow(60.0).has_point(ep):
+				if fr.has_point(ep):
 					_foes.append(ep)
+	var day_tint: Color = colony.day.tint
 	var state := {}
 	var back := []
 	var front := []
@@ -229,54 +243,60 @@ func _draw() -> void:
 		lanes.append([])
 	var crowd := {}            # spot -> [items]: underground ants close together
 	for a in sim.ants:
-		var p = sim.ant_pos(a)
+		var t: float = a.t
+		var p := Vector2((a.x + 0.5 + (a.tx - a.x) * t) * C, (a.y + 0.5 + (a.ty - a.y) * t) * C)
 		if not vr.has_point(p):
 			continue
-		var surf = 1.0 if g.is_surface_cell(a.tx, a.ty) else 0.0
-		var goal = _lane_goal(g, a, piles)
 		var st = _state.get(a.id)
 		if st == null:
-			st = _new_state(a, p, surf, goal)
-		st[S_SURF] = lerp(float(st[S_SURF]), surf, ks)
-		st[S_LANE] = lerp(float(st[S_LANE]), goal, kl)
+			st = _new_state(a, p, g)
 		state[a.id] = st
-		var it = [a, p, st, 0.0]
-		if st[S_SURF] >= 0.5:
-			lanes[clampi(int(st[S_LANE] * LANE_BUCKETS), 0, LANE_BUCKETS - 1)].append(it)
-		else:
-			_place(a, p, st, _len_of(a) * far * lerp(1.0, BACK_SCALE, float(a.tz if a.t > 0.5 else a.z)))
-			var z = a.tz if a.t > 0.5 else a.z
+		var surf = 1.0 if g.is_surface_cell(a.tx, a.ty) else 0.0
+		var sk: float = lerp(float(st[S_SURF]), surf, ks)
+		st[S_SURF] = sk
+		if sk > 0.001 or surf > 0.0:
+			st[S_LANE] = lerp(float(st[S_LANE]), _lane_goal(g, a, piles), kl)
+		var it = [a, p, st]
+		if sk >= 0.5:
+			lanes[clampi(int(float(st[S_LANE]) * LANE_BUCKETS), 0, LANE_BUCKETS - 1)].append(it)
+			continue
+		var z: int = a.tz if t > 0.5 else a.z
+		if ground:
+			_place(a, p, st, float(st[S_WLEN]) * far * (BACK_SCALE if z == 1 else 1.0), z)
 			var key = ((int(p.x / C) >> 1) * 8192 + (int(p.y / C) >> 1)) * 2 + z
 			var c = crowd.get(key)
 			if c == null:
 				crowd[key] = [it]
 			else:
 				c.append(it)
-			if lerp(float(a.z), float(a.tz), clamp(a.t, 0.0, 1.0)) > 0.5:
-				back.append(it)
-			else:
-				front.append(it)
+		if (a.z + (a.tz - a.z) * t) > 0.5:
+			back.append(it)
+		else:
+			front.append(it)
 	_state = state
 	for c in crowd.values():
-		_spread(c, far)
+		if c.size() > 1 or abs(float(c[0][2][S_SPREAD])) > 0.3:
+			_spread(c, far)
+	var kf: int = kit._frame if kit != null else 0
 	for it in back:
-		_draw_ant(it[0], it[1], it[2], far, poses, sel)
+		_draw_ant(it[0], it[1], it[2], far, poses, sel, day_tint, kf)
 	_draw_queen(vr, far)
 	for it in front:
-		_draw_ant(it[0], it[1], it[2], far, poses, sel)
+		_draw_ant(it[0], it[1], it[2], far, poses, sel, day_tint, kf)
 	for bucket in lanes:
 		for it in bucket:
-			_draw_ant(it[0], it[1], it[2], far, poses, sel)
+			_draw_ant(it[0], it[1], it[2], far, poses, sel, day_tint, kf)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	draw_us = Time.get_ticks_usec() - t0
 
 
-func _new_state(a, p: Vector2, surf: float, lane: float) -> Array:
+func _new_state(a, p: Vector2, g) -> Array:
 	var st := []
 	st.resize(S_N)
 	st.fill(0.0)
+	var surf = 1.0 if g.is_surface_cell(a.tx, a.ty) else 0.0
 	st[S_SURF] = surf
-	st[S_LANE] = lane
+	st[S_LANE] = a.lane
 	st[S_FACE] = float(a.facing)
 	st[S_GAIT] = a.id * 0.37
 	st[S_PX] = p.x
@@ -287,6 +307,14 @@ func _new_state(a, p: Vector2, surf: float, lane: float) -> Array:
 	st[S_ROT] = a.rot
 	st[S_CARRY] = a.carry
 	st[S_NEXT] = 2.0 + fmod(a.id * 1.37, 8.0)
+	st[S_LOOK] = kit.request(a.genome, a.caste) if kit != null else null
+	var wl = kit.world_len(a.genome, a.caste) if kit != null else -1.0
+	if wl <= 0.0:
+		wl = _length(a.ph.get("size", 74.0))
+	st[S_WLEN] = wl * CASTE_SCALE[clampi(a.caste, 0, 2)]
+	st[S_TINT] = _tint(a.genome)
+	st[S_WINGS] = a.ph.get("wings", 0) > 0
+	st[S_GKEY] = -1
 	return st
 
 
@@ -312,11 +340,11 @@ func _lane_goal(g, a, piles: Array) -> float:
 func _cv(x: int, y: int, z: int) -> int:
 	var g = _g
 	var w: int = g.W
-	var xl = x - g.ox
+	var xl: int = x - g.ox
 	if xl < 1 or xl >= w - 1 or y < 1 or y >= g.H - 1:
 		return 16 if g.is_solid(x, y, z) else 0
 	var s: PackedByteArray = g.solid
-	var b = z * g.WH + y * w + xl
+	var b: int = z * g.WH + y * w + xl
 	return s[b - w - 1] + 2 * s[b - w] + s[b - w + 1] + 2 * s[b - 1] + 4 * s[b] + 2 * s[b + 1] + s[b + w - 1] + 2 * s[b + w] + s[b + w + 1]
 
 
@@ -356,47 +384,64 @@ func _march(cx: float, cy: float, d: Vector2, z: int, reach: float) -> float:
 	return NONE
 
 
-# How far from world point p, along direction q (DIRS of them, DIRS = straight down and far), the drawn ground is; NONE if there is
-# none within reach. Worked out from the centre of p's cell and cached per cell for GROUND_LIFE.
+# From the centre of cell (cx, cy), how far along direction q (DIRS of them; DIRS = straight down, further) the drawn ground is, or
+# NONE. Cached per cell for GROUND_LIFE.
+func _ground_raw(cx: int, cy: int, z: int, q: int) -> float:
+	var key = (((cx + 65536) * 4096 + cy) * 2 + z) * 32 + q
+	var e = _gc.get(key)
+	if e == null or _t - e.y > GROUND_LIFE:
+		e = Vector2(_march((cx + 0.5) * C, (cy + 0.5) * C, _dir[q], z, (DROP if q == DIRS else REACH) * C), _t)
+		_gc[key] = e
+	return e.x
+
+
+# The same from world point p (corrected from its cell's centre along the direction).
 func _ground(p: Vector2, z: int, q: int) -> float:
 	var cx = int(floor(p.x / C))
 	var cy = int(floor(p.y / C))
-	var key = (((cx + 65536) * 4096 + cy) * 2 + z) * 32 + q
-	var e = _gc.get(key)
-	var d: Vector2 = _dir[q]
-	var c = Vector2((cx + 0.5) * C, (cy + 0.5) * C)
-	if e == null or _t - e.y > GROUND_LIFE:
-		e = Vector2(_march(c.x, c.y, d, z, (DROP if q == DIRS else REACH) * C), _t)
-		_gc[key] = e
-	if e.x >= NONE:
+	var r = _ground_raw(cx, cy, z, q)
+	if r >= NONE:
 		return NONE
-	return e.x - (p - c).dot(d)
+	var d: Vector2 = _dir[q]
+	return r - (p.x - (cx + 0.5) * C) * d.x - (p.y - (cy + 0.5) * C) * d.y
 
 
 # Where an underground ant's feet are drawn (S_OX, S_OY: from its sim position) and its tilt (S_ROT): on the drawn ground below its
 # feet along its body's down; in a passage narrower than the ant, its body in the middle of it (the legs reach into the walls rather
 # than its back sticking through the far one); where there is no drawn ground (it stands on a crumb the soil view does not draw),
-# upright on the floor below. `length`: its drawn body length.
-func _place(a, p: Vector2, st: Array, length: float) -> void:
-	var z = a.tz if a.t > 0.5 else a.z
+# upright on the floor below. `length`: its drawn body length. The answers for its cell are kept in its state.
+func _place(a, p: Vector2, st: Array, length: float, z: int) -> void:
 	var rot: float = a.rot
 	var down = Vector2(-sin(rot), cos(rot))
-	var q = posmod(int(round(down.angle() / TAU * DIRS)), DIRS)
-	var d = _ground(p, z, q)
+	var q: int = posmod(int(round(atan2(down.y, down.x) * (DIRS / TAU))), DIRS)
+	var cx = int(floor(p.x / C))
+	var cy = int(floor(p.y / C))
+	var key: int = (((cx + 65536) * 4096 + cy) * 2 + z) * 32 + q
+	if key != int(st[S_GKEY]) or _t - float(st[S_GT]) > GROUND_LIFE:
+		st[S_GKEY] = key
+		st[S_GT] = _t
+		st[S_GD] = _ground_raw(cx, cy, z, q)
+		st[S_GD2] = _ground_raw(cx, cy, z, (q + DIRS / 2) % DIRS) if float(st[S_GD]) < NONE else NONE
+		st[S_GDROP] = _ground_raw(cx, cy, z, DIRS) if float(st[S_GD]) >= NONE else NONE
+	var ex = p.x - (cx + 0.5) * C
+	var ey = p.y - (cy + 0.5) * C
+	var dq: Vector2 = _dir[q]
 	var off: Vector2
+	var d: float = st[S_GD]
 	if d < NONE:
+		d -= ex * dq.x + ey * dq.y
+		var d2: float = st[S_GD2]
 		var hc = BODY_MID * length
-		var d2 = _ground(p, z, (q + DIRS / 2) % DIRS)
-		if d2 < NONE and d + d2 < 2.0 * hc:
-			d = min((d - d2) * 0.5 + hc, d + SQUEEZE * C)
+		if d2 < NONE:
+			d2 += ex * dq.x + ey * dq.y
+			if d + d2 < 2.0 * hc:
+				d = min((d - d2) * 0.5 + hc, d + SQUEEZE * C)
 		off = down * d
+	elif float(st[S_GDROP]) < NONE:
+		off = Vector2(0.0, float(st[S_GDROP]) - ey)
+		rot = 0.0
 	else:
-		var dd = _ground(p, z, DIRS)
-		if dd < NONE:
-			off = Vector2(0.0, dd)
-			rot = 0.0
-		else:
-			off = down * C * 0.5
+		off = down * C * 0.5
 	var k = 1.0 - exp(-_dt * SNAP_RATE)
 	st[S_OX] = lerp(float(st[S_OX]), off.x, k)
 	st[S_OY] = lerp(float(st[S_OY]), off.y, k)
@@ -414,7 +459,7 @@ func _spread(items: Array, far: float) -> void:
 		var st: Array = it[2]
 		var want = 0.0
 		if n > 1:
-			var gap = SPREAD_GAP * _len_of(a) * far
+			var gap = SPREAD_GAP * float(st[S_WLEN]) * far
 			want = clamp((i - (n - 1) * 0.5) * gap, -SPREAD_MAX * C, SPREAD_MAX * C)
 		var cur = lerp(float(st[S_SPREAD]), want, k)
 		st[S_SPREAD] = cur
@@ -424,8 +469,8 @@ func _spread(items: Array, far: float) -> void:
 		var rot: float = st[S_ROT]
 		var down = Vector2(-sin(rot), cos(rot))
 		var along = Vector2(cos(rot), sin(rot))
-		var z = a.tz if a.t > 0.5 else a.z
-		var q = posmod(int(round(down.angle() / TAU * DIRS)), DIRS)
+		var z: int = a.tz if a.t > 0.5 else a.z
+		var q: int = posmod(int(round(atan2(down.y, down.x) * (DIRS / TAU))), DIRS)
 		var base = _ground(p, z, q)
 		if base >= NONE:
 			continue
@@ -444,77 +489,89 @@ func _spread(items: Array, far: float) -> void:
 
 # ------------------------------------------------------------------------------------------------ drawing an ant
 
-# Body length in world px (tail to nose) before depth scaling: the look's (its painter's layout) or, before it is baked, the size's.
-func _len_of(a) -> float:
-	var wl = kit.world_len(a.genome, a.caste) if kit != null else -1.0
-	if wl <= 0.0:
-		wl = _length(a.ph.get("size", 74.0))
-	return wl * CASTE_SCALE[clampi(a.caste, 0, 2)]
-
-
-func _draw_ant(a, p: Vector2, st: Array, far: float, poses: bool, sel: Dictionary) -> void:
-	var g = colony.grid
-	var t = clamp(a.t, 0.0, 1.0)
-	var plane = lerp(float(a.z), float(a.tz), t)
-	var hidden = lerp(_behind(g, a.x, a.y, a.z), _behind(g, a.tx, a.ty, a.tz), t)
+func _draw_ant(a, p: Vector2, st: Array, far: float, poses: bool, sel: Dictionary, day_tint: Color, kf: int) -> void:
+	var t: float = clamp(a.t, 0.0, 1.0)
+	var plane: float = a.z + (a.tz - a.z) * t
+	var hidden := 0.0
+	if a.z == 1 or a.tz == 1:
+		var g = colony.grid
+		hidden = lerp(_behind(g, a.x, a.y, a.z), _behind(g, a.tx, a.ty, a.tz), t)
 	var surf: float = st[S_SURF]
 	var lane: float = st[S_LANE]
-	var depth = lerp(1.0, Band.persp(lane), surf) * lerp(1.0, BACK_SCALE, plane)
-	var length = _len_of(a) * far * depth * _pop(a.age)
+	var depth: float = (lerp(1.0, Band.persp(lane), surf) if surf > 0.0 else 1.0) * (lerp(1.0, BACK_SCALE, plane) if plane > 0.0 else 1.0)
+	var length: float = float(st[S_WLEN]) * far * depth * (_pop(a.age) if a.age < 0.5 else 1.0)
 	# where it stands: underground on the drawn ground (_place, _spread), on the surface in its lane
-	var down = Vector2(-sin(a.rot), cos(a.rot))
-	var feet = p + down * C * 0.5
-	feet = feet.lerp(p + Vector2(st[S_OX], st[S_OY]), 1.0 - surf)
-	feet.y = lerp(feet.y, Band.lane_y(feet.y, lane), surf)
-	var rot = lerp_angle(float(st[S_ROT]), a.rot, surf)
+	var rot: float = a.rot
+	var feet: Vector2
+	if surf >= 1.0:
+		feet = p + Vector2(-sin(rot), cos(rot)) * (C * 0.5)
+	else:
+		feet = p + Vector2(st[S_OX], st[S_OY])
+		if surf > 0.0:
+			feet = feet.lerp(p + Vector2(-sin(rot), cos(rot)) * (C * 0.5), surf)
+		rot = lerp_angle(float(st[S_ROT]), rot, surf)
+	if surf > 0.0:
+		feet.y = lerp(feet.y, Band.lane_y(feet.y, lane), surf)
 	# walking: the cycle advances by the ground really covered, so the feet stay planted
-	var moved = Vector2(st[S_PX], st[S_PY]).distance_to(p)
+	var mx: float = p.x - float(st[S_PX])
+	var my: float = p.y - float(st[S_PY])
+	var moved = sqrt(mx * mx + my * my)
 	st[S_PX] = p.x
 	st[S_PY] = p.y
-	var walking = (a.tx != a.x or a.ty != a.y) and moved > 0.001
-	var lk = kit.look(a.genome, a.caste) if kit != null else null
+	var walking: bool = (a.tx != a.x or a.ty != a.y) and moved > 0.001
+	var lk = st[S_LOOK]
+	if lk != null:
+		lk["used"] = kf
+		if lk["tex"] == null:
+			lk = null
 	if walking and moved < 90.0:
-		var cyc = (lk["cycle"] if lk != null else 0.6) * length
+		var cyc = (float(lk["cycle"]) if lk != null else 0.6) * length
 		st[S_GAIT] = float(st[S_GAIT]) + min(moved / max(1.0, cyc), STRIDE_CAP)
 	# flight: a winged ant crossing open ground takes off, and lands at the pile or the nest
-	var fly = 1.0 if (a.ph.get("wings", 0) > 0 and surf > 0.5 and walking and a.curl_t <= 0.0) else 0.0
 	var air: float = st[S_AIR]
-	if fly > 0.0 or air > 0.0:
-		air = move_toward(air, fly, _dt * AIR_RATE * (1.0 if fly > 0.0 else 0.6))
-		st[S_AIR] = air
-		feet.y -= air * AIR_LIFT * depth * (1.0 + 0.15 * sin(_t * 3.0 + a.id))
+	if st[S_WINGS]:
+		var fly = 1.0 if (surf > 0.5 and walking and a.curl_t <= 0.0) else 0.0
+		if fly > 0.0 or air > 0.0:
+			air = move_toward(air, fly, _dt * AIR_RATE * (1.0 if fly > 0.0 else 0.6))
+			st[S_AIR] = air
+			feet.y -= air * AIR_LIFT * depth * (1.0 + 0.15 * sin(_t * 3.0 + a.id))
 	# pose: a transform about the feet (old ant_view._apply_pose)
-	var pose = _pose(a, st, p, walking, length) if poses else [Vector2.ZERO, 0.0, 1.0, 1.0, float(a.facing)]
-	var tf = move_toward(float(st[S_FACE]), pose[4], _dt * TURN_RATE)
+	var pose = _pose(a, st, p, walking, length) if poses else _NO_POSE
+	var pf: float = a.facing if not poses else pose[4]
+	var tf = move_toward(float(st[S_FACE]), pf, _dt * TURN_RATE)
 	st[S_FACE] = tf
 	var face = tf if abs(tf) > TURN_MIN else (TURN_MIN if tf >= 0.0 else -TURN_MIN)
-	rot += pose[1] - air * 0.14 * sign(face)
-	var bob = (sin(_t * 16.0 + a.id) * (0.09 if a.carry > 0.0 else 0.06) if walking and air < 0.5 else 0.0) if poses else 0.0
-	var hurt = clamp(a.hurt / HURT_T, 0.0, 1.0)
+	rot += pose[1]
+	if air > 0.0:
+		rot -= air * 0.14 * sign(face)
+	var bob = sin(_t * 16.0 + a.id) * (0.09 if a.carry > 0.0 else 0.06) if (poses and walking and air < 0.5) else 0.0
+	var hurt: float = clamp(a.hurt / HURT_T, 0.0, 1.0)
 	# colour: shade by depth and haze, the strain's colour over the drab kit, hurt flash, selection
-	var shade = lerp(1.0, BACK_SHADE, plane) * lerp(1.0, HIDDEN_SHADE, hidden)
-	var alpha = lerp(1.0, HIDDEN_ALPHA, hidden) * (0.55 if a.shelter_t > 0.0 else 1.0)
-	if _lane_alpha.is_valid() and surf > 0.0:
-		alpha *= lerp(1.0, float(_lane_alpha.call(lane)), surf)
-		if alpha <= 0.01:
-			return
+	var shade = (lerp(1.0, BACK_SHADE, plane) if plane > 0.0 else 1.0) * (lerp(1.0, HIDDEN_SHADE, hidden) if hidden > 0.0 else 1.0)
+	var alpha = (lerp(1.0, HIDDEN_ALPHA, hidden) if hidden > 0.0 else 1.0) * (0.55 if a.shelter_t > 0.0 else 1.0)
 	var light = Color(shade, shade, shade, alpha)
-	light *= Color.WHITE.lerp(HAZE.lerp(Color.WHITE, clamp(lane, 0.0, 1.0)) * colony.day.tint, surf)
+	if surf > 0.0:
+		light *= Color.WHITE.lerp(HAZE.lerp(Color.WHITE, clamp(lane, 0.0, 1.0)) * day_tint, surf)
+		if _lane_alpha.is_valid():
+			light.a *= lerp(1.0, float(_lane_alpha.call(lane)), surf)
+			if light.a <= 0.01:
+				return
 	if hurt > 0.0:
 		light *= Color.WHITE.lerp(HURT, hurt)
 	if sel.has(a.id):
 		light *= SELECTED
-	var tint = _tint(a.genome)
+	var tint: Color = st[S_TINT]
 	# the spot it is drawn at (picking)
-	var mid = feet - Vector2(-sin(rot), cos(rot)) * length * 0.2
-	st[S_SPOT_X] = mid.x
-	st[S_SPOT_Y] = mid.y
+	var up = Vector2(sin(rot), -cos(rot))
+	st[S_SPOT_X] = feet.x + up.x * length * 0.2
+	st[S_SPOT_Y] = feet.y + up.y * length * 0.2
 	st[S_SPOT_R] = length * 0.5
+	var at: Vector2 = feet + pose[0]
 	if lk != null:
-		var s = length / lk["len"]
+		var s = length / float(lk["len"])
 		var sx = face * s * pose[2] * (1.0 + 0.12 * hurt)
 		var sy = s * pose[3] * (1.0 + bob - 0.14 * hurt)
-		draw_set_transform(feet + pose[0], rot, Vector2(sx, sy))
+		draw_set_transform(at, rot, Vector2(sx, sy))
 		var cell: Vector2 = lk["cell"]
 		var fr = int(fposmod(float(st[S_GAIT]), 1.0) * AntKit.FRAMES) % AntKit.FRAMES if (walking or air > 0.05) else AntKit.STAND
 		var dst = Rect2(-lk["feet"], cell)
@@ -526,23 +583,23 @@ func _draw_ant(a, p: Vector2, st: Array, far: float, poses: bool, sel: Dictionar
 				var beat = sin(_t * TAU * FLAP_HZ + a.id * 1.3)
 				var root = Vector2(lk["mid"].x * 0.2, lk["mid"].y * 1.25)
 				var ang = -air * (0.5 + 0.45 * beat)
-				draw_set_transform_matrix(Transform2D(rot, Vector2(sx, sy), 0.0, feet + pose[0]) * Transform2D(ang, root) * Transform2D(0.0, -root))
+				draw_set_transform_matrix(Transform2D(rot, Vector2(sx, sy), 0.0, at) * Transform2D(ang, root) * Transform2D(0.0, -root))
 			draw_texture_rect_region(lk["tex"], dst, Rect2(cell.x * fr, cell.y, cell.x, cell.y), wc)
 			if air > 0.05:
-				draw_set_transform(feet + pose[0], rot, Vector2(sx, sy))
+				draw_set_transform(at, rot, Vector2(sx, sy))
 		if a.carry > 0.0 and not _foods.is_empty():
 			var food = _foods[a.id % _foods.size()]
-			var size: Vector2 = food["size"] * lk["len"] / FOOD_REF
+			var size: Vector2 = food["size"] * float(lk["len"]) / FOOD_REF
 			draw_texture_rect(food["tex"], Rect2(lk["jaw"] - size * 0.5, size), false, _pm(light))
 		return
 	# not baked yet: the caste's whole-body picture
-	var b = _bodies.get("alate_full" if a.ph.get("wings", 0) > 0 else CASTE_BODY[a.caste])
+	var b = _bodies.get("alate_full" if st[S_WINGS] else CASTE_BODY[a.caste])
 	if b == null:
 		b = _bodies.get(CASTE_BODY[a.caste])
 		if b == null:
 			return
 	var s2 = length / b["length"]
-	draw_set_transform(feet + pose[0], rot, Vector2(face * s2 * pose[2], s2 * pose[3] * (1.0 + bob)))
+	draw_set_transform(at, rot, Vector2(face * s2 * pose[2], s2 * pose[3] * (1.0 + bob)))
 	draw_texture(b["tex"], -b["feet"], _pm(light * tint))
 	if a.carry > 0.0 and not _foods.is_empty():
 		var food2 = _foods[a.id % _foods.size()]
@@ -679,7 +736,10 @@ func ant_spot(a) -> Vector3:
 		return Vector3(st[S_SPOT_X], st[S_SPOT_Y], st[S_SPOT_R])
 	var p = colony.sim.ant_pos(a)
 	var down = Vector2(-sin(a.rot), cos(a.rot))
-	var length = _len_of(a) * clamp(sqrt(FAR_ZOOM / colony.zoom()), 1.0, FAR_MAX)
+	var wl = kit.world_len(a.genome, a.caste) if kit != null else -1.0
+	if wl <= 0.0:
+		wl = _length(a.ph.get("size", 74.0))
+	var length = wl * CASTE_SCALE[clampi(a.caste, 0, 2)] * clamp(sqrt(FAR_ZOOM / colony.zoom()), 1.0, FAR_MAX)
 	var mid = p + down * C * 0.5 - down * length * 0.2
 	return Vector3(mid.x, mid.y, length * 0.5)
 
