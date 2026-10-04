@@ -195,6 +195,7 @@ static func _cream(tex: Texture2D) -> Texture2D:
 	if img.is_compressed():
 		img.decompress()
 	img.convert(Image.FORMAT_RGBA8)
+	img.clear_mipmaps()
 	var d = img.get_data()
 	var n := 0
 	for i in range(0, d.size(), 4):
