@@ -44,11 +44,14 @@ const STATUS_K = 0.8          # ... for the line at the bottom
 const WILL_ICON = "ui/hivemind.png"
 const FOOD_ICON = "ui/food.png"
 const BROOD_ICON = "ui/queen.png"
-# The owner's pictures standing for the powers in the menu. A power with none (surge, the scent flag, mutagen) shows a blank: art list.
-const ICONS = {"rally": "ui/soldier.png", "harvest": "ui/food_pile.png", "recall": "ui/chamber_queen.png", "breed": "ui/brood.png",
-	"strike": "ui/crown_red.png"}
+# The owner's pictures standing for the powers in the menu (a missing one shows as a blank). Surge borrows the Swift Strain's legs and
+# the scent flag the Trail Pheromone's scent; the purple ooze is the owner's mutation icon.
+const ICONS = {"rally": "ui/soldier.png", "harvest": "ui/food_pile.png", "recall": "ui/chamber_queen.png", "surge": "items/swift.png",
+	"breed": "ui/brood.png", "strike": "ui/crown_red.png", "beacon": "items/trail.png", "mutagen": "ui/ooze.png"}
 const LABELS = {"rally": "Rally here", "harvest": "Harvest this pile", "recall": "Recall: everyone home", "surge": "Surge: sprint",
 	"breed": "Breed: mutate hard", "strike": "Strike the rival nest"}
+const ORDER_ICONS = {"move": "ui/soldier.png", "attack": "items/pincer.png", "harvest": "ui/food_pile.png", "dig": "ui/tremors2.png",
+	"free": "ui/forage.png"}
 const KEY_BEACON = KEY_B
 const KEY_MUTAGEN = KEY_G
 const KEY_CASTE = KEY_C
@@ -578,13 +581,13 @@ func _build_menu() -> void:
 	_sel_lbl = _label("", 14, GOLD)
 	box.add_child(_sel_lbl)
 	_rows["order"] = _row(box, "order", "")
-	_rows["free"] = _row(box, "free", "")
+	_rows["free"] = _row(box, "free", ORDER_ICONS["free"])
 	_gap_orders = _gap(8)
 	box.add_child(_gap_orders)
 	for id in Sim.COMMANDS:
 		_rows[id] = _row(box, id, ICONS.get(id, ""))
-	_rows["beacon"] = _row(box, "beacon", "")
-	_rows["mutagen"] = _row(box, "mutagen", "")
+	_rows["beacon"] = _row(box, "beacon", ICONS["beacon"])
+	_rows["mutagen"] = _row(box, "mutagen", ICONS["mutagen"])
 	box.add_child(_gap(6))
 	# the brood's caste order: what the queen's eggs lean toward
 	var brood := HBoxContainer.new()
@@ -645,7 +648,8 @@ func _row(parent: Control, id: String, icon_path: String) -> Dictionary:
 	line.add_theme_constant_override("separation", 6)
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	b.add_child(line)
-	line.add_child(_icon(icon_path, 28))
+	var ic = _icon(icon_path, 28)
+	line.add_child(ic)
 	var nm = _label("", 17, INK)
 	nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	nm.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -666,7 +670,7 @@ func _row(parent: Control, id: String, icon_path: String) -> Dictionary:
 	line.add_child(food)
 	var food_i = _icon(FOOD_ICON, 20)
 	line.add_child(food_i)
-	return {"btn": b, "line": line, "name": nm, "key": key, "will": will, "will_i": will_i, "food": food, "food_i": food_i, "tip": ""}
+	return {"btn": b, "line": line, "icon": ic, "name": nm, "key": key, "will": will, "will_i": will_i, "food": food, "food_i": food_i, "tip": ""}
 
 
 func _hover(tip: String) -> void:
@@ -741,6 +745,7 @@ func _refresh_menu() -> void:
 	if has_sel:
 		_sel_lbl.text = "  " + _sel_summary(sel)
 		var o = _order_for(t, sel)
+		_rows["order"]["icon"].texture = Art.tex(ORDER_ICONS.get(o[0], ORDER_ICONS["move"]))
 		if o[0] == "":
 			_set_row("order", o[5].trim_suffix("."), "", -1.0, -1.0, 0.0, false, o[5])
 		else:
@@ -775,7 +780,7 @@ func _refresh_menu() -> void:
 					label = "Harvest the nearest pile"
 			"breed":
 				if ant != null:
-					label = "Breed from %s  (mutation %d)" % ["this ant" if ant == t.get("ant") else "the selection", int(sim.ms_of(ant))]
+					label = "Breed from %s  (mut. %d)" % ["this ant" if ant == t.get("ant") else "selected", int(sim.ms_of(ant))]
 			"strike":
 				if not sim.rival.found:
 					ok = false

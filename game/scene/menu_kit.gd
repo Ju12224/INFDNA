@@ -15,8 +15,8 @@ const BAD = Color("#ff8a72")
 const OUTLINE = Color("#1a120c")
 # frame name -> [left, top, right, bottom] border of the picture, in picture pixels
 const FRAMES = {
-	"frame_small": [22, 16, 22, 16],
-	"frame_wide": [34, 30, 34, 30],
+	"frame_small": [30, 14, 30, 19],
+	"frame_wide": [28, 33, 28, 33],
 	"stone_small": [16, 16, 16, 16],
 	"stone_wide": [26, 28, 26, 28],
 	"frame_tall": [26, 44, 26, 44],
@@ -25,29 +25,116 @@ const FRAMES = {
 static var _scaled := {}
 
 
-# The owner's frame as a stylebox, shrunk to k of its drawn size (borders included) so it fits small controls; the inside keeps the
-# picture's own fill, tiled rather than smeared. `pad` is the room between the border and the content.
+# The owner's frame as a stylebox, shrunk to k of its drawn size (borders included) so it fits small controls. `pad` is the room
+# between the border and the content. Given a control, the frame is redrawn to that control's exact size whenever it changes
+# (fit()), so the border repeats whole and the inside stays clean (Godot's own tiling leaves dark specks where its tiles meet).
 static func box(frame: String, k: float = 1.0, pad: Vector2 = Vector2(6, 2), tint: Color = Color.WHITE) -> StyleBox:
 	var tex = _tex_scaled(frame, k)
 	if tex == null:
 		var empty := StyleBoxEmpty.new()
 		empty.set_content_margin_all(8)
 		return empty
-	var m: Array = FRAMES.get(frame, [16, 16, 16, 16])
+	var m = _margins(frame, k)
 	var sb := StyleBoxTexture.new()
 	sb.texture = tex
-	sb.texture_margin_left = round(m[0] * k)
-	sb.texture_margin_top = round(m[1] * k)
-	sb.texture_margin_right = round(m[2] * k)
-	sb.texture_margin_bottom = round(m[3] * k)
-	sb.content_margin_left = round(m[0] * k) + pad.x
-	sb.content_margin_right = round(m[2] * k) + pad.x
-	sb.content_margin_top = round(m[1] * k) + pad.y
-	sb.content_margin_bottom = round(m[3] * k) + pad.y
-	sb.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_TILE_FIT
-	sb.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_TILE_FIT
+	sb.texture_margin_left = m[0]
+	sb.texture_margin_top = m[1]
+	sb.texture_margin_right = m[2]
+	sb.texture_margin_bottom = m[3]
+	sb.content_margin_left = m[0] + pad.x
+	sb.content_margin_right = m[2] + pad.x
+	sb.content_margin_top = m[1] + pad.y
+	sb.content_margin_bottom = m[3] + pad.y
+	sb.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_STRETCH
+	sb.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_STRETCH
 	sb.modulate_color = tint
+	sb.set_meta("frame", [frame, k])
 	return sb
+
+
+static func _margins(frame: String, k: float) -> Array:
+	var m: Array = FRAMES.get(frame, [16, 16, 16, 16])
+	return [int(round(m[0] * k)), int(round(m[1] * k)), int(round(m[2] * k)), int(round(m[3] * k))]
+
+
+# Keeps a control's frame styleboxes (box()) drawn at its exact size.
+static func fit(c: Control, names: Array) -> void:
+	c.resized.connect(_refit.bind(c, names))
+
+
+static func _refit(c: Control, names: Array) -> void:
+	var sz := Vector2i(int(round(c.size.x)), int(round(c.size.y)))
+	if sz.x < 4 or sz.y < 4:
+		return
+	for n in names:
+		var sb = c.get_theme_stylebox(n)
+		if sb is StyleBoxTexture and sb.has_meta("frame"):
+			var f = sb.get_meta("frame")
+			var tex = _composed(f[0], f[1], sz)
+			if tex != null:
+				sb.texture = tex
+
+
+static var _composed_cache := {}
+
+
+# The frame drawn at exactly `sz` pixels: corners as they are, each edge its middle piece repeated a whole number of times (squeezed
+# or stretched a little to fit), the inside filled with the picture's own middle.
+static func _composed(frame: String, k: float, sz: Vector2i) -> Texture2D:
+	var key = "%s@%.2f@%dx%d" % [frame, k, sz.x, sz.y]
+	if _composed_cache.has(key):
+		return _composed_cache[key]
+	var src: Texture2D = _tex_scaled(frame, k)
+	if src == null:
+		return null
+	var img: Image = src.get_image()
+	if img.is_compressed():
+		img.decompress()
+	img.convert(Image.FORMAT_RGBA8)
+	var m = _margins(frame, k)
+	var w = img.get_width()
+	var h = img.get_height()
+	var cw = w - m[0] - m[2]
+	var ch = h - m[1] - m[3]
+	var tw = sz.x - m[0] - m[2]
+	var th = sz.y - m[1] - m[3]
+	if cw < 1 or ch < 1 or tw < 1 or th < 1:
+		return null
+	var out := Image.create(sz.x, sz.y, false, Image.FORMAT_RGBA8)
+	var xs = [[0, m[0], 0, m[0]], [m[0], cw, m[0], tw], [w - m[2], m[2], sz.x - m[2], m[2]]]     # [src x, src w, dst x, dst w]
+	var ys = [[0, m[1], 0, m[1]], [m[1], ch, m[1], th], [h - m[3], m[3], sz.y - m[3], m[3]]]
+	for yi in 3:
+		for xi in 3:
+			var sx = xs[xi]
+			var sy = ys[yi]
+			if sx[1] <= 0 or sy[1] <= 0 or sx[3] <= 0 or sy[3] <= 0:
+				continue
+			var piece = img.get_region(Rect2i(sx[0], sy[0], sx[1], sy[1]))
+			_tile_into(out, piece, Rect2i(sx[2], sy[2], sx[3], sy[3]), xi == 1, yi == 1)
+	var tex = ImageTexture.create_from_image(out)
+	if _composed_cache.size() > 200:
+		_composed_cache.clear()
+	_composed_cache[key] = tex
+	return tex
+
+
+# Fills `dst` with `piece`, repeated a whole number of times along each axis marked to repeat (stretched along the others).
+static func _tile_into(out: Image, piece: Image, dst: Rect2i, rep_x: bool, rep_y: bool) -> void:
+	var nx = max(1, int(round(float(dst.size.x) / piece.get_width()))) if rep_x else 1
+	var ny = max(1, int(round(float(dst.size.y) / piece.get_height()))) if rep_y else 1
+	for j in ny:
+		for i in nx:
+			var x0 = dst.position.x + int(round(float(dst.size.x) * i / nx))
+			var x1 = dst.position.x + int(round(float(dst.size.x) * (i + 1) / nx))
+			var y0 = dst.position.y + int(round(float(dst.size.y) * j / ny))
+			var y1 = dst.position.y + int(round(float(dst.size.y) * (j + 1) / ny))
+			if x1 <= x0 or y1 <= y0:
+				continue
+			var p = piece
+			if p.get_width() != x1 - x0 or p.get_height() != y1 - y0:
+				p = piece.duplicate()
+				p.resize(x1 - x0, y1 - y0, Image.INTERPOLATE_BILINEAR)
+			out.blit_rect(p, Rect2i(0, 0, p.get_width(), p.get_height()), Vector2i(x0, y0))
 
 
 static func _tex_scaled(frame: String, k: float) -> Texture2D:
@@ -72,6 +159,7 @@ static func _tex_scaled(frame: String, k: float) -> Texture2D:
 static func panel(frame: String = "frame_wide", k: float = 1.0, pad: Vector2 = Vector2(10, 6)) -> PanelContainer:
 	var p := PanelContainer.new()
 	p.add_theme_stylebox_override("panel", box(frame, k, pad))
+	fit(p, ["panel"])
 	return p
 
 
@@ -96,6 +184,7 @@ static func button(text: String, font_size: int = 20, k: float = 0.8, min_size: 
 	b.add_theme_stylebox_override("disabled", box("frame_small", k, pad, Color(0.6, 0.6, 0.6, 0.7)))
 	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	b.custom_minimum_size = min_size
+	fit(b, ["normal", "hover", "pressed", "hover_pressed", "disabled"])
 	return b
 
 

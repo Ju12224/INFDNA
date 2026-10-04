@@ -83,8 +83,8 @@ const MAX_LADDERS = 7
 const LADDER_RUN = 7           # straight open cells above a floor that make a shaft worth a ladder
 
 # ---- brood: [antkit piece, long side in world px at the start of the stage, at its end]
-const EGG = [["egg_cluster", 8.5, 9.0], ["egg_mass", 8.0, 8.5]]
-const LARVA = [["larva_curled", 7.0, 9.5], ["larva_fat", 9.5, 12.0]]
+const EGG = [["egg_cluster", 10.0, 11.0], ["egg_mass", 9.5, 10.5]]
+const LARVA = [["larva_curled", 8.5, 10.5], ["larva_fat", 10.5, 12.5]]
 const PUPA = {"cream": ["cocoon_cream", 12.5], "grey": ["cocoon_grey", 13.0], "winged": ["cocoon_winged", 14.5]}
 const EGG_END = 0.34           # share of the countdown spent as an egg ...
 const LARVA_END = 0.76         # ... and as a grub; the rest in the cocoon
@@ -102,9 +102,9 @@ const BADGE_PX = 44.0          # their size on screen ...
 const BADGE_MAX = 84.0         # ... but never wider than this many world px (zoomed far out the rooms are close together)
 
 # ---- the anthill
-const MOUND_K = 0.24           # world px per picture px (the small mound's hole comes out about as tall as an ant on the surface)
+const MOUND_K = 0.28           # world px per picture px (the small mound's hole comes out about as tall as an ant on the surface)
 const MOUND_LANE = 0.62        # the lane ants walk into a mouth on (units_view.gd ENTRANCE_LANE, read from it when it has one)
-const MOUND_GROW = [0, 220, 800]   # spoil grains on the surface (world_grid.mound_cells) for the small, medium and large mound
+const MOUND_GROW = [0, 220, 900]   # spoil grains on the surface (world_grid.mound_cells) for the small, medium and large mound
 const HAZE = Color(0.88, 0.92, 0.97)
 
 var colony
@@ -115,7 +115,7 @@ var _specs := {}               # name -> spec (null: no such picture): {tex, src
 var _brood := {}               # antkit piece name -> {tex, w, h, base (picture px), long}
 var _icons := {}               # purpose -> texture
 var _mounds := []              # [{tex, w, h, hole: Vector2 (picture px, the hole's floor under its centre)}], small to large
-var _props := []               # [{tex, src, pos, size, mirror, mod, x0, x1, y0, y1}] (world px)
+var _props := []               # [{tex, src (picture px), rect (world px), mirror, mod}]
 var _occ := []                 # footprints placed so far in a rebuild
 var _prop_key := ""
 var _check_t := 0.0
@@ -792,11 +792,8 @@ func _draw_egg(g, e: Dictionary, prog: float) -> void:
 	while n < 4 and g.is_solid(x, y, z):
 		y -= 1
 		n += 1
-	n = 0
-	while n < 8 and not g.is_solid(x, y + 1, z):
-		y += 1
-		n += 1
-	var feet = Vector2((pos.x + 0.5) * C, (y + 1) * C + 0.5)
+	var wx = (pos.x + 0.5) * C
+	var feet = Vector2(wx, _floor_y(g, wx, y, z) + 0.5)
 	var shade := 1.0
 	var alpha := 1.0
 	if z == 1:
@@ -810,6 +807,22 @@ func _draw_egg(g, e: Dictionary, prog: float) -> void:
 	draw_set_transform(feet, rot, Vector2(s * flip, s * squash))
 	draw_texture(b["tex"], -b["base"], Color(shade, shade, shade, alpha))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+# World y of the floor as the soil draws it, under world x, from row `row` down (at most 8 rows): the soil shader's edge is the 0.5
+# contour of the solid mask (a texel per cell, filtered between cell centres), which rounds off steps and corners, so the top of the
+# solid cell is not where the drawn floor is on a slope.
+static func _floor_y(g, wx: float, row: int, z: int) -> float:
+	var fx = wx / C - 0.5
+	var x0 = int(floor(fx))
+	var tx = fx - x0
+	var prev = lerp(1.0 if g.is_solid(x0, row, z) else 0.0, 1.0 if g.is_solid(x0 + 1, row, z) else 0.0, tx)
+	for r in range(row, row + 8):
+		var v = lerp(1.0 if g.is_solid(x0, r + 1, z) else 0.0, 1.0 if g.is_solid(x0 + 1, r + 1, z) else 0.0, tx)
+		if prev < 0.5 and v >= 0.5:
+			return (r + (0.5 - prev) / (v - prev) + 0.5) * C
+		prev = v
+	return (row + 1) * C
 
 
 # ------------------------------------------------------------------------------------------------------------ the anthill

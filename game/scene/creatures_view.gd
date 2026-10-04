@@ -53,12 +53,17 @@ const KIT_BASE = Color(0.60, 0.52, 0.46)  # the kit's mean fill (units_view.gd):
 const LEN_PER_SIZE = 2.2                  # ant length from phenotype size, as units_view.gd
 const LEN_BASE = 24.0
 const LEN_K = 0.132
+# the Tunnel Borer (the old mod drew it 4.2 times the burrower height long)
+const WORM_LEN = 200.0
+const WORM_THICK = 40.0
 # the anteater (the old creature_art.gd): nose to tail in world px, and how far its legs rock
 const ANTEATER_LEN = 380.0
 const ANTEATER_STEP = 0.07
 # the bird (the old rig_art.gd and predator_view.gd): its five pieces flapped about the shoulder
 const BIRD_K = 0.5
 const BIRD_LANE = 0.5
+const BIRD_SPAN = 600.0                 # art px from wing tip to beak
+const BIRD_DROP = 260.0                 # art px from the shoulder origin down to the talons and the low wing tip
 const BIRD_FALL_T = 1.3                 # seconds the sim lets bird_fall drop (colony_sim._step_bird_fall)
 const DEAD_PIVOT = Vector2(-60, 20)
 const DEAD_REACH = 198.0
@@ -105,6 +110,8 @@ var _state := {}            # raider id -> Vector3(surface 0..1, drawn lane, dra
 var _seen := {}             # raider id -> [raider, pos, state, k] as drawn last frame (for the death fall)
 var _dying := []            # [{e, p, st, k, t}]
 var _born := {}             # raider id -> sim time first seen (the Void Maw's climb out of the pit)
+var _worm := {}             # borer id -> its drawn heading (radians), turned smoothly toward the way it bores
+var _earthworm := {}        # fauna_manifest "earthworm": the Tunnel Borer's picture
 var _hover := 0.0           # the bird wheels about over its prey
 var _bird_px := 0.0
 var _bird_last := Vector2.ZERO
@@ -140,6 +147,7 @@ func _ready() -> void:
 		if sv != null:
 			_tree_pick = sv.get_script_constant_map().get("TREE_PICK", TREE_PICK_FALLBACK)
 	_anteater = Art.manifest("anteater/anteater_manifest.json")
+	_earthworm = Art.manifest("fauna_manifest.json").get("items", {}).get("earthworm", {})
 
 
 func reset() -> void:
@@ -147,6 +155,7 @@ func reset() -> void:
 	_seen = {}
 	_dying = []
 	_born = {}
+	_worm = {}
 	_bird_ok = false
 	_fall_origin = null
 
@@ -324,6 +333,36 @@ func _rig_body(ci: CanvasItem, r: Dictionary, base: Transform2D, fv: Vector2, bt
 			_put(ci, base, gt, r["glow"]["pos"] - fv + Vector2(0, bob), Vector2.ZERO, 0.0, Color(1, 1, 1, mod.a * (0.45 + 0.4 * sin(t * 2.6))))
 
 
+# ---------------------------------------------------------------- the Tunnel Borer
+# The owner's earthworm (fauna/earthworm.png, mouth to the right), WORM_LEN long: on the meadow it lies along the ground; boring it turns
+# head first down its own tunnel (its heading eases toward the way it is going, so it bends round instead of snapping). It crawls by
+# squeezing: shorter and fatter, then long and thin, as an earthworm does. The picture is turned, never mirrored upside down.
+func _draw_worm(ci: CanvasItem, e, feet: Vector2, p: Vector2, k: float, face: float, surf: float, col: Color, flash: bool, rot: float, moving: bool) -> bool:
+	var tex = _tx(str(_earthworm.get("file", "")))
+	if tex == null:
+		return false
+	var d = Vector2(e.tx - e.x, e.ty - e.y)
+	if e.state == 3 and e.dest != Vector2.ZERO:
+		d = e.dest - Vector2(e.x, e.y)
+	var goal = 0.0 if face > 0.0 else PI
+	if surf < 0.5 and d.length() > 0.1:
+		goal = d.angle()
+	var a = float(_worm.get(e.id, goal))
+	a += wrapf(goal - a, -PI, PI) * (1.0 - exp(-_dt * 3.0))
+	_worm[e.id] = a
+	var sz = tex.get_size()
+	var s = WORM_LEN * k / sz.x
+	var squeeze = sin(_t * (7.0 if moving else 1.4) + e.id) * (0.12 if moving else 0.03)
+	var up = -1.0 if cos(a) < 0.0 else 1.0                      # heading left: flipped so its back stays up
+	var centre = feet.lerp(p, 1.0 - surf) + Vector2(0, -sz.y * 0.4 * s * surf)
+	if flash:
+		col = _flash(col)
+	ci.draw_set_transform_matrix(Transform2D(rot + a, centre) * Transform2D(Vector2(s * (1.0 + squeeze), 0), Vector2(0, s * up * (1.0 - squeeze)), Vector2.ZERO))
+	ci.draw_texture(tex, -sz * 0.5, col)
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	return true
+
+
 # ---------------------------------------------------------------- the anteater (four parts: tail, hind legs, front legs, body with head)
 func _anteater_h() -> float:
 	if _anteater.is_empty():
@@ -468,6 +507,9 @@ func _draw_enemy(ci: CanvasItem, e, p: Vector2, st: Vector3, far: float, zoom: f
 			h = _rig_h(rig) * k
 			drawn = _rig(ci, rig, feet - Vector2(0, lift), k, face, tt, moving or e.def.get("fly", false), 0.2, col, flash, rot)
 			feet.y -= lift
+	elif e.cls == "burrower":
+		h = WORM_THICK * k
+		drawn = _draw_worm(ci, e, feet, p, k, face, surf, col, flash, rot, moving or e.state == 3)
 	elif art == "anteater":
 		h = _anteater_h()
 		k = _boss_k(k, h, zoom)
@@ -494,7 +536,7 @@ func _draw_enemy(ci: CanvasItem, e, p: Vector2, st: Vector3, far: float, zoom: f
 				feet.y += (1.0 - q) * h * 0.3
 			drawn = _rig(ci, rig, feet - Vector2(0, lift), k, face, tt, moving or em < 0.8, mouth, col, flash, rot)
 			feet.y -= lift
-	# (the Tunnel Borer, the grasshopper and the butterfly have no picture: nothing is drawn)
+	# (the grasshopper and the butterfly have no picture: nothing is drawn)
 	if drawn and die < 0.0 and (e.stun_t > 0.0 or e.slow_t > 0.0):
 		_draw_silk(ci, e, feet, h, col.a)
 	return [e, p, st]
@@ -632,9 +674,9 @@ func _bird_pose(b: Dictionary) -> Array:
 	return [pos, face]
 
 
-# The bird's drawing scale: its lane's perspective, but never under BOSS_MIN_PX across on screen (it is about 300 art px across).
+# The bird's drawing scale: its lane's perspective, but never under BOSS_MIN_PX * 1.5 across on screen (BIRD_SPAN art px wide).
 func _bird_scale(zoom: float) -> float:
-	return max(BIRD_K * 0.95 * Band.persp(BIRD_LANE), BOSS_MIN_PX * 1.3 / (300.0 * max(0.05, zoom)))
+	return max(BIRD_K * 0.95 * Band.persp(BIRD_LANE), BOSS_MIN_PX * 1.5 / (BIRD_SPAN * max(0.05, zoom)))
 
 
 func _draw_bird(b: Dictionary, zoom: float) -> void:
@@ -650,7 +692,9 @@ func _draw_bird(b: Dictionary, zoom: float) -> void:
 		hurt = fmod(_t, 0.22) < 0.1                  # winged ants are on it: it flinches and blinks red
 		pos += Vector2(sin(_t * 83.0), cos(_t * 71.0)) * 3.0 * clamp(hit / 0.3, 0.0, 1.0)
 	var fade = clamp(float(b["t"]) / 2.0, 0.0, 1.0)
-	_bird(self, pos, _bird_scale(zoom), _t, int(bp[1]), fold, fade, hurt)
+	var s = _bird_scale(zoom)
+	pos.y -= (s - BIRD_K * 0.95 * Band.persp(BIRD_LANE)) * BIRD_DROP      # grown to stay readable: lifted so its talons stay off the ground
+	_bird(self, pos, s, _t, int(bp[1]), fold, fade, hurt)
 
 
 func _bird_tex() -> Array:
