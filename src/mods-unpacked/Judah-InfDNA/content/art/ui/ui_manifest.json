@@ -1,0 +1,77 @@
+{
+ "brood": {
+  "file": "ui/brood.png",
+  "w": 128,
+  "h": 128
+ },
+ "food_pile": {
+  "file": "ui/food_pile.png",
+  "w": 128,
+  "h": 128
+ },
+ "fungus": {
+  "file": "ui/fungus.png",
+  "w": 128,
+  "h": 128
+ },
+ "soldier": {
+  "file": "ui/soldier.png",
+  "w": 128,
+  "h": 128
+ },
+ "queen": {
+  "file": "ui/queen.png",
+  "w": 128,
+  "h": 128
+ },
+ "midden": {
+  "file": "ui/midden.png",
+  "w": 128,
+  "h": 128
+ },
+ "food": {
+  "file": "ui/food.png",
+  "w": 128,
+  "h": 128
+ },
+ "will": {
+  "file": "ui/will.png",
+  "w": 128,
+  "h": 128
+ },
+ "acid": {
+  "file": "ui/acid.png",
+  "w": 128,
+  "h": 128
+ },
+ "frame_tall": {
+  "file": "ui/frame_tall.png",
+  "w": 91,
+  "h": 236
+ },
+ "frame_wide": {
+  "file": "ui/frame_wide.png",
+  "w": 219,
+  "h": 94
+ },
+ "frame_small": {
+  "file": "ui/frame_small.png",
+  "w": 146,
+  "h": 60
+ },
+ "dominion": {
+  "file": "ui/dominion.png",
+  "w": 128,
+  "h": 128
+ },
+ "tremors": {
+  "file": "ui/tremors.png",
+  "w": 128,
+  "h": 128
+ },
+ "void": {
+  "file": "ui/void.png",
+  "w": 128,
+  "h": 128
+ }
+}

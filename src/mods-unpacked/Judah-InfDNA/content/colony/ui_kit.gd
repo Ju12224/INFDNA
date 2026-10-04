@@ -1,8 +1,33 @@
 extends Reference
-# Shared look + motion for every InfDNA screen. Built from Brotato's own art:
-# ink-outlined chunky panels, lifebar textures, stat icons, particle sprites.
+# Shared look + motion for every InfDNA screen. The owner's UI art first (content/art/ui, cut by tools/art/make_ui_icons.py): the colony's icons
+# and the bone frame round the panels; Brotato's own stat icons, lifebars and particles fill in where there is no picture of ours yet.
 
 const INK = Color("#15121a")
+const AL = preload("res://mods-unpacked/Judah-InfDNA/content/colony/art_lib.gd")
+# short key -> the owner's icon (content/art/...); these win over the Brotato icon of the same key below
+const OWN = {
+	"food": "ui/food.png",
+	"egg": "ui/brood.png",
+	"brood": "ui/brood.png",
+	"ant": "ui/soldier.png",
+	"queen": "ui/queen.png",
+	"soldier": "ui/soldier.png",
+	"forager": "ui/food_pile.png",
+	"food_pile": "ui/food_pile.png",
+	"skull": "ui/midden.png",
+	"midden": "ui/midden.png",
+	"fungus": "ui/fungus.png",
+	"power": "ui/will.png",
+	"will": "ui/will.png",
+	"fire": "ui/acid.png",
+	"acid": "ui/acid.png",
+	"boss": "ui/void.png",
+	"void": "ui/void.png",
+	"dominion": "ui/dominion.png",
+	"tremors": "ui/tremors.png",
+}
+const OWN_PANEL = "ui/frame_wide.png"     # nine-patch: the bone-and-claw rim stays its size, the dark middle stretches
+const OWN_PANEL_M = [30, 26, 30, 26]       # left, top, right, bottom rim in the picture's px
 const FONT_PATH = "res://resources/fonts/raw/Anybody-Medium.ttf"
 const T_PANEL = "res://ui/hud/ui_panel_normal.png"
 const T_BAR_BG = "res://ui/hud/ui_lifebar_bg.png"
@@ -68,7 +93,16 @@ static func tex(path: String):
 
 
 static func icon(key: String):
+	if OWN.has(key):
+		var t = AL.get_lib().tex(OWN[key])
+		if t != null:
+			return t
 	return tex(ICONS.get(key, ""))
+
+
+# The owner's icon for a key, or null (no Brotato fallback): for places that should show nothing rather than an old icon.
+static func own_icon(key: String):
+	return AL.get_lib().tex(OWN[key]) if OWN.has(key) else null
 
 
 static func font(size: int, outline: int = 2) -> DynamicFont:
@@ -83,6 +117,22 @@ static func font(size: int, outline: int = 2) -> DynamicFont:
 
 # Big chunky panel (Brotato's ink-outlined panel, tinted).
 static func panel(tint: Color = Color(0.3, 0.28, 0.38), alpha: float = 0.96, pad: float = 12.0) -> StyleBox:
+	var own = AL.get_lib().tex(OWN_PANEL)
+	if own != null:
+		var o = StyleBoxTexture.new()
+		o.texture = own
+		o.margin_left = OWN_PANEL_M[0]
+		o.margin_top = OWN_PANEL_M[1]
+		o.margin_right = OWN_PANEL_M[2]
+		o.margin_bottom = OWN_PANEL_M[3]
+		# the frame is already coloured (bone and dark earth): the panel's tint only leans it a little
+		var lean = Color.white.linear_interpolate(tint.lightened(0.45), 0.22)
+		o.modulate_color = Color(lean.r, lean.g, lean.b, alpha)
+		o.content_margin_left = max(pad + 8, OWN_PANEL_M[0] + 4)
+		o.content_margin_right = max(pad + 8, OWN_PANEL_M[2] + 4)
+		o.content_margin_top = max(pad + 4, OWN_PANEL_M[1] + 2)
+		o.content_margin_bottom = max(pad + 4, OWN_PANEL_M[3] + 2)
+		return o
 	var t = tex(T_PANEL)
 	if t == null:
 		return flat(Color(tint.r * 0.4, tint.g * 0.4, tint.b * 0.4, alpha), INK, 12, 3, pad)

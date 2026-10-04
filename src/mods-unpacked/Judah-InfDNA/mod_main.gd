@@ -30,3 +30,11 @@ func _closing() -> void:
 	if BugReport.closing():
 		return
 	BugReport.write("game closed", true)
+	# the art library (the menus use its icons too) lives in Engine metadata, which outlives the scripts at exit and crashed the game:
+	# drop it while the scripts still run
+	for k in ["infdna_art", "infdna_ug"]:
+		if Engine.has_meta(k):
+			var lib = Engine.get_meta(k)
+			if lib != null and lib.has_method("shutdown"):
+				lib.shutdown()
+			Engine.remove_meta(k)

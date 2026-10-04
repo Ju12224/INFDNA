@@ -21,8 +21,6 @@ const APEX_GOLD = Color(1.0, 0.82, 0.32)
 const APEX_TAG_ZOOM = 0.4      # the APEX tags show over every Apex ant in view only this close (camera zoom below it; farther out meadow_depth marks them); the selected one always
 
 const CASTE_COLORS = [Color("#6cc644"), Color("#c9863b"), Color("#e8483b")]
-const CASTE_ICONS = ["res://items/all/fruit_basket/fruit_basket_icon.png", "res://items/all/improved_tools/improved_tools_icon.png",
-	"res://items/all/warrior_helmet/warrior_helmet_icon.png"]
 
 var sim
 var baker
@@ -65,8 +63,8 @@ var _mk := 0.0           # how mutated the ant being drawn is, 0 (plain) .. 1 (m
 func _ready() -> void:
 	if ResourceLoader.exists("res://particles/sprites/particle_28.png"):
 		_glow_tex = load("res://particles/sprites/particle_28.png")
-	for p in CASTE_ICONS:
-		_caste_tex.append(load(p) if ResourceLoader.exists(p) else null)
+	for k in Kit.CASTE_KEYS:
+		_caste_tex.append(Kit.icon(k))      # the owner's icons where there are some (ui_kit.gd)
 	_tag_font = Kit.font(15, 2)
 
 

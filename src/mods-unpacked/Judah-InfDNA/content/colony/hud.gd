@@ -806,6 +806,8 @@ func _draw_strip() -> void:
 	else:
 		var ac: Color = arc["col"]
 		var pulse = 0.8 + 0.2 * sin(_t * 3.0) if sim.arc_stage >= 2 else 1.0
+		ops2.append(["icon", x2, ARC_ICONS[int(clamp(sim.arc_stage, 0, 3))]])
+		x2 += 28.0
 		ops2.append(["text", x2, arc["text"], Color(ac.r, ac.g, ac.b, pulse)])
 		x2 += f.get_string_size(arc["text"]).x + 10.0
 		ops2.append(["bar", x2, arc["frac"], ac, 80.0])
@@ -855,6 +857,7 @@ func _on_strip_best(ev: InputEvent) -> void:
 
 
 # ---- Monstrosity and the Apex ants (colony_sim: monstrosity, apex; arc.gd)
+const ARC_ICONS = ["acid", "dominion", "tremors", "void"]     # the owner's icons for Growing, Dominion, Tremors, The Void
 func _mono_pct(sim) -> int:
 	return int(round(clamp(sim.monstrosity, 0.0, 100.0)))
 
@@ -902,7 +905,7 @@ func _draw_apex() -> void:
 	var w = c.rect_size.x
 	var mp = _mono_pct(sim)
 	var arc = _arc_line(sim)
-	var ic = Kit.icon("power")
+	var ic = Kit.icon("acid")
 	if ic != null:
 		c.draw_texture_rect(ic, Rect2(0, 0, 24, 24), false)
 	c.draw_string(_f_m, Vector2(30, 22), "Monstrosity %d%%" % mp, Color.white)
@@ -924,8 +927,11 @@ func _draw_apex() -> void:
 	if arc["text"] != "":
 		var ac: Color = arc["col"]
 		var pulse = 0.82 + 0.18 * sin(_t * 4.0) if sim.arc_stage >= 2 else 1.0
-		c.draw_string(_f_s, Vector2(0, 60), arc["text"], Color(ac.r, ac.g, ac.b, pulse))
-		var tw = _f_s.get_string_size(arc["text"]).x + 12.0
+		var si = Kit.icon(ARC_ICONS[int(clamp(sim.arc_stage, 0, 3))])
+		if si != null:
+			c.draw_texture_rect(si, Rect2(0, 44, 20, 20), false)
+		c.draw_string(_f_s, Vector2(24, 60), arc["text"], Color(ac.r, ac.g, ac.b, pulse))
+		var tw = 24.0 + _f_s.get_string_size(arc["text"]).x + 12.0
 		c.draw_rect(Rect2(tw, 47, w - tw, 11), Kit.INK)
 		c.draw_rect(Rect2(tw + 2.0, 49, (w - tw - 4.0) * clamp(arc["frac"], 0.0, 1.0), 7), ac)
 	else:
