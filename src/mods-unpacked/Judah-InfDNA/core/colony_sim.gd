@@ -1642,8 +1642,14 @@ func _step_ant(a, dt: float) -> void:
 		_rescue(a)
 	_qe("a_misc", q0)
 
-	# the body turns smoothly toward the tilt _orient chose for this step, never faster than ROT_RATE (it used to swing a quarter turn in two ticks)
+	# the body turns smoothly toward the tilt _orient chooses for the step it is on (worked out once per step, and at high game speed only every
+	# rot_every ticks), never faster than ROT_RATE (it used to swing a quarter turn in two ticks)
 	if rot_every <= 1 or (_tick_n + a.id) % rot_every == 0:
+		var rk = a.tx * 7919 + a.ty * 31 + a.tz
+		if rk != a.rot_key:
+			a.rot_key = rk
+			if a.tx != a.x or a.ty != a.y:
+				_orient(a)
 		var dr = wrapf(a.trot - a.rot, -PI, PI)
 		if dr != 0.0:
 			var kr = dt * rot_every
@@ -1726,13 +1732,23 @@ func _step_ant(a, dt: float) -> void:
 			break                  # it stopped for a pause
 		var moved = a.tx != a.x or a.ty != a.y
 		if moved:
-			_orient(a)
+			# note the step in the gait word, and slow down for a sharp turn
+			var mx = a.tx - a.x
+			var my = a.ty - a.y
+			var code = Loco.DIR_OF[(4 if my > 0 else (-2 if my < 0 else 1)) + (1 if mx > 0 else (-1 if mx < 0 else 0)) + 3]
+			var gait = a.scout
+			var last = gait & Loco.DIR_MASK
+			var r = (gait >> Loco.RAMP_SHIFT) & 255
+			if last != 0 and last != Loco.PLANE_STEP:
+				r = int(min(r, RAMP_CAP[Loco.TURN[last * 9 + code]]))
+			a.scout = (gait & Loco.DEBT_MASK) | code | (r << Loco.RAMP_SHIFT)
+			a.rot_key = -1          # its body is turned for the new step on the next rotation tick
 		elif a.tz != a.z:
 			a.scout = (a.scout & Loco.DEBT_MASK) | Loco.PLANE_STEP | (int(min((a.scout >> Loco.RAMP_SHIFT) & 255, 60)) << Loco.RAMP_SHIFT)   # through the hole at a crawl
 		if (moved or a.tz != a.z) and a.dig_timer <= 0.0:
 			dist = a.hop if a.hop > 0.0 else (1.4142 if (a.tx != a.x and a.ty != a.y) else 1.0)
 			a.t = min(over / dist, 1.6)
-			if occ.size() == grid.PLANES * grid.WH:
+			if a.ty > grid.surf_y_hint and occ.size() == grid.PLANES * grid.WH:
 				_mark_step(a)
 		else:
 			a.scout = a.scout & Loco.NO_RAMP      # standing: it will set off slowly
