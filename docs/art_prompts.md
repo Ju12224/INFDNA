@@ -227,7 +227,7 @@ Square image (1:1).
 Style: 2D cartoon game art matching the attached style reference picture: bold thick near-black outlines (a little purple-black), flat cel shading with 2-3 tones per colour and soft rounded highlights, chunky simple shapes, a muted earthy palette. No text, no letters, no watermark, no shadow on the ground. Transparent background (PNG).
 ```
 
-## 18. Queen portraits, sheet 1
+## 18. Queen portraits, sheet 1 (ON HOLD: the roster may shrink to 8 detailed queens)
 _Used for: Queen picker (step 4.4)._
 
 ```
@@ -253,7 +253,7 @@ Square image (1:1).
 Style: 2D cartoon game art matching the attached style reference picture: bold thick near-black outlines (a little purple-black), flat cel shading with 2-3 tones per colour and soft rounded highlights, chunky simple shapes, a muted earthy palette. No text, no letters, no watermark, no shadow on the ground. Transparent background (PNG).
 ```
 
-## 19. Queen portraits, sheet 2
+## 19. Queen portraits, sheet 2 (ON HOLD: the roster may shrink to 8 detailed queens)
 _Used for: Queen picker (step 4.4)._
 
 ```
@@ -279,7 +279,7 @@ Square image (1:1).
 Style: 2D cartoon game art matching the attached style reference picture: bold thick near-black outlines (a little purple-black), flat cel shading with 2-3 tones per colour and soft rounded highlights, chunky simple shapes, a muted earthy palette. No text, no letters, no watermark, no shadow on the ground. Transparent background (PNG).
 ```
 
-## 20. Queen portraits, sheet 3
+## 20. Queen portraits, sheet 3 (ON HOLD: the roster may shrink to 8 detailed queens)
 _Used for: Queen picker (step 4.4)._
 
 ```
@@ -305,7 +305,7 @@ Square image (1:1).
 Style: 2D cartoon game art matching the attached style reference picture: bold thick near-black outlines (a little purple-black), flat cel shading with 2-3 tones per colour and soft rounded highlights, chunky simple shapes, a muted earthy palette. No text, no letters, no watermark, no shadow on the ground. Transparent background (PNG).
 ```
 
-## 21. Queen portraits, sheet 4
+## 21. Queen portraits, sheet 4 (ON HOLD: the roster may shrink to 8 detailed queens)
 _Used for: Queen picker (step 4.4)._
 
 ```
