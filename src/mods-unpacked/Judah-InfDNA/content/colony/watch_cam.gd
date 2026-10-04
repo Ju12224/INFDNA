@@ -23,6 +23,7 @@ var _kind := ""
 var _target := Vector2.ZERO
 var _zoom := 0.7
 var _unit = null              # ant the shot follows, or null
+var focus_enemy = null        # the raider of the fight being shown, or null (meadow_depth.gd parts the grass in front of it)
 var _next := 0
 var _strain_done := -1.0    # newest strain event already shown
 var _fight_block := 0.0     # after a long fight shot the camera looks elsewhere for a while, even if the siege goes on
@@ -197,6 +198,7 @@ func _aim(delta: float, fight) -> void:
 	var cam = scene.cam
 	var tgt = cam.position
 	var rate = 1.7
+	focus_enemy = fight if (_kind == "fight" and fight != null) else null
 	if _kind == "fight" and fight != null:
 		var p = sim.enemy_pos(fight)
 		var d = scene.ant_view._depth(-fight.id, scene.ant_view.lane_of(fight, -fight.id))

@@ -204,6 +204,13 @@ func prepare(cols: Array, t: float) -> void:
 				_stale.erase(ci)
 		if ch != null:
 			_vis.append([ci, ch])
+	# a quiet frame (nothing in view to build) builds one chunk past an edge of the view, so a pan finds the ground (and the grass that
+	# stands on it, meadow_depth.gd) already there
+	if budget >= 3 and (not _chunks.empty()):
+		for ci in [c_lo - 1, c_hi + 1]:
+			if not _chunks.has(ci):
+				_chunks[ci] = _build_chunk(ci)
+				break
 	# the drawn scenery of the chunks in view, per slice (gathered once a frame, not once per slice drawn)
 	_vis_spr = []
 	for s in SLICES + 1:

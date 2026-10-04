@@ -321,8 +321,10 @@ func _update_view(delta: float) -> void:
 	var vy0 = cc.y - vp.y * z * 0.5
 	var vy1 = cc.y + vp.y * z * 0.5
 	var CHW = float(CH) * sim.grid.CELL
-	var lo = int(floor((_cx - _half - 160.0) / CHW))
-	var hi = int(floor((_cx + _half + 160.0) / CHW))
+	var lo_v = int(floor((_cx - _half - 160.0) / CHW))
+	var hi_v = int(floor((_cx + _half + 160.0) / CHW))
+	var lo = lo_v - 1          # one chunk past each side is built too (after what is in view), so a pan finds the grass already standing
+	var hi = hi_v + 1
 	var mid = int(floor(_cx / CHW))
 	_sig_t -= delta
 	var resig = _sig_t <= 0.0
@@ -333,11 +335,13 @@ func _update_view(delta: float) -> void:
 	var built := 0
 	var vis := []
 	var missing := 0
-	for ci in range(lo, hi + 1):
+	for ci in range(lo_v, hi_v + 1):
 		var e = _chunks.get(ci)
 		if e == null or e["born"][1] < 0.0:
 			missing += 1
-	var budget = 12000 if missing * 2 > hi - lo + 1 else 2500     # an empty screen fills at once; later it streams in
+	# an empty screen fills at once; grass missing anywhere in view gets a good share of the frame (a gap must not linger); the margin
+	# past the view streams in at leisure
+	var budget = 12000 if missing * 2 > hi_v - lo_v + 1 else (7000 if missing > 0 else 2500)
 	for d in range(0, max(mid - lo, hi - mid) + 1):
 		for ci in ([mid - d] if d == 0 else [mid - d, mid + d]):
 			if ci < lo or ci > hi:
@@ -371,7 +375,7 @@ func _update_view(delta: float) -> void:
 					if e["need"][c] and (built == 0 or OS.get_ticks_usec() - t0 < budget):
 						_build_row(e, ci, c, gch)
 						built += 1
-			if e != null and e["y1"] > vy0 and e["y0"] < vy1:
+			if e != null and ci >= lo_v and ci <= hi_v and e["y1"] > vy0 and e["y0"] < vy1:
 				vis.append([ci, e])
 	# snow on the grass, built once snow lies (cheap, a few pieces a frame)
 	if _snow > 0.01:
@@ -414,6 +418,10 @@ func _update_local(delta: float) -> void:
 				list.append(a)
 		for id in ant_view.sel_ids:
 			_keep[id] = true
+		# watch mode: the ant the camera follows shows too, whatever stands in front of it
+		var w = scene.watch
+		if scene.watch_mode and w != null and w._unit != null and sim.ants.has(w._unit) and not (w._unit in list):
+			list.append(w._unit)
 		var C = sim.grid.CELL
 		var pw = PW * C
 		for a in list:
@@ -426,9 +434,10 @@ func _update_local(delta: float) -> void:
 				for c in NC:
 					if _lanes[c] > ln + 0.004:
 						want[pidx * NC + c] = 1.0
-		# a boss: the rows in front of it part over its whole width, so it can always be seen
+		# a boss (and, in watch mode, the raider of the fight being shown): the rows in front of it part over its whole width
+		var shown = w.focus_enemy if (scene.watch_mode and w != null) else null
 		for e in sim.enemies:
-			if e.cls != "boss" or e.hp <= 0.0 or sim.grid.is_under(e.x, e.y):
+			if (e.cls != "boss" and e != shown) or e.hp <= 0.0 or sim.grid.is_under(e.x, e.y):
 				continue
 			var bx = (e.x + 0.5) * C
 			var half = max(120.0, EnemyDefs.height_of(e) * 1.1)
