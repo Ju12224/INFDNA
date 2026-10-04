@@ -10,6 +10,11 @@
    "file": "grass/grass_mid.png",
    "w": 3072,
    "h": 409
+  },
+  "front": {
+   "file": "grass/grass_front.png",
+   "w": 2998,
+   "h": 414
   }
  }
 }

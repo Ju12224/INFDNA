@@ -14,7 +14,7 @@ from PIL import Image
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 OUT = os.path.join(ROOT, "game", "art", "grass")
 ROWS = ["back", "mid", "front", "edge"]
-TRIM = {}        # row -> (columns off the left, off the right, rows off the bottom) where a sheet has a frame line drawn round it
+TRIM = {"front": (16, 16, 0)}        # row -> (columns off the left, off the right, rows off the bottom) where a sheet has a frame line drawn round it
 
 
 def main():
