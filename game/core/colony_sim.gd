@@ -1126,7 +1126,7 @@ func _step_bird(dt: float) -> void:
 		for a in ants:
 			if not grid.is_under(a.x, a.y) and a.shelter_t <= 0.0 and abs(a.x - bird["x"]) <= 12.0:
 				near.append(a)
-		var victims := near.slice(0, 1 if near.size() < 9 else 2)         # one ant, or two when they bunch up
+		var victims := near.slice(0, 2 if near.size() < 9 else 3)         # one ant, or two when they bunch up
 		for a in victims:
 			fx.append({"kind": "puff", "pos": ant_pos(a), "t": 0.0, "color": Color("#c9a37a")})
 			kill(a, "bird")
@@ -2824,7 +2824,7 @@ func top_genomes(n: int) -> Array:
 	for uid in counts.keys():
 		list.append({"genome": by_uid[uid], "count": counts[uid]})
 	list.sort_custom(Callable(self, "_by_count"))
-	return list.slice(0, min(n, list.size()) - 1) if list.size() > 0 else []
+	return list.slice(0, min(n, list.size()))         # Godot 4's slice end is exclusive if list.size() > 0 else []
 
 
 func _by_count(a, b) -> bool:

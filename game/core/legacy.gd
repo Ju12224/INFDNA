@@ -107,7 +107,7 @@ static func candidates(g, founder, from: String) -> Array:
 		out.append({"kind": "mods", "key": "", "value": 0.06, "label": "Veteran stock (+6% HP and attack)"})
 	for h in out:
 		h["from"] = from
-	return out.slice(0, 2)
+	return out.slice(0, 3)
 
 
 static func apply(h: Dictionary, g) -> void:

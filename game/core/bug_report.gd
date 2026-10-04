@@ -152,7 +152,7 @@ static func _log_tail(path: String) -> PackedStringArray:
 		var up = ln.to_upper()
 		if up.find("ERROR") >= 0 or up.find("WARNING") >= 0 or up.find("INFDNA") >= 0:
 			var item = ln
-			if i + 1 < lines.size() and str(lines[i + 1]).strip_edges().begins_with("At:"):
+			if i + 1 < lines.size() and str(lines[i + 1]).strip_edges().to_lower().begins_with("at:"):
 				item += "  |  " + str(lines[i + 1]).strip_edges()
 				i += 1
 			if counts.has(item):
