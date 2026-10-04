@@ -24,7 +24,6 @@
    "ink_close": "tree_mossoak_inkc.png",
    "sil": "tree_mossoak_sil.png",
    "shade": "tree_mossoak_shade.png",
-   "detail": "tree_mossoak_detail.png",
    "foot": [
     0.3805,
     0.7632
@@ -339,7 +338,6 @@
    "ink_close": "tree_acacia_inkc.png",
    "sil": "tree_acacia_sil.png",
    "shade": "tree_acacia_shade.png",
-   "detail": "tree_acacia_detail.png",
    "foot": [
     0.2101,
     0.8877
@@ -472,7 +470,6 @@
    "ink_close": "tree_grove_inkc.png",
    "sil": "tree_grove_sil.png",
    "shade": "tree_grove_shade.png",
-   "detail": "tree_grove_detail.png",
    "foot": [
     0.0,
     0.9919

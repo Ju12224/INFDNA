@@ -1622,6 +1622,8 @@ const LADEN_K = 0.93           # on open ground a forager with a load walks this
 const OUT_K = 1.08             # ... and one going out light this much faster, so a round trip takes as long as before
 const SPOIL_K = 0.95           # a digger with a dirt pellet
 const CATCH_K = 0.2            # how much faster a working ant walks while it makes up lost ground
+const HOLD_T = 0.1             # an ant that decided to stay where it is (holding a line, biting prey) thinks again after this long, not every tick
+const CLIMB_K = 0.45           # up or down the open chimney through the mound an ant climbs at this share of its running speed (it used to shoot up it)
 var _pause_req := 0.0          # a pause the deciding ant's task asked for (_on_arrive applies it once the task has chosen where to go)
 var occ := PoolIntArray()      # tunnel cells (both planes) an ant is about to enter or stands in: (taken until, in tenths of a sim second) << 12 | id & 4095
 
@@ -1663,9 +1665,9 @@ func _step_ant(a, dt: float) -> void:
 		return
 
 	# a pause: the ant stands where it is for a moment (looking about, antennae out) and decides nothing until it is over. Being bitten, being
-	# called to defend or given an order ends it at once.
+	# given an order or (but for the last HOLD_T) being called to defend ends it at once.
 	if a.t < 0.0:
-		if a.hurt > 0.0 or a.squad != 0 or a.task == Task.DEFEND or a.tx != a.x or a.ty != a.y or a.tz != a.z:
+		if a.hurt > 0.0 or a.squad != 0 or (a.task == Task.DEFEND and a.t < -HOLD_T - 0.01) or a.tx != a.x or a.ty != a.y or a.tz != a.z:
 			a.t = 0.0
 		else:
 			a.t += dt
@@ -1674,11 +1676,12 @@ func _step_ant(a, dt: float) -> void:
 			a.t = 0.0
 
 	var dist = a.hop if a.hop > 0.0 else (1.4142 if (a.tx != a.x and a.ty != a.y) else 1.0)
+	var und := false
 	if a.tx == a.x and a.ty == a.y and a.tz == a.z:
 		dist = 1.0
 		a.t = 1.0
 	else:
-		var und = grid.is_under(a.x, a.y)
+		und = grid.is_under(a.x, a.y)
 		var sp = a.ph["speed"] * (a.ph["tunnel_mult"] if und else SURFACE_K * _s_walk)
 		if surge_t > 0.0 and not und:
 			sp *= 1.45 + 0.3 * mod("surge_power")
@@ -1687,8 +1690,15 @@ func _step_ant(a, dt: float) -> void:
 			sp *= LADEN_K if a.carry > 0.0 else OUT_K
 		elif a.spoil > 0.0:
 			sp *= SPOIL_K
-		# getting up to speed: the mean of the ramp over this tick, so the step size does not change how far an ant gets. The ground lost is owed
-		# (not by nurses, whose walking gets nothing done) and made up at full speed.
+		var climb = not und and a.tx == a.x and a.ty != a.y
+		if climb:
+			var lost = sp * (1.0 - CLIMB_K)
+			sp -= lost
+			if a.task != Task.NURSE:
+				var dg = a.scout
+				a.scout = (dg & 4095) | (int(min(4095, ((dg >> Loco.DEBT_SHIFT) & 4095) + int(lost * dt * 64.0 + 0.5))) << Loco.DEBT_SHIFT)
+		# getting up to speed: the mean of the ramp over this tick, so the step size does not change how far an ant gets. The ground lost (here and
+		# on a climb) is owed, but not by nurses, whose walking gets nothing done; it is made up at full speed on the level.
 		var gait = a.scout
 		var r0i = (gait >> Loco.RAMP_SHIFT) & 255
 		if r0i < 255:
@@ -1705,7 +1715,7 @@ func _step_ant(a, dt: float) -> void:
 				debt = int(min(4095, debt + int(sp * dt * (1.0 - fac) * 64.0 + 0.5)))
 			sp *= fac
 			a.scout = (gait & Loco.DIR_MASK) | (int(r1 * 255.0) << Loco.RAMP_SHIFT) | (debt << Loco.DEBT_SHIFT)
-		elif gait >= (1 << Loco.DEBT_SHIFT):
+		elif gait >= (1 << Loco.DEBT_SHIFT) and not climb:
 			var debt2 = (gait >> Loco.DEBT_SHIFT) & 4095
 			var extra = sp * CATCH_K * clamp(debt2 / 128.0, 0.25, 1.0)     # eases off over the last two cells owed
 			debt2 = int(max(0, debt2 - max(1, int(extra * dt * 64.0 + 0.5))))
@@ -1748,10 +1758,12 @@ func _step_ant(a, dt: float) -> void:
 		if (moved or a.tz != a.z) and a.dig_timer <= 0.0:
 			dist = a.hop if a.hop > 0.0 else (1.4142 if (a.tx != a.x and a.ty != a.y) else 1.0)
 			a.t = min(over / dist, 1.6)
-			if occ.size() == grid.PLANES * grid.WH:
+			if und and occ.size() == grid.PLANES * grid.WH:
 				_mark_step(a)
 		else:
 			a.scout = a.scout & Loco.NO_RAMP      # standing: it will set off slowly
+			if a.dig_timer <= 0.0 and a.squad == 0 and a.tx == a.x and a.ty == a.y and a.tz == a.z:
+				a.t = -HOLD_T
 			break
 
 
@@ -1764,35 +1776,70 @@ func _orient(a) -> void:
 	var my = a.ty - a.y
 	var f = a.facing
 	var th = a.trot
-	if grid.is_surface_cell(a.tx, a.ty):
+	var g = grid
+	var W = g.W
+	var xl = a.tx - g.ox
+	var deep = xl >= 1 and xl < W - 1 and a.ty >= 2 and a.ty < g.H - 1 and g.under[a.ty * W + xl] == 1 and g.under[(a.ty - 1) * W + xl] == 1
+	if not deep and g.is_surface_cell(a.tx, a.ty):
 		if abs(my) <= abs(mx):
-			th = grid.surface_tilt(a.tx)
+			th = g.surface_tilt(a.tx)
 			f = 1 if mx > 0 else -1
 		else:
 			th = atan2(f * my, f * mx)
 	else:
-		# the rock round the cell behind, this cell and the next together: one odd cell at a bend no longer turns the ant over and back
-		var n = _floor_dir(a.tx, a.ty, a.tz)
-		var roof = -2.0                 # how much more rock above than below makes a real roof
-		if a.tz == a.z:
-			n += _floor_dir(a.x, a.y, a.z)
+		# the rock round the cell behind, this cell and the next together (so one odd cell at a bend does not turn the ant over and back):
+		# nx, ny the sum of the offsets of the solid cells round them (the ground normal), nc how many there are
+		var s = g.solid
+		var WH = g.WH
+		var nx := 0
+		var ny := 0
+		var nc := 0
+		var roof := 0.0                 # how much more rock above than below makes a real roof (2 per cell counted)
+		var lc = a.scout & Loco.DIR_MASK
+		for k in 3:
+			var cx = a.tx
+			var cy = a.ty
+			var cz = a.tz
+			if k == 1:
+				if a.tz != a.z:
+					break
+				cx = a.x
+				cy = a.y
+				cz = a.z
+			elif k == 2:
+				if lc < 1 or lc > 8:
+					break
+				cx = a.x - Loco.OX[lc - 1]
+				cy = a.y - Loco.OY[lc - 1]
+				cz = a.z
+			var cl = cx - g.ox
+			if cl < 1 or cl >= W - 1 or cy < 1 or cy >= g.H - 1:
+				continue
+			var b = cz * WH + cy * W + cl
+			var ul = s[b - W - 1]
+			var u = s[b - W]
+			var ur = s[b - W + 1]
+			var l = s[b - 1]
+			var r = s[b + 1]
+			var dl = s[b + W - 1]
+			var dd = s[b + W]
+			var dr = s[b + W + 1]
+			nx += ur + r + dr - ul - l - dl
+			ny += dl + dd + dr - ul - u - ur
+			nc += ul + u + ur + l + r + dl + dd + dr
 			roof -= 2.0
-			var lc = a.scout & Loco.DIR_MASK
-			if lc >= 1 and lc <= 8:
-				n += _floor_dir(a.x - Loco.OX[lc - 1], a.y - Loco.OY[lc - 1], a.z)
-				roof -= 2.0
-		var nl = n.x * n.x + n.y * n.y
-		var along = nl * 3.0 < n.z or nl <= 0.0
+		var nl = nx * nx + ny * ny
+		var along = nl * 3 < nc or nl == 0
 		if not along:
-			th = atan2(-n.x, n.y)
-			if grid.is_solid(a.tx, a.ty + 1, a.tz) or grid.is_solid(a.x, a.y + 1, a.z):
+			th = atan2(-nx, ny)
+			if g.is_solid(a.tx, a.ty + 1, a.tz) or g.is_solid(a.x, a.y + 1, a.z):
 				th = clamp(th, -1.1, 1.1)       # a floor under the feet wins (a ceiling cell must not turn it upside down)
-			elif abs(th) > 2.0 and mx != 0 and abs(a.trot) <= 2.0 and (n.y > roof or abs(n.x) > -n.y):
+			elif abs(th) > 2.0 and mx != 0 and abs(a.trot) <= 2.0 and (ny > roof or abs(nx) > -ny):
 				along = true                    # it turns upside down only under a real roof (round an overhang at a bend it stays upright),
 				                                # and once on a roof it stays there until the roof ends
 			if not along:
 				var d = mx * cos(th) + my * sin(th)
-				if abs(d) > 0.35 * sqrt(mx * mx + my * my):
+				if d * d > 0.1225 * (mx * mx + my * my):
 					f = 1 if d > 0 else -1
 		if along:
 			if abs(mx) >= abs(my) and mx * f < 0:
@@ -1800,30 +1847,6 @@ func _orient(a) -> void:
 			th = atan2(f * my, f * mx)
 	a.trot = th
 	a.facing = f
-
-
-# Solid cells round (x, y) in plane z: (sum of their offsets x, y; how many) - the raw ground normal and how boxed in the cell is.
-func _floor_dir(x: int, y: int, z: int) -> Vector3:
-	var g = grid
-	var xl = x - g.ox
-	if xl >= 1 and xl < g.W - 1 and y >= 1 and y < g.H - 1:
-		var s = g.solid
-		var W = g.W
-		var b = z * g.WH + y * W + xl
-		var ul = s[b - W - 1]
-		var u = s[b - W]
-		var ur = s[b - W + 1]
-		var l = s[b - 1]
-		var r = s[b + 1]
-		var dl = s[b + W - 1]
-		var dd = s[b + W]
-		var dr = s[b + W + 1]
-		return Vector3(ur + r + dr - ul - l - dl, dl + dd + dr - ul - u - ur, ul + u + ur + l + r + dl + dd + dr)
-	var n = Vector3.ZERO
-	for i in 8:
-		if g.is_solid(x + Loco.OX[i], y + Loco.OY[i], z):
-			n += Vector3(Loco.OX[i], Loco.OY[i], 1)
-	return n
 
 
 # Crowding in the tunnels. An ant marks the cell it is about to enter as taken by it for a moment (or the cell it stands in, for as long as it stands);
@@ -1885,8 +1908,11 @@ func _on_arrive(a) -> void:
 	_pause_req = 0.0
 	if not grid.is_under(a.x, a.y):
 		a.lane = clamp(a.lane + rng.randf_range(-0.02, 0.02), 0.0, 1.0)      # small steps: ants hop 18 cells a second now, and big ones made them shimmer
-		if a.task == Task.FORAGE and grid.pher_at(a.x) > 0.8:
-			a.lane = lerp(a.lane, 0.68 if a.carry > 0.0 else 0.32, 0.12)   # two-lane trail: laden ants on one side
+		if a.task == Task.FORAGE:
+			var ph = grid.pher_at(a.x)
+			if ph > 0.3:
+				# two-lane trail, the clearer the stronger the trail: laden ants on one side, ants going out on the other, each a little apart
+				a.lane = lerp(a.lane, (0.68 if a.carry > 0.0 else 0.32) + (a.id % 5 - 2) * 0.025, 0.12 * min(1.0, ph / 0.8))
 	# lost footing (terrain changed, or the ant ended up in open space): grab the
 	# nearest foothold, otherwise fall one cell
 	if not grid.can_walk(a.x, a.y, a.z):
@@ -1930,7 +1956,7 @@ func _on_arrive(a) -> void:
 		_pause_req = max(_pause_req, rng.randf_range(0.25, 0.5))
 	elif a.task != task0:
 		_pause_req = max(_pause_req, rng.randf_range(0.15, 0.4))
-	elif a.task == Task.FORAGE and a.carry <= 0.0 and a.ty < a.y and grid.is_under(a.x, a.y) and not grid.is_under(a.tx, a.ty) and rng.randf() < 0.4:
+	elif a.task == Task.FORAGE and a.carry <= 0.0 and a.ty < a.y and not grid.is_under(a.tx, a.ty) and grid.is_under(a.x, a.y) and rng.randf() < 0.4:
 		_pause_req = max(_pause_req, rng.randf_range(0.2, 0.35))
 	if _pause_req > 0.0:
 		_pause(a, _pause_req)

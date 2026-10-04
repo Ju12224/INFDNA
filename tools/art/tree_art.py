@@ -347,11 +347,11 @@ def _lic(theta, valid, noise, steps=18, h=1.4):
 PRESETS = {
     # how much of each close-up effect a kind of picture gets: dome = light on the leaf clumps, cyl = rounded bark, bark = furrows and cracks, moss, tufts = leaves
     # on the clump rims, canopy = the crown's shadow on the bark, base = dark where it meets the ground. The oaks are plain and want all of it; the others
-    # are already painted with their own bark and leaf texture, so they only get light, shadow and a few leaves.
+    # are already painted with their own bark and leaf texture, so they only get light and shadow (and no detail layer at all).
     "oak": dict(dome=0.8, cyl=0.9, bark=1.0, moss=0.8, tufts=1.0, canopy=1.0, base=1.0),
-    "moss": dict(dome=0.3, cyl=0.3, bark=0.0, moss=0.0, tufts=0.3, canopy=0.5, base=1.0),
-    "acacia": dict(dome=0.3, cyl=0.35, bark=0.0, moss=0.0, tufts=0.25, canopy=0.45, base=1.0),
-    "grove": dict(dome=0.3, cyl=0.35, bark=0.0, moss=0.0, tufts=0.25, canopy=0.45, base=1.0),
+    "moss": dict(dome=0.3, cyl=0.3, bark=0.0, moss=0.0, tufts=0.0, canopy=0.5, base=1.0),
+    "acacia": dict(dome=0.3, cyl=0.35, bark=0.0, moss=0.0, tufts=0.0, canopy=0.45, base=1.0),
+    "grove": dict(dome=0.3, cyl=0.35, bark=0.0, moss=0.0, tufts=0.0, canopy=0.45, base=1.0),
     "spruce": dict(dome=0.0, cyl=0.3, bark=0.0, moss=0.0, tufts=0.0, canopy=0.0, base=1.0),
     "stump": dict(dome=0.0, cyl=0.35, bark=0.0, moss=0.0, tufts=0.0, canopy=0.0, base=1.0),
     "log": dict(dome=0.0, cyl=0.3, bark=0.0, moss=0.0, tufts=0.0, canopy=0.0, base=0.8),

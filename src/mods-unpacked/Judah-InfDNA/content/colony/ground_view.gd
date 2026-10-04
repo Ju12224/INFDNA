@@ -22,7 +22,7 @@ const CLOSE_DETAIL_HI = 0.95
 const SHADE_FAR = 0.3         # the share of the soft light and shadow that stays on a tree seen from afar
 const SWAY_Z = 0.95           # at and below this zoom the clumps of a canopy move each their own way (beyond it the whole tree bends as one)
 const SWAY_N = 6              # the canopy moves on a (SWAY_N + 1)^2 grid of points (the manifest's `sway` says how much each one is leaf)
-const FOG_K = 0.14            # depth fog on the trees: the share of haze on the farthest (trees stand in lanes 0.1 to 0.45; less close up, where it would wash out the detail)
+const FOG_K = 0.1             # depth fog on the trees: the share of haze on the farthest (trees stand in lanes 0.1 to 0.45; less close up, where it would wash out the detail)
 const FOG_COL = Color(0.8, 0.87, 0.91)
 const LEAF_Z = 1.05           # falling leaves are drawn at and below this zoom
 const DEPTH = 128.0          # thickness of the walkable band, px
@@ -1047,7 +1047,6 @@ func _scenery_add(spr: Array, shade, kind: String, col: int, c0: int, sy: PoolRe
 	if list.empty():
 		return false
 	var snow = float(_P["snow"])
-	var ph = Seasons.phase(day.sea_t) if day != null else 0.3
 	var hs = MK.hash1(col * 2.71 + 11.0)
 	if kind == "shroom" and snow > 0.3:
 		return false                                   # no mushrooms in winter
