@@ -204,6 +204,9 @@ func _strip_for(n: int) -> Texture2D:
 
 
 func _draw_row(it: Node2D, n: int) -> void:
+	if n == 1 and Band.cover_n() < FILL_TO:
+		_cover_rows(it, true)                   # the cover row's own foot, carried on under the soil (see _draw_cover)
+		return
 	if float(n) <= Band.cover_n():
 		return                                  # the cover row stands here or in front of it
 	var lane = Band.lane_of(n)
@@ -251,9 +254,15 @@ func _cover_k() -> float:
 	return clamp((Band.cover_n() - 1.0) / COVER_SPAN, 0.0, 1.0)
 
 
-# The cover row on the cut; below it, more rows of the same strip, nearer, bigger and darker, down to the bottom of the screen once
-# the cut is FILL_TO lanes in (before that only down to the soil's top line, so no sky shows where the cut lanes were).
+# The cover row on the cut; below it, more rows of the same strip, nearer, bigger and darker, filling the screen down to its bottom
+# once the cut is FILL_TO lanes in. Before that it stops just above the soil's top line (whose ink outline stays in sight, and a nest
+# mouth stays open for the ants climbing out), and the same row carries on under the soil in the front lane (under = true, from
+# _draw_row), down into any hole a little, so no sky shows where the cut lanes were.
 func _draw_cover(it: Node2D) -> void:
+	_cover_rows(it, false)
+
+
+func _cover_rows(it: Node2D, under: bool) -> void:
 	var tex: Texture2D = _strips.get("front")
 	if tex == null:
 		return
@@ -266,21 +275,26 @@ func _draw_cover(it: Node2D) -> void:
 	var view = colony.view_rect(0.0)
 	var step = max(6.0, STEP_PX / colony.zoom())
 	var x0 = floor((view.position.x - step) / step) * step
-	var w = tex.get_width() * h / tex.get_height()
 	var lines := PackedFloat32Array()
 	var bottoms := PackedFloat32Array()
 	var x = x0
 	while x <= view.end.x + step:
 		var gy = ground_y(x, COVER_SMOOTH)
-		lines.append(Band.lane_y(gy, lane))
-		var lip = min(_lip(x), gy + HOLE_REACH) + 2.0
-		bottoms.append(lerp(lip, view.end.y + 8.0, fill))
+		var line = Band.lane_y(gy, lane)
+		lines.append(line)
+		var lip = _lip(x)
+		if under:
+			bottoms.append(max(min(lip, gy + HOLE_REACH) + 2.0, line + ROW_SINK * h))
+		else:
+			bottoms.append(lerp(min(lip, gy) - 1.0, view.end.y + 8.0, fill))
 		x += step
 	# the cover row, then rows nearer the camera than it (lower, in front of it), while any of them shows above the bottom
 	var rows := [[0.0, h, 1.0, 0.11]]
 	var gap = 0.5 * h
 	var y = 0.0
 	for i in range(1, 5):
+		if under:
+			break
 		y += gap * (1.0 + 0.25 * i)
 		var any := false
 		for j in lines.size():
@@ -302,13 +316,14 @@ func _draw_cover(it: Node2D) -> void:
 		for j in lines.size():
 			var xx = x0 + j * step
 			var line = lines[j] + r[0]
+			var top = line - (1.0 - ROW_SINK) * hh
 			var b = bottoms[j]
 			var foot = min(line + ROW_SINK * hh, b)
 			var u = xx / ww + r[3]
-			pts.append(Vector2(xx, min(line - (1.0 - ROW_SINK) * hh, foot)))
+			pts.append(Vector2(xx, min(top, foot)))
 			pts.append(Vector2(xx, foot))
 			uvs.append(Vector2(u, V0))
-			uvs.append(Vector2(u, lerp(V0, V1, clamp((foot - (line - (1.0 - ROW_SINK) * hh)) / hh, 0.0, 1.0))))
+			uvs.append(Vector2(u, lerp(V0, V1, clamp((foot - top) / hh, 0.0, 1.0))))
 			# its solid foot, stretched down to the bottom where the row ends above it
 			bot.append(Vector2(xx, foot))
 			bot.append(Vector2(xx, max(b, foot)))

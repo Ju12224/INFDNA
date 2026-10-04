@@ -17,8 +17,8 @@ const WorldGrid = preload("res://core/world_grid.gd")
 
 const RAIN_MAX = 150          # streaks at full rain
 const FLAKE_MAX = 110         # flakes at full snowfall
-const LEAVES_PER_TREE = 22
-const LEAVES_MAX = 70
+const LEAVES_PER_TREE = 70    # at most, for the biggest crowns
+const LEAVES_MAX = 90
 const SLANT = 0.45            # radians from straight down: how the owner's streaks lean (they fall toward the lower left)
 const FALL = 0.8              # share of a streak's lap spent falling; the rest is its splash
 const RAIN_LEN = 80.0         # screen px height of the nearest streak at zoom 1
@@ -28,7 +28,7 @@ const SNOW_W = 150.0          # world px width of a lying-snow piece in the fron
 const SNOW_LIMIT = 12         # pieces per lane at most: zoomed out they grow instead of multiplying
 const PUDDLE_W = 120.0
 const PUDDLE_SPAN = 340.0     # world px between puddle slots (a lane's x axis)
-const LEAF_W = 24.0
+const LEAF_W = 34.0
 const TREE_MARGIN = 420.0     # world px past the screen whose trees still shed leaves into it
 const TREES_FALLBACK = [[0.30, "oak1", 0.88], [0.58, "oak2", 0.88], [0.68, "mossoak", 0.55], [0.76, "acacia", 0.4], [0.82, "grove", 0.5],
 	[0.93, "spruce", 0.95], [0.97, "stump", 0.38], [1.0, "log", 0.16]]
@@ -55,7 +55,9 @@ var _trees_x := -1e9
 var _trees_age := 99.0
 var _pick := TREES_FALLBACK
 var _tree_defs := {}
-var sprites := 0              # drawn this frame (tests look at it)
+var sprites := 0              # drawn this frame (tests look at it), and the script time it took, in microseconds
+var air_us := 0
+var lane_us := 0
 
 
 func _ready() -> void:
@@ -108,6 +110,7 @@ func _process(delta: float) -> void:
 		return
 	_t += delta
 	_trees_age += delta
+	lane_us = 0
 	_surf = colony.views.get("surface")
 	_has_lane_ground = _surf != null and _surf.has_method("lane_ground")
 	_wind_at(_t)
@@ -138,6 +141,7 @@ func _zscale(p: float, lo: float, hi: float) -> float:
 
 func _draw() -> void:
 	sprites = 0
+	var t0 = Time.get_ticks_usec()
 	if colony == null or colony.sim == null:
 		return
 	var view: Rect2 = colony.view_rect(0.0)
@@ -150,6 +154,7 @@ func _draw() -> void:
 			_rain(view, col)
 	if _leaf_rate > 0.01 and not _leaf_tex.is_empty():
 		_leaves(view)
+	air_us = Time.get_ticks_usec() - t0
 
 
 # ---- rain ------------------------------------------------------------------------------------------------------------------------
@@ -320,7 +325,7 @@ func _leaves(view: Rect2) -> void:
 		var pers = Band.persp(lane)
 		var base_y = Band.lane_y(tr["gy"], lane)
 		var sd: float = tr["seed"]
-		for k in LEAVES_PER_TREE:
+		for k in clampi(int(cr.size.x * 0.06), 10, LEAVES_PER_TREE):
 			var key = sd * 1.37 + k * 5.71
 			var period = 16.0 + 8.0 * _h(key, 1.0)
 			var ph = _t / period + _h(key, 2.0)
@@ -334,7 +339,7 @@ func _leaves(view: Rect2) -> void:
 			var dist = base_y - sy
 			if dist < 4.0:
 				continue
-			var spd = (42.0 + 26.0 * _h(q, 6.0)) * pers
+			var spd = maxf((60.0 + 40.0 * _h(q, 6.0)) * (0.5 + 0.5 * pers), dist / (period - 3.0))
 			var fall_t = dist / spd
 			var t0 = period - 3.0 - fall_t                  # it hangs on until here, then lets go
 			var tf = tl - maxf(t0, 0.0)
@@ -373,6 +378,7 @@ func _leaves(view: Rect2) -> void:
 func draw_lane(it: CanvasItem, n: int) -> void:
 	if colony == null or colony.sim == null:
 		return
+	var t0 = Time.get_ticks_usec()
 	var d = colony.day
 	var lane = Band.lane_of(float(n))
 	var la = Band.lane_alpha(lane)
@@ -386,6 +392,7 @@ func draw_lane(it: CanvasItem, n: int) -> void:
 	if pw > 0.04 and d.season != 3 and _puddle != null:
 		_puddles(it, n, lane, la, pw)
 	it.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	lane_us += Time.get_ticks_usec() - t0
 
 
 func _lane_ground(px: float, n: int, lane: float) -> float:
