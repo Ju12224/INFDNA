@@ -11,9 +11,10 @@ const WF = preload("res://core/world_features.gd")
 const WorldGrid = preload("res://core/world_grid.gd")
 
 const C = WorldGrid.CELL
-# grass rows: [strip, lane, height in world px at the front, brightness, share of its height sunk below its lane's ground line]
-# (the front row reaches well down behind the soil's top edge, so no sky shows through where the ground dips)
-const ROWS = [["back", 0.04, 100.0, 0.74, 0.08], ["mid", 0.5, 92.0, 0.88, 0.1], ["front", 1.0, 84.0, 1.0, 0.45]]
+# grass rows: [strip, lane, height in world px at the front, brightness, share of its height sunk below its lane's ground line,
+# columns of ground smoothing]. A short fringe, not a wall: an ant (about 40 px) stays in sight above it. The front row reaches down
+# behind the soil's top edge and follows it closely, so no sky shows where the ground dips.
+const ROWS = [["back", 0.0, 64.0, 0.72, 0.15, 6], ["front", 1.0, 34.0, 1.0, 0.4, 1]]
 const RIBBON_STEP = 12.0       # world px between the points of a grass row's outline
 const SMOOTH = 2               # columns either side averaged into the ground height
 const MARGIN = 500.0           # world px past the screen edges that are still drawn (trees are wide)
@@ -70,17 +71,17 @@ func _draw() -> void:
 
 
 # The ground's top at world x (px), smoothed over a few columns: the spoil mound counts, dug holes do not.
-func ground_y(px: float) -> float:
+func ground_y(px: float, smooth: int = SMOOTH) -> float:
 	var g = colony.grid
 	var cx = px / C - 0.5
 	var c0 = int(floor(cx))
 	var f = cx - c0
 	var a := 0.0
 	var b := 0.0
-	for d in range(-SMOOTH, SMOOTH + 1):
+	for d in range(-smooth, smooth + 1):
 		a += min(g.surf_y(c0 + d), g.base_y(c0 + d))          # a hole (the nest's mouth) does not pull the meadow down; a mound lifts it
 		b += min(g.surf_y(c0 + 1 + d), g.base_y(c0 + 1 + d))
-	return lerp(a, b, f) / (2 * SMOOTH + 1) * C
+	return lerp(a, b, f) / (2 * smooth + 1) * C
 
 
 func _lane_tint(lane: float, bright: float = 1.0) -> Color:
@@ -102,7 +103,7 @@ func _draw_row(r: Array, view: Rect2) -> void:
 	var uv_bottom := PackedVector2Array()
 	var x = floor(view.position.x / RIBBON_STEP) * RIBBON_STEP
 	while x <= view.end.x + RIBBON_STEP:
-		var by = Band.lane_y(ground_y(x), lane) + e[4] * h       # the strip's solid foot sinks into the ground
+		var by = Band.lane_y(ground_y(x, e[5]), lane) + e[4] * h  # the strip's solid foot sinks into the ground
 		var u = x / w
 		top.append(Vector2(x, by - h))
 		bottom.append(Vector2(x, by))

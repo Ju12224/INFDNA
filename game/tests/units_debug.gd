@@ -41,10 +41,20 @@ func _init() -> void:
 	root.add_child(_node)
 
 
+var _t0 := 0
+
+
 func _process(_delta: float) -> bool:
 	_frames += 1
+	if _frames == 2:
+		_t0 = Time.get_ticks_usec()
+		print("ants ", _node.sim.ants.size())
+	if _frames == int(_args["frames"]) - 1 and _args.has("bench"):
+		print("avg frame ms ", (Time.get_ticks_usec() - _t0) / 1000.0 / (_frames - 2))
 	if _frames == 1:
 		_node.debug_setup(_args)
+		if _args.has("nounits"):
+			_node.views["units"].queue_free()
 		if _args.get("o", "0") == "1":
 			var o = Overlay.new()
 			o.colony = _node

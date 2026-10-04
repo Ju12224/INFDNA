@@ -4,7 +4,7 @@ extends RefCounted
 # lip (the soil's top line). The trees, rocks, grass rows and surface ants all place themselves with these, so they agree.
 # (The sim keeps one row of surface cells; lanes are only how the views spread things out.)
 
-const DEPTH = 192.0      # depth of the band, world px
+const DEPTH = 44.0       # depth of the band, world px: shallow, so the ground reads as one line the colony walks on
 const LANE_K = 0.9       # a thing in lane l stands (1 - l) * DEPTH * LANE_K above the front lip
 
 

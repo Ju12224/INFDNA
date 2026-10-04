@@ -9,6 +9,7 @@ extends Node2D
 # and the picture's 'feet' point goes there. a.facing flips the picture (rot is already worked out for the flipped body). Underground
 # ants stand flat in the cross-section; ants in the back plane are smaller and dimmer, and ghosted where front dirt hides them. On the
 # surface every ant walks in a lane of the meadow band (band.gd): lifted, smaller and hazier toward the back, in the daylight tint.
+# Sizes and the colour (the drab kit tinted by the genome's colour) are the old view's.
 
 const Art = preload("res://scene/art.gd")
 const Band = preload("res://scene/band.gd")
@@ -218,5 +219,6 @@ func _draw_queen(vr: Rect2, far: float) -> void:
 	var feet = Vector2((cx + 0.5) * C - b["mid"] * s, y * C)
 	if not vr.has_point(feet):
 		return
+	var hurt = Color.WHITE.lerp(HURT, clamp(sim.queen_flash / QUEEN_HURT_T, 0.0, 1.0))
 	draw_set_transform(feet, 0.0, Vector2(s, s))
-	draw_texture(b["tex"], -b["feet"], _tint(sim.queen_genome.color) * Color.WHITE.lerp(HURT, clamp(sim.queen_flash / QUEEN_HURT_T, 0.0, 1.0)))
+	draw_texture(b["tex"], -b["feet"], _tint(sim.queen_genome.color) * hurt)

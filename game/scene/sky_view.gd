@@ -29,7 +29,7 @@ const CLOUD_SCROLL = 0.02    # clouds drift with the wind and barely with the ca
 var colony
 var _stars := []             # [x 0..1, y 0..1, size px, twinkle phase, picture]
 var _clouds := []            # [picture, x (screen px at t = 0), height 0..1 of the sky, scale, speed px/s]
-var _hills := []             # [picture, entry of HILLS]
+var _hills := []             # [picture, entry of HILLS, colour of its bottom rows]
 var _t := 0.0
 
 
@@ -54,7 +54,8 @@ func _ready() -> void:
 	for h in HILLS:
 		var e = man.get("hills", {}).get(h[0])
 		if e != null:
-			_hills.append([Art.tex(e["file"]), h])
+			var tex = Art.tex(e["file"])
+			_hills.append([tex, h, _bottom_colour(tex)])
 
 
 func _process(delta: float) -> void:
@@ -116,6 +117,27 @@ func _draw() -> void:
 		while x < vs.x:
 			draw_texture_rect(tex, Rect2(Vector2(x, bottom - size.y), size + Vector2(1, 0)), false, day.tint)
 			x += size.x
+		if bottom < vs.y:
+			# below the strip its own ground carries on, so a dip in the meadow never shows the sky
+			draw_rect(Rect2(0, bottom - 1.0, vs.x, vs.y - bottom + 1.0), h[2] * day.tint)
+
+
+# The average colour of a picture's bottom rows (where a hill strip meets the ground).
+static func _bottom_colour(tex: Texture2D) -> Color:
+	var img = tex.get_image()
+	if img == null:
+		return Color(0.2, 0.3, 0.22)
+	if img.is_compressed():
+		img.decompress()
+	var r := Color(0, 0, 0, 0)
+	var n := 0
+	for y in range(img.get_height() - 4, img.get_height()):
+		for x in range(0, img.get_width(), 7):
+			var c = img.get_pixel(x, y)
+			if c.a > 0.5:
+				r += c
+				n += 1
+	return Color(r.r / n, r.g / n, r.b / n, 1.0) if n > 0 else Color(0.2, 0.3, 0.22)
 
 
 # Where something on the sky arc is when it is u of the way across (0 = rising at the left, 1 = setting at the right).
