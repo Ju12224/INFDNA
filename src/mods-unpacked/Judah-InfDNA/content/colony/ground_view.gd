@@ -364,6 +364,8 @@ func _draw_sprite(ci: CanvasItem, sp: Dictionary, xf: Transform2D) -> void:
 # clump its own way; farther out the whole tree bends as one. z is the camera zoom (below 1 is a magnified view).
 func _draw_tree(ci: CanvasItem, sp: Dictionary, by: float, z: float, sway: float, gust: float) -> void:
 	var mod: Color = sp["mod"]
+	if day != null and day.snow > 0.01:
+		mod = mod.linear_interpolate(Color(0.86, 0.9, 0.97, mod.a), 0.3 * day.snow)     # frost
 	var layers := []
 	layers.append([sp["base"], mod])
 	if sp.has("looks") and day != null:
@@ -372,7 +374,7 @@ func _draw_tree(ci: CanvasItem, sp: Dictionary, by: float, z: float, sway: float
 			var ts = _lazy(sp, "spring", false)
 			if ts != null:
 				layers.append([ts, Color(mod.r, mod.g, mod.b, spring)])
-		var au = day.autumn
+		var au = max(day.autumn, 1.0 - day.leaf)       # the dry autumn look stays on through winter (there is no bare picture yet)
 		if au > 0.02:
 			var ta = _lazy(sp, sp["autumn"], false)
 			if ta != null:
@@ -586,8 +588,6 @@ func _tree_sprite(f: Dictionary):
 	var lane: float = f["lane"]
 	var sc = persp(lane)
 	var leafy = bool(def["leafy"])
-	if leafy and float(_P["leaf"]) < 0.12 + 0.55 * MK.hash1(sd + 98.0):
-		return null                     # this tree has dropped its leaves: the game's own bare tree stands here
 	var base = lib.tex_mip(str(def["looks"]["summer"]))
 	if base == null:
 		return null
@@ -1297,231 +1297,9 @@ func _tree(f: Dictionary) -> Dictionary:
 	var drawn = _tree_sprite(f)
 	if drawn != null:
 		return drawn
-	var mk = MK.new()
-	var sh = MK.new()
-	var lane: float = f["lane"]
-	var sc = persp(lane)
-	var w: float = f["w"] * sc
-	var h: float = f["h"] * sc
-	var sd: float = f["seed"]
+	# every tree is one of the owner's pictures; without its picture (art missing) nothing stands here
 	var b = _base_point(f)
-	var bark = hz(Color("#6a4b32"), lane)
-	var bark_d = bark.darkened(0.42)
-	var bark_m = bark.darkened(0.18)
-	var bark_l = hz(Color("#8c6139"), lane)
-	var bark_h = hz(Color("#b98650"), lane)
-	var n = 22
-	var top_y = h * 0.6
-	var lean = (MK.hash1(sd + 3.0) - 0.5) * w * 1.6
-	var pts := PoolVector2Array()
-	var wid := PoolRealArray()
-	var wink := PoolRealArray()
-	for i in n + 1:
-		var t = float(i) / n
-		pts.append(b + Vector2(lean * t * t + sin(t * 3.4 + sd) * w * 0.12 * t + sin(t * 9.0 + sd * 2.0) * w * 0.025, -top_y * t))
-		var ww = w * (1.0 - 0.58 * t) + w * 0.9 * pow(1.0 - t, 5.0)
-		wid.append(ww)
-		wink.append(ww + 12.0)
-	# branches go behind the trunk, so they grow out of its sides instead of being drawn across it. Slim, tapering to a point, forking into
-	# twigs that fork again: a bare tree in winter has to look like a tree, not a thorn bush. The trunk itself ends in three limbs.
-	var ends := []
-	var snow_k = float(_P["snow"])
-	for k in 8:
-		var t0 = 0.36 + 0.07 * k
-		var idx = int(t0 * n)
-		var dir = 1.0 if k % 2 == 0 else -1.0
-		var ln = h * (0.14 + 0.14 * MK.hash1(sd + k * 5.0))
-		var ang = -PI * 0.5 + dir * (0.5 + 0.55 * MK.hash1(sd + k * 7.0))
-		_limb(mk, pts[idx], ang, ln, wid[idx] * 0.3, 2, sd + k * 11.0, bark_m, bark_d, snow_k, ends)
-	mk.ribbon(pts, wink, INK)
-	# the trunk in five vertical bands, shaded left to right (the sun is on the right)
-	var band_cols = [bark_d, bark_m, bark, bark_l, bark_h]
-	for bi in 5:
-		var u0 = -0.5 + float(bi) / 5.0
-		var u1 = u0 + 0.2
-		for i in n:
-			var n0 = Vector2(1, 0)
-			var a0 = pts[i] + n0 * wid[i] * u0
-			var a1 = pts[i] + n0 * wid[i] * u1
-			var c0 = pts[i + 1] + n0 * wid[i + 1] * u0
-			var c1 = pts[i + 1] + n0 * wid[i + 1] * u1
-			mk.quad(a0, a1, c1, c0, band_cols[bi])
-	# bark: grooves, ridges, knots and a little moss on the shaded base
-	for k in 9:
-		var pg := PoolVector2Array()
-		var wg := PoolRealArray()
-		var off = (k / 8.0 - 0.5) * 0.86
-		var t0 = 0.02 + 0.3 * MK.hash1(sd + k * 1.7)
-		var t1 = min(1.0, t0 + 0.4 + 0.5 * MK.hash1(sd + k * 2.9))
-		for i in range(int(t0 * n), int(t1 * n) + 1):
-			var t2 = float(i) / n
-			pg.append(pts[i] + Vector2(wid[i] * off + sin(t2 * 11.0 + k * 1.7) * 3.0, 0))
-			wg.append(3.0 + 1.5 * (1.0 - t2))
-		if pg.size() > 1:
-			mk.ribbon(pg, wg, Color(0.1, 0.07, 0.05, 0.45))
-	for k in 16:
-		var ti = int((0.05 + 0.85 * MK.hash1(sd + k * 4.1)) * n)
-		var u = (MK.hash1(sd + k * 6.3) - 0.5) * 0.7
-		var kp = pts[ti] + Vector2(wid[ti] * u, 0)
-		if k % 8 == 0:
-			var kr = wid[ti] * 0.034 + 2.6
-			mk.ellipse(kp, kr * 1.5, kr * 2.0, Color(bark_d.r, bark_d.g, bark_d.b, 0.8), 12)
-			mk.ellipse(kp + Vector2(kr * 0.1, kr * 0.25), kr * 0.85, kr * 1.3, Color(0.07, 0.045, 0.03, 0.7), 12)
-		else:
-			var rr := PoolVector2Array([kp + Vector2(-wid[ti] * 0.1, 2), kp + Vector2(0, -1.5), kp + Vector2(wid[ti] * 0.1, 2)])
-			mk.ribbon(rr, PoolRealArray([2.5, 3.2, 2.5]), Color(0.1, 0.07, 0.05, 0.4))
-	for k in 6:
-		var mt = 0.01 + 0.12 * MK.hash1(sd + 30.0 + k)
-		var mi = int(mt * n)
-		var mu = -0.4 + 0.5 * MK.hash1(sd + 40.0 + k)                   # across the lower trunk, inside its edges
-		var mp = pts[mi] + Vector2(wid[mi] * mu, 0)
-		var mr = wid[mi] * (0.05 + 0.05 * MK.hash1(sd + 50.0 + k))
-		var mdark = hz(Color("#4a7a33"), lane)
-		var mlite = hz(Color("#86bf55"), lane)
-		mk.blob(mp, mr * 1.5, mr * 0.7, sd + 60.0 + k, 0.22, mdark, 14)
-		mk.blob(mp + Vector2(mr * 0.15, -mr * 0.18), mr * 1.0, mr * 0.42, sd + 70.0 + k, 0.2, mlite, 12)
-		for q in 3:
-			var tq = mp + Vector2((q - 1.0) * mr * 0.7, -mr * (0.35 + 0.15 * MK.hash1(sd + k * 3.0 + q)))
-			mk.ellipse(tq, mr * 0.28, mr * 0.2, mlite.lightened(0.15), 6)
-	# the top of the trunk: a knot where it divides, then its limbs, so it never ends in a flat cut
-	mk.blob_ink(pts[n] + Vector2(0, 4.0), wid[n] * 0.56, wid[n] * 0.36, sd + 33.0, 0.12, bark_m, 3.4, 14, bark)
-	for k in 3:
-		var ca = -PI * 0.5 + (k - 1) * (0.42 + 0.12 * MK.hash1(sd + 70.0 + k))
-		_limb(mk, pts[n] + Vector2(0, 6.0), ca, h * (0.2 + 0.08 * MK.hash1(sd + 80.0 + k)), wid[n] * 0.5, 2, sd + 90.0 + k * 7.0, bark_m, bark_d, snow_k, ends)
-	# the foot of the trunk: rounded root lumps at its corners, then a mound of turf with moss and grass over the join, so the flat bottom edge
-	# is buried: the trunk comes OUT of the ground instead of standing on it
-	var w0 = wid[0]
-	for sgn2 in [-1.0, 1.0]:
-		for q in 2:
-			var cx = b.x + sgn2 * (w0 * 0.5 - w * (0.04 + 0.22 * q))
-			mk.ellipse_ink(Vector2(cx, b.y - w * 0.04 * (1.0 - 0.5 * q)), w * (0.3 - 0.08 * q), w * (0.14 - 0.03 * q), bark_m, 2.4, 14, sgn2 * 0.3)
-	var turf = hz(_sg(Color("#6fa93f")), lane)
-	var turf_c = hz(_sg(Color("#8cc352")), lane)
-	mk.ellipse(b + Vector2(0, 9.0), w0 * 0.6, w * 0.07 + 3.0, Color(0.08, 0.16, 0.04, 0.3), 20)
-	mk.blob(b + Vector2(0, 2.0), w0 * 0.58, w * 0.12 + 4.0, sd + 80.0, 0.08, turf, 24, turf_c)
-	for k in 7:
-		var mx = b.x + (k - 3.0) * w0 * 0.15 + (MK.hash1(sd + k * 2.0) - 0.5) * w * 0.12
-		mk.blob(Vector2(mx, b.y - w * 0.05), w * 0.14, w * 0.05, sd + 90.0 + k, 0.2, hz(Color("#4a7a33"), lane), 10)
-	for k in 18:
-		var ux = (float(k) / 17.0 - 0.5) * 2.0
-		var gp = b + Vector2(ux * w0 * 0.56 + (MK.hash1(sd + k * 1.9) - 0.5) * w * 0.1, 3.0 + MK.hash1(sd + k * 4.3) * 5.0 - abs(ux) * w * 0.02)
-		var gl = clamp(w * (0.07 + 0.13 * MK.hash1(sd + k * 5.7)), 10.0, 44.0)
-		mk.blade(gp, (MK.hash1(sd + k * 8.1) - 0.5) * gl * 0.8, gl, clamp(w * 0.02, 2.5, 5.5), hz(_sg(Color("#3f7a2a")), lane), hz(_sg(Color("#7cbc4c")), lane))
-	# crown: a wide canopy of many round leaf clusters, dark under, light on top (sun upper right)
-	var cc = pts[n] + Vector2(lean * 0.2, -h * 0.17)
-	var Rx = h * 0.36
-	var Ry = h * 0.22
-	var g_d = hz(Color("#27501f"), lane)
-	var g_m = hz(Color("#3a7a2e"), lane)
-	var g_l = hz(Color("#5aa043"), lane)
-	var g_h = hz(Color("#9bd563"), lane)
-	var leafk = float(_P["leaf"])
-	var snowk = float(_P["snow"])
-	var aut = float(_P["autumn"]) * (0.0 if MK.hash1(sd + 57.0) > 0.82 else 1.0)       # a few trees stay green all autumn
-	if aut > 0.0:
-		var A = AUTUMN_SETS[int(MK.hash1(sd + 55.0) * 2.99)]
-		g_d = hz(Color("#27501f").linear_interpolate(A[0], aut), lane)
-		g_m = hz(Color("#3a7a2e").linear_interpolate(A[1], aut), lane)
-		g_l = hz(Color("#5aa043").linear_interpolate(A[2], aut), lane)
-		g_h = hz(Color("#9bd563").linear_interpolate(A[3], aut), lane)
-	var lobes := []
-	var N = 34
-	for i in N:
-		var rr = sqrt((i + 0.5) / N)
-		if leafk < 0.999 and (leafk < 0.04 or rr + 0.3 * (MK.hash1(sd + i * 9.3) - 0.5) > 0.06 + 0.94 * leafk):
-			continue          # leaves not out yet, or already down: the crown thins from the outside in (and the leaves that are left are smaller)
-		var ang2 = i * 2.39996 + sd
-		var jx = (MK.hash1(sd + i * 1.3) - 0.5) * 0.25
-		var jy = (MK.hash1(sd + i * 2.7) - 0.5) * 0.25
-		var pos = cc + Vector2((cos(ang2) * rr + jx) * Rx, (sin(ang2) * rr * 0.9 + jy) * Ry)
-		var rad = h * (0.062 + 0.05 * MK.hash1(sd + i * 3.9)) * (1.15 - 0.4 * rr) * (0.72 + 0.28 * leafk)
-		lobes.append([pos, rad])
-	var ends_n = ends.size()
-	var ends_step = max(1, ends_n / 44)                  # a few dozen leaf clusters at the twig tips, not one per twig
-	for ei in range(0, ends_n, ends_step):
-		var e = ends[ei]
-		if leafk >= 0.999 or MK.hash1(sd + e.x * 0.1) <= leafk * 0.85:
-			lobes.append([e, h * 0.05 * (0.6 + 0.4 * leafk)])
-	lobes.sort_custom(self, "_lobe_y")
-	var shadow_ell = Color(g_d.r * 0.6, g_d.g * 0.6, g_d.b * 0.6, 0.4 * leafk)
-	mk.ellipse(cc + Vector2(0, Ry * 0.95), Rx * 0.85, Ry * 0.38, shadow_ell, 16)
-	var k2 = 0
-	for L in lobes:
-		mk.blob_ink(L[0] + Vector2(-h * 0.012, h * 0.016), L[1] * 1.1, L[1] * 0.98, sd + k2, 0.05, g_d, 4.5, 26)
-		k2 += 1
-	k2 = 0
-	for L in lobes:
-		mk.blob(L[0], L[1] * 0.97, L[1] * 0.86, sd + k2 * 1.3, 0.06, g_m, 26, g_l.linear_interpolate(g_m, 0.4))
-		k2 += 1
-	k2 = 0
-	for L in lobes:
-		var lp = L[0] + Vector2(L[1] * 0.2, -L[1] * 0.22)
-		mk.blob(lp, L[1] * 0.62, L[1] * 0.5, sd + k2 * 2.1, 0.08, g_l, 18, g_h.linear_interpolate(g_l, 0.35))
-		# leaf flecks: bright on the sunny side, dark on the other
-		for q in 5:
-			var fa = TAU * q / 5.0 + k2
-			var fr = L[1] * (0.25 + 0.55 * MK.hash1(sd + k2 * 7.0 + q))
-			var fp = L[0] + Vector2(cos(fa), sin(fa) * 0.8) * fr
-			var sunny = (cos(fa) - sin(fa)) > 0.0
-			mk.ellipse(fp, L[1] * 0.13, L[1] * 0.08, Color(g_h.r, g_h.g, g_h.b, 0.75) if sunny else Color(g_d.r, g_d.g, g_d.b, 0.55), 6, fa)
-		k2 += 1
-	if MK.hash1(sd + 8.0) > 0.4 and leafk > 0.9 and snowk < 0.3:
-		for i in 11:
-			var a2 = PI * (0.05 + 0.9 * MK.hash1(sd + i * 4.4))
-			var rr2 = 0.45 + 0.55 * MK.hash1(sd + i * 6.6)
-			var fcol = Color("#d9413a") if MK.hash1(sd + 9.0) > 0.5 else Color("#f0a233")
-			mk.ellipse_ink(cc + Vector2(cos(a2) * Rx * rr2, sin(a2) * Ry * rr2 * 0.8), 7.0 * sc + 2.5, 7.0 * sc + 2.5, fcol, 2.2, 9)
-	# spring blossom, thinning out as the season goes on
-	var blo = float(_P["blossom"]) * (1.0 if MK.hash1(sd + 61.0) > 0.35 else 0.0)
-	if blo > 0.05 and leafk > 0.1:
-		for L in lobes:
-			if MK.hash1(sd + L[0].x * 0.13) > blo:
-				continue
-			for q in 3:
-				var bq = L[0] + Vector2((MK.hash1(L[0].x + q) - 0.5) * L[1] * 1.2, (MK.hash1(L[0].y + q * 3.0) - 0.5) * L[1])
-				mk.ellipse(bq, 3.0 * sc + 1.2, 2.6 * sc + 1.0, Color("#fbd1de") if q % 2 == 0 else Color("#ffffff"), 6)
-	if snowk > 0.3:
-		mk.ellipse(b + Vector2(-w * 0.15, 2.0), w * 1.35, w * 0.2, Color(0.62, 0.73, 0.86), 12)
-		mk.ellipse(b + Vector2(-w * 0.15, 0.0), w * 1.3, w * 0.17, Color(0.97, 0.985, 1.0), 12)
-	sh.shadow(b + Vector2(-w * 1.4, 5.0), w * 2.0 + h * 0.05, w * 0.3, Color(0.06, 0.1, 0.04, 0.13 * (0.4 + 0.6 * leafk)), 4)
-	var ext = Rx * 1.25 + w * 1.3
-	return {"mesh": mk.build(), "shade": sh.build(), "slice": slice_of(lane), "x0": min(b.x, cc.x) - ext, "x1": max(b.x, cc.x) + ext, "sway": 1.0, "by": b.y}
-
-
-# One limb of a tree: a ribbon that tapers to a point and curves up, and, while `depth` lasts, side branches along it and a fork at its tip.
-# The tips are collected in `ends` (the leaf clusters hang there).
-func _limb(mk, base: Vector2, ang: float, ln: float, w0: float, depth: int, sd: float, bark_m: Color, bark_d: Color, snow_k: float, ends: Array) -> void:
-	var m = 7
-	var pts := PoolVector2Array()
-	var wf := PoolRealArray()
-	var wi := PoolRealArray()
-	var dx = cos(ang)
-	var dy = sin(ang)
-	for j in m:
-		var u = float(j) / (m - 1)
-		var bend = sin(u * 2.4 + sd) * ln * 0.06
-		pts.append(base + Vector2(dx * ln * u + bend, dy * ln * u - ln * 0.3 * u * u))
-		wf.append(w0 * pow(1.0 - u, 1.1) + 2.0)
-		wi.append(w0 * pow(1.0 - u, 1.1) + 6.0)
-	mk.ribbon(pts, wi, INK)
-	mk.ribbon(pts, wf, bark_m, bark_d)
-	if snow_k > 0.3 and depth >= 1:
-		for j in [1, 2, 3, 4, 5]:
-			mk.ellipse(pts[j] + Vector2(0, -wf[j] * 0.55), wf[j] * 0.8 + 2.0, wf[j] * 0.3 + 1.2, Color(0.96, 0.98, 1.0), 8)
-	ends.append(pts[m - 1])
-	if depth <= 0:
-		return
-	for q in 2:
-		var at = pts[2 + q * 2]
-		var side = 1.0 if (int(sd * 3.0) + q) % 2 == 0 else -1.0
-		var turn = side * (0.55 + 0.35 * MK.hash1(sd + q * 4.3))
-		_limb(mk, at, ang + turn, ln * (0.52 - 0.08 * q), w0 * (0.55 - 0.08 * q), depth - 1, sd * 1.7 + q * 3.1 + 1.0, bark_m, bark_d, snow_k, ends)
-	for f in 2:
-		_limb(mk, pts[m - 1], ang + (0.5 if f == 0 else -0.5), ln * 0.34, w0 * 0.3, depth - 1, sd * 2.3 + f * 5.7 + 2.0, bark_m, bark_d, snow_k, ends)
-
-
-func _lobe_y(a, b) -> bool:
-	return a[0].y < b[0].y
+	return {"mesh": null, "shade": null, "slice": slice_of(float(f["lane"])), "x0": b.x, "x1": b.x, "sway": 0.0, "by": b.y}
 
 
 func _boulder(f: Dictionary) -> Dictionary:

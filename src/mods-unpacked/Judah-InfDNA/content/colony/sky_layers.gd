@@ -321,8 +321,6 @@ func _build(i: int, ci: int):
 		"peaks":
 			_snow(mk, pts, step, i, x0)
 			_strata(mk, pts, col, i, x0)
-		"ridge":
-			_pines(mk, i, x0, 20.0, 34.0, 62.0, 0.5, col.darkened(0.12))
 		"fields":
 			_fields(mk, pts, i, x0, step, col)
 	# the near layers' trees are the owner's pictures (_mist_trees), not drawn shapes
@@ -436,9 +434,8 @@ func _mist_trees(i: int, p0: float, p1: float) -> void:
 		var a = 1.0
 		var look = "summer"
 		if bool(def["leafy"]):
-			var thr = 0.15 + 0.5 * _hh(ci, 11.0)
-			a = smoothstep(thr - 0.08, thr + 0.08, leaf)
-			if au > 0.5:
+			# the dry autumn look stays on through winter (no bare pictures yet), so the far woods never empty out
+			if au > 0.5 or leaf < 0.5:
 				look = ["orange", "red", "gold"][int(_hh(ci, 12.0) * 2.99)]
 			elif day != null and Seasons.phase(day.sea_t) < 0.12:
 				look = "spring"
@@ -544,35 +541,6 @@ func _strata(mk, pts: PoolVector2Array, col: Color, i: int, x0: float) -> void:
 		var a = pts[k]
 		var ln = 40.0 + 90.0 * _hh(x0 + k, 6.0)
 		mk.tri(a + Vector2(-5, 4), a + Vector2(5, 4), a + Vector2(-8.0 + 16.0 * _hh(x0 + k, 7.0), ln), Color(dark.r, dark.g, dark.b, 0.55))
-
-
-func _pines(mk, i: int, x0: float, spacing: float, hmin: float, hmax: float, density: float, col: Color) -> void:
-	var hz: float = LAYERS[i]["hz"]
-	var dark = col.darkened(0.2).linear_interpolate(HAZE, hz * 0.3)
-	var lite = col.lightened(0.1).linear_interpolate(HAZE, hz * 0.3)
-	var trunk = Color("#4a3a2c").linear_interpolate(HAZE, hz)
-	var snowk = day.snow if day != null else 0.0
-	var snow_c = SNOW_WHITE.linear_interpolate(HAZE, hz * 0.35)
-	var k = 0
-	var x = x0 + 4.0
-	while x < x0 + CW:
-		var h1 = _hh(x * 0.37, 11.0 + i)
-		if h1 < density:
-			var hh = hmin + (hmax - hmin) * _hh(x * 0.21, 12.0 + i)
-			var b = Vector2(x, _ridge_y(i, x) + 6.0)
-			var w = hh * 0.3
-			mk.quad(b + Vector2(-hh * 0.025, 0), b + Vector2(hh * 0.025, 0), b + Vector2(hh * 0.02, -hh * 0.2), b + Vector2(-hh * 0.02, -hh * 0.2), trunk)
-			for t in 3:
-				var y0 = -hh * (0.14 + 0.24 * t)
-				var wt = w * (1.0 - 0.27 * t)
-				var tip = b + Vector2(0, y0 - hh * 0.34)
-				mk.tri(b + Vector2(-wt, y0), b + Vector2(0, y0), tip, dark)
-				mk.tri(b + Vector2(0, y0), b + Vector2(wt, y0), tip, lite)
-				if snowk > 0.3:
-					var capw = wt * 0.52
-					mk.tri(b + Vector2(-capw, y0 - hh * 0.17), b + Vector2(capw, y0 - hh * 0.17), tip, snow_c)
-		x += spacing * (0.75 + 0.6 * _hh(x, 13.0))
-		k += 1
 
 
 func _fields(mk, pts: PoolVector2Array, i: int, x0: float, step: float, col: Color) -> void:
