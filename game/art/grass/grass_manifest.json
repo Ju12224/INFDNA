@@ -5,6 +5,11 @@
    "file": "grass/grass_back.png",
    "w": 3072,
    "h": 403
+  },
+  "mid": {
+   "file": "grass/grass_mid.png",
+   "w": 3072,
+   "h": 409
   }
  }
 }
