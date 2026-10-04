@@ -80,12 +80,12 @@ Style: 2D cartoon game art matching the attached style reference picture: bold t
 _Used for: The grass edge on top of the soil (step 2.2)._
 
 ```
-A wide thin strip of short grass and moss tufts that sits on top of a dirt cross-section (the lip where the meadow meets the soil). It fills only the bottom quarter of the image, solid base along the bottom; everything above is transparent. The left and right edges should line up so it can repeat. Landscape image (3:2).
+Draw ONLY this one strip: no flowers, rocks, critters or other objects, nothing else on the image. A wide thin strip of short grass and moss tufts that sits on top of a dirt cross-section (the lip where the meadow meets the soil). It fills only the bottom quarter of the image, solid base along the bottom; everything above is transparent. The left and right edges should line up so it can repeat. Landscape image (3:2).
 
 Style: 2D cartoon game art matching the attached style reference picture: bold thick near-black outlines (a little purple-black), flat cel shading with 2-3 tones per colour and soft rounded highlights, chunky simple shapes, a muted earthy palette. No text, no letters, no watermark, no shadow on the ground. Transparent background (PNG).
 ```
 
-## 10. Grass clumps
+## 10. Grass clumps (done: you made a whole meadow kit, which I cut into 111 pieces)
 _Used for: Single clumps scattered on the meadow (step 2.2)._
 
 ```
@@ -98,7 +98,7 @@ Style: 2D cartoon game art matching the attached style reference picture: bold t
 _Used for: Rain and snow (step 2.6)._
 
 ```
-One sheet, spread out so nothing touches: 4 raindrops and rain streaks (blue-white), 2 small splash crowns, 8 snowflakes in 3 sizes (simple shapes), a thin strip of lying snow that could cap the ground (its left and right edges line up so it repeats), and a small puddle seen from the side. Square image (1:1).
+Draw ONLY the items listed here, exactly that many of each, nothing else on the image. One sheet, spread out so nothing touches: 4 raindrops and rain streaks (blue-white), 2 small splash crowns, 8 snowflakes in 3 sizes (simple shapes), a thin strip of lying snow that could cap the ground (its left and right edges line up so it repeats), and a small puddle seen from the side. Square image (1:1).
 
 Style: 2D cartoon game art matching the attached style reference picture: bold thick near-black outlines (a little purple-black), flat cel shading with 2-3 tones per colour and soft rounded highlights, chunky simple shapes, a muted earthy palette. No text, no letters, no watermark, no shadow on the ground. Transparent background (PNG).
 ```
@@ -107,7 +107,7 @@ Style: 2D cartoon game art matching the attached style reference picture: bold t
 _Used for: The nest entrance on the surface (step 3.3)._
 
 ```
-3 ant hill mounds (small, medium and large), seen from the side: a dome of loose crumbly brown soil with little pebbles and twig bits, an entrance hole on the front, and a flat bottom edge so it sits on the ground line. Spread out so they don't touch. Landscape image (3:2).
+Draw ONLY these 3 mounds, nothing else on the image: no plants, ants, rocks or background. 3 ant hill mounds (small, medium and large), seen from the side: a dome of loose crumbly brown soil with little pebbles and twig bits, an entrance hole on the front, and a flat bottom edge so it sits on the ground line. Spread out so they don't touch. Landscape image (3:2).
 
 Style: 2D cartoon game art matching the attached style reference picture: bold thick near-black outlines (a little purple-black), flat cel shading with 2-3 tones per colour and soft rounded highlights, chunky simple shapes, a muted earthy palette. No text, no letters, no watermark, no shadow on the ground. Transparent background (PNG).
 ```
@@ -116,7 +116,7 @@ Style: 2D cartoon game art matching the attached style reference picture: bold t
 _Used for: Evolution Lab cards (step 4.4)._
 
 ```
-A grid of 16 square game icons, 4 per row (4 rows), each icon centred in its own cell with clear empty space around it, no frames or borders. Each icon is one simple object or creature that shows what the item does. In this exact order, left to right, top to bottom:
+Draw EXACTLY the icons listed, one per cell, nothing else on the image. A grid of 16 square game icons, 4 per row (4 rows), each icon centred in its own cell with clear empty space around it, no frames or borders. Each icon is one simple object or creature that shows what the item does. In this exact order, left to right, top to bottom:
 1. Eel Strain: Electric organs evolve more often: sense prey, shock attackers, then chain lightning.
 2. Shell Strain: Shells evolve more often: scutes, a snail shell, then armadillos that curl up when hurt.
 3. Silk Strain: Silk evolves more often: carry bundles, webs that slow raiders, then bolas snares that stun.
@@ -142,7 +142,7 @@ Style: 2D cartoon game art matching the attached style reference picture: bold t
 _Used for: Evolution Lab cards (step 4.4)._
 
 ```
-A grid of 16 square game icons, 4 per row (4 rows), each icon centred in its own cell with clear empty space around it, no frames or borders. Each icon is one simple object or creature that shows what the item does. In this exact order, left to right, top to bottom:
+Draw EXACTLY the icons listed, one per cell, nothing else on the image. A grid of 16 square game icons, 4 per row (4 rows), each icon centred in its own cell with clear empty space around it, no frames or borders. Each icon is one simple object or creature that shows what the item does. In this exact order, left to right, top to bottom:
 1. Toxic Spines: Spikes deal double damage back.
 2. Berserker Brood: Ants hit 35% harder but have 20% less HP.
 3. Rally Banner: Defenders hit 25% harder.
@@ -168,7 +168,7 @@ Style: 2D cartoon game art matching the attached style reference picture: bold t
 _Used for: Evolution Lab cards (step 4.4)._
 
 ```
-A grid of 16 square game icons, 4 per row (4 rows), each icon centred in its own cell with clear empty space around it, no frames or borders. Each icon is one simple object or creature that shows what the item does. In this exact order, left to right, top to bottom:
+Draw EXACTLY the icons listed, one per cell, nothing else on the image. A grid of 16 square game icons, 4 per row (4 rows), each icon centred in its own cell with clear empty space around it, no frames or borders. Each icon is one simple object or creature that shows what the item does. In this exact order, left to right, top to bottom:
 1. Frugal Orders: Every command costs 20% less Will.
 2. War Standard: Rally lasts 50% longer and rallied ants bite 10% harder.
 3. Honey Trail: Harvest lasts 50% longer and the ants it sends carry 30% more.
@@ -194,7 +194,7 @@ Style: 2D cartoon game art matching the attached style reference picture: bold t
 _Used for: Evolution Lab cards (step 4.4)._
 
 ```
-A grid of 16 square game icons, 4 per row (4 rows), each icon centred in its own cell with clear empty space around it, no frames or borders. Each icon is one simple object or creature that shows what the item does. In this exact order, left to right, top to bottom:
+Draw EXACTLY the icons listed, one per cell, nothing else on the image. A grid of 16 square game icons, 4 per row (4 rows), each icon centred in its own cell with clear empty space around it, no frames or borders. Each icon is one simple object or creature that shows what the item does. In this exact order, left to right, top to bottom:
 1. Scent Beacon: Food appears closer and foragers sense 6 cells farther.
 2. Blasting Caps: Ants dig 60% faster.
 3. Cursed Idol: Every ant: +40% HP, +40% attack, +20% speed.
@@ -220,7 +220,7 @@ Style: 2D cartoon game art matching the attached style reference picture: bold t
 _Used for: Evolution Lab cards (step 4.4)._
 
 ```
-A grid of 1 square game icons, 4 per row (1 rows), each icon centred in its own cell with clear empty space around it, no frames or borders. Each icon is one simple object or creature that shows what the item does. In this exact order, left to right, top to bottom:
+Draw EXACTLY the icons listed, one per cell, nothing else on the image. A grid of 1 square game icons, 4 per row (1 rows), each icon centred in its own cell with clear empty space around it, no frames or borders. Each icon is one simple object or creature that shows what the item does. In this exact order, left to right, top to bottom:
 1. Hive Mind: Parents are chosen from the fittest 8 instead of 4.
 Square image (1:1).
 
@@ -231,7 +231,7 @@ Style: 2D cartoon game art matching the attached style reference picture: bold t
 _Used for: Queen picker (step 4.4)._
 
 ```
-A grid of 16 square portraits of ant queens, 4 per row (4 rows), each centred in its own cell with clear empty space around it, no frames or borders. Each is the head and upper body of a cartoon ant queen, facing right, whose look shows her personality below. In this exact order, left to right, top to bottom:
+Draw EXACTLY the icons listed, one per cell, nothing else on the image. A grid of 16 square portraits of ant queens, 4 per row (4 rows), each centred in its own cell with clear empty space around it, no frames or borders. Each is the head and upper body of a cartoon ant queen, facing right, whose look shows her personality below. In this exact order, left to right, top to bottom:
 1. The Founder: The plain queen. No perks, no flaws.
 2. Bloodmother: Her brood drinks what it bites.
 3. Wraith Queen: Half in the grave already.
@@ -257,7 +257,7 @@ Style: 2D cartoon game art matching the attached style reference picture: bold t
 _Used for: Queen picker (step 4.4)._
 
 ```
-A grid of 16 square portraits of ant queens, 4 per row (4 rows), each centred in its own cell with clear empty space around it, no frames or borders. Each is the head and upper body of a cartoon ant queen, facing right, whose look shows her personality below. In this exact order, left to right, top to bottom:
+Draw EXACTLY the icons listed, one per cell, nothing else on the image. A grid of 16 square portraits of ant queens, 4 per row (4 rows), each centred in its own cell with clear empty space around it, no frames or borders. Each is the head and upper body of a cartoon ant queen, facing right, whose look shows her personality below. In this exact order, left to right, top to bottom:
 1. Vault Queen: Nothing is ever wasted.
 2. Mason Queen: Bigger pantries, sturdier walls.
 3. Engineer Queen: Three tunnels at once.
@@ -283,7 +283,7 @@ Style: 2D cartoon game art matching the attached style reference picture: bold t
 _Used for: Queen picker (step 4.4)._
 
 ```
-A grid of 16 square portraits of ant queens, 4 per row (4 rows), each centred in its own cell with clear empty space around it, no frames or borders. Each is the head and upper body of a cartoon ant queen, facing right, whose look shows her personality below. In this exact order, left to right, top to bottom:
+Draw EXACTLY the icons listed, one per cell, nothing else on the image. A grid of 16 square portraits of ant queens, 4 per row (4 rows), each centred in its own cell with clear empty space around it, no frames or borders. Each is the head and upper body of a cartoon ant queen, facing right, whose look shows her personality below. In this exact order, left to right, top to bottom:
 1. Curious Queen: She has to press every button.
 2. Wanderer Queen: Never lives behind one door.
 3. General Queen: Her brood is mostly soldiers.
@@ -309,7 +309,7 @@ Style: 2D cartoon game art matching the attached style reference picture: bold t
 _Used for: Queen picker (step 4.4)._
 
 ```
-A grid of 16 square portraits of ant queens, 4 per row (4 rows), each centred in its own cell with clear empty space around it, no frames or borders. Each is the head and upper body of a cartoon ant queen, facing right, whose look shows her personality below. In this exact order, left to right, top to bottom:
+Draw EXACTLY the icons listed, one per cell, nothing else on the image. A grid of 16 square portraits of ant queens, 4 per row (4 rows), each centred in its own cell with clear empty space around it, no frames or borders. Each is the head and upper body of a cartoon ant queen, facing right, whose look shows her personality below. In this exact order, left to right, top to bottom:
 1. Trail Queen: Long roads, long legs.
 2. Glutton Queen: Eats for the whole colony.
 3. Elder Queen: Slow to lay, slow to die.
