@@ -23,4 +23,6 @@ The roadmap is the plan: https://claude.ai/artifact/Ed2J4qRfFKQ52b8TNLwwu5
   - screenshot: `xvfb-run -a -s "-screen 0 1920x1080x24" godot --path game --rendering-driver opengl3 --script res://tests/shot.gd -- out=/tmp/s.png`
 - Build for the owner (Windows): `godot --headless --path game --export-release "Windows Desktop" ../build/InfDNA.exe`
   (needs the 4.7.2 Windows export templates in `~/.local/share/godot/export_templates/4.7.2.stable/`), then zip `InfDNA.exe`
-  into `releases/` and send it. The owner unzips it and double-clicks InfDNA.exe (Windows asks once: More info, Run anyway).
+  into `releases/`, commit and push it. The chat can't send files over 30 MiB and the game zip is ~60 MB, so give the owner the
+  GitHub download link (`https://github.com/Ju12224/INFDNA/raw/<branch>/releases/<zip>`). The owner unzips it and double-clicks
+  InfDNA.exe (Windows asks once: More info, Run anyway).
