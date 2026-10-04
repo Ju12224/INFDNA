@@ -1,0 +1,35 @@
+{
+ "_about": "The owner's anthill mounds, cut by tools/art/make_anthills.py. Sizes in pixels; hole = the entrance's centre.",
+ "mounds": [
+  {
+   "name": "mound_small",
+   "file": "anthill/mound_small.png",
+   "w": 321,
+   "h": 177,
+   "hole": [
+    267.6,
+    163.4
+   ]
+  },
+  {
+   "name": "mound_medium",
+   "file": "anthill/mound_medium.png",
+   "w": 481,
+   "h": 267,
+   "hole": [
+    45.5,
+    142.6
+   ]
+  },
+  {
+   "name": "mound_large",
+   "file": "anthill/mound_large.png",
+   "w": 593,
+   "h": 399,
+   "hole": [
+    300.3,
+    379.8
+   ]
+  }
+ ]
+}
