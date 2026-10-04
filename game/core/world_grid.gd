@@ -405,8 +405,8 @@ func _alloc_fresh() -> void:
 			img_u.fill_rect(Rect2i(c, s, 1, H - s), one)
 			img_p.fill_rect(Rect2i(c + PM, s, 1, H - s), both)
 		# footing: the open cells that touch the ground (the rule of _walk_rule on untouched columns)
-		var ylo = max(0, min(s, min(su[c], su[c + 2])) - 1)
-		if s > ylo:
+		var ylo = max(1, min(s, min(su[c], su[c + 2])) - 1)
+		if s > ylo and c > 0 and c < W - 1:
 			img_w.fill_rect(Rect2i(c, ylo, 1, s - ylo), one)
 		# strata: the same seams as strata_at, found exactly
 		var b = base_y(x)
@@ -723,6 +723,8 @@ func make_link(cx: int, cy: int, r: int = 1) -> int:
 
 
 func _walk_rule(x: int, y: int, z: int) -> int:
+	if x <= ox or x >= ox + W - 1 or y <= 0 or y >= H - 1:
+		return 0                           # no footing on the world's border cells (so _bfs never steps off the arrays)
 	var j = y * W + (x - ox)
 	if solid[z * WH + j] == 1:
 		return 0
@@ -1114,21 +1116,33 @@ func rebuild_nav() -> void:
 func _bfs(sources: Array, max_d: int = -1) -> PackedInt32Array:
 	var dist: PackedInt32Array = _neg.duplicate()     # Godot 4 shares packed arrays on assignment: copy, never write into _neg
 	var queue := PackedInt32Array()
+	var edge := []          # sources on the arrays' border: their neighbours go in next, at distance 1
 	for s in sources:
 		var sz = int(s.z) if typeof(s) == TYPE_VECTOR3 else 0
-		if not inb(int(s.x), int(s.y)):
+		var sx = int(s.x)
+		var sy = int(s.y)
+		if not inb(sx, sy):
 			continue
-		var si = _i(int(s.x), int(s.y), sz)
+		var si = _i(sx, sy, sz)
 		if dist[si] != 0:
 			dist[si] = 0
-			queue.append(si)
+			if sx > ox and sx < ox + W - 1 and sy > 0 and sy < H - 1:
+				queue.append(si)
+			else:
+				edge.append(Vector3i(sx, sy, sz))
+	for e in edge:
+		for d in N8:
+			if can_walk(e.x + int(d.x), e.y + int(d.y), e.z):
+				var ei = _i(e.x + int(d.x), e.y + int(d.y), e.z)
+				if dist[ei] == -1:
+					dist[ei] = 1
+					queue.append(ei)
 	# (typed and unrolled: on the 3072-column world the surface alone is thousands of cells, and this runs every
 	# NAV_INTERVAL while the colony digs)
 	var wk: PackedByteArray = walk
 	var lk: PackedByteArray = link
 	var w: int = W
 	var wh: int = WH
-	var h: int = H
 	var cap: int = max_d if max_d >= 0 else (1 << 30)
 	var head: int = 0
 	var tail: int = queue.size()
@@ -1138,63 +1152,49 @@ func _bfs(sources: Array, max_d: int = -1) -> PackedInt32Array:
 		var nd: int = dist[i] + 1
 		if nd > cap:
 			continue        # depth cap: cells past it stay -1
+		# every walkable cell is off the arrays' border (_walk_rule), so all eight neighbours exist
 		var z: int = 1 if i >= wh else 0
 		var r: int = i - z * wh
-		var y: int = r / w
-		var x: int = r - y * w
-		if x > 0 and x < w - 1 and y > 0 and y < h - 1:
-			var j: int = i - w - 1
-			if wk[j] == 1 and dist[j] == -1:
-				dist[j] = nd
-				queue.append(j)
-				tail += 1
-			j += 1
-			if wk[j] == 1 and dist[j] == -1:
-				dist[j] = nd
-				queue.append(j)
-				tail += 1
-			j += 1
-			if wk[j] == 1 and dist[j] == -1:
-				dist[j] = nd
-				queue.append(j)
-				tail += 1
-			j = i - 1
-			if wk[j] == 1 and dist[j] == -1:
-				dist[j] = nd
-				queue.append(j)
-				tail += 1
-			j = i + 1
-			if wk[j] == 1 and dist[j] == -1:
-				dist[j] = nd
-				queue.append(j)
-				tail += 1
-			j = i + w - 1
-			if wk[j] == 1 and dist[j] == -1:
-				dist[j] = nd
-				queue.append(j)
-				tail += 1
-			j += 1
-			if wk[j] == 1 and dist[j] == -1:
-				dist[j] = nd
-				queue.append(j)
-				tail += 1
-			j += 1
-			if wk[j] == 1 and dist[j] == -1:
-				dist[j] = nd
-				queue.append(j)
-				tail += 1
-		else:
-			var base: int = z * wh
-			for d in N8:
-				var nx: int = x + int(d.x)
-				var ny: int = y + int(d.y)
-				if nx < 0 or ny < 0 or nx >= w or ny >= h:
-					continue
-				var j2: int = base + ny * w + nx
-				if wk[j2] == 1 and dist[j2] == -1:
-					dist[j2] = nd
-					queue.append(j2)
-					tail += 1
+		var j: int = i - w - 1
+		if wk[j] == 1 and dist[j] == -1:
+			dist[j] = nd
+			queue.append(j)
+			tail += 1
+		j += 1
+		if wk[j] == 1 and dist[j] == -1:
+			dist[j] = nd
+			queue.append(j)
+			tail += 1
+		j += 1
+		if wk[j] == 1 and dist[j] == -1:
+			dist[j] = nd
+			queue.append(j)
+			tail += 1
+		j = i - 1
+		if wk[j] == 1 and dist[j] == -1:
+			dist[j] = nd
+			queue.append(j)
+			tail += 1
+		j = i + 1
+		if wk[j] == 1 and dist[j] == -1:
+			dist[j] = nd
+			queue.append(j)
+			tail += 1
+		j = i + w - 1
+		if wk[j] == 1 and dist[j] == -1:
+			dist[j] = nd
+			queue.append(j)
+			tail += 1
+		j += 1
+		if wk[j] == 1 and dist[j] == -1:
+			dist[j] = nd
+			queue.append(j)
+			tail += 1
+		j += 1
+		if wk[j] == 1 and dist[j] == -1:
+			dist[j] = nd
+			queue.append(j)
+			tail += 1
 		if lk[r] == 1:
 			var j3: int = (1 - z) * wh + r
 			if wk[j3] == 1 and dist[j3] == -1:

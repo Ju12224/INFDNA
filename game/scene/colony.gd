@@ -182,12 +182,19 @@ func _unhandled_input(event: InputEvent) -> void:
 				speed = SPEEDS[2]
 
 
-# The view never goes below the bottom of the world (nothing is drawn there) nor far up into empty sky.
+# The view never goes below the bottom of the world (nothing is drawn there) nor far up into empty sky, nor past its left
+# or right edge (the world is WorldGrid.WORLD_W columns wide); a screen wider than the world is centred on it.
 func _clamp_camera() -> void:
-	var half = get_viewport_rect().size.y * 0.5 / zoom()
+	var vs = get_viewport_rect().size * 0.5 / zoom()
 	var bottom = grid.H * WorldGrid.CELL
 	var top = ground_y() - SKY_ROOM
-	cam.position.y = clamp(cam.position.y, top + half, max(top + half, bottom - half))
+	cam.position.y = clamp(cam.position.y, top + vs.y, max(top + vs.y, bottom - vs.y))
+	var left = grid.sim_l() * WorldGrid.CELL
+	var right = (grid.sim_r() + 1) * WorldGrid.CELL
+	var x = (left + right) * 0.5 if right - left <= 2.0 * vs.x else clamp(cam.position.x, left + vs.x, right - vs.x)
+	if x != cam.position.x:
+		cam.position.x = x
+		_vel.x = 0.0           # a glide stops at the edge instead of pushing against it
 
 
 # Zoom by k (eased over the next frames), keeping the world point under the mouse where it is.
@@ -196,9 +203,11 @@ func _zoom_at(screen_pos: Vector2, k: float) -> void:
 	_zoom_anchor = screen_pos
 
 
-# Zoomed out no further than the world is tall (sky room included), so nothing empty shows below the bedrock.
+# Zoomed out no further than the world is tall (sky room included), so nothing empty shows below the bedrock, nor wider
+# than the world is wide.
 func min_zoom() -> float:
-	return max(ZOOM_MIN, get_viewport_rect().size.y / (grid.H * WorldGrid.CELL - ground_y() + SKY_ROOM))
+	var vs = get_viewport_rect().size
+	return max(ZOOM_MIN, max(vs.y / (grid.H * WorldGrid.CELL - ground_y() + SKY_ROOM), vs.x / (grid.W * WorldGrid.CELL)))
 
 
 func _screen_to_world(p: Vector2) -> Vector2:

@@ -172,6 +172,7 @@ var _layout := -1
 var _chunks := {}           # chunk index -> {"sprite", "front", "aux", "surf"}
 var _stale := {}            # chunk index -> true: rebuild when there is time (the grid reallocated its arrays)
 var _cam := Vector2(INF, INF)
+var _ahead_done := false    # every chunk of the world has its images built
 
 
 func _ready() -> void:
@@ -185,6 +186,7 @@ func reset() -> void:
 		_drop(k)
 	_stale.clear()
 	_grid = null
+	_ahead_done = false
 
 
 func _process(_delta: float) -> void:
@@ -230,14 +232,17 @@ func _process(_delta: float) -> void:
 		_stale.erase(k)
 		built += 1
 	# nothing left to show: build the grid's images of the next chunks out from the view, so panning finds them ready
-	if built == todo.size():
+	if built == todo.size() and not _ahead_done:
 		var c0 = clampi(roundi(mid), k_lo, k_hi)
+		var left := 0
 		for d in range(0, k_hi - k_lo + 1):
-			if Time.get_ticks_usec() - t0 > BUILD_US:
-				break
 			for k in [c0 + d, c0 - d - 1]:
-				if k >= k_lo and k <= k_hi and not g.has_chunk_images(k) and Time.get_ticks_usec() - t0 <= BUILD_US:
-					g.chunk_images(k)
+				if k >= k_lo and k <= k_hi and not g.has_chunk_images(k):
+					if Time.get_ticks_usec() - t0 <= BUILD_US:
+						g.chunk_images(k)
+					else:
+						left += 1
+		_ahead_done = left == 0
 	var c = colony.cam_center() / WorldGrid.CELL
 	if c != _cam:
 		_cam = c
