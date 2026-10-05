@@ -1,13 +1,15 @@
 # Builds the Windows game on GitHub's free build servers and attaches the zip to a GitHub Release (a release file can be up to 2 GiB,
 # so the 100 MB limit on files in the repo does not apply and nothing big is stored in git).
-# Run it by pushing a tag that starts with v, for example:  git tag v0.6.1 && git push origin v0.6.1
+# Run it by committing release_request.txt with the release name on its first line (for example v0.6.1) to this branch.
 # The download is then at https://github.com/Ju12224/INFDNA/releases (the zip is the release's file).
 name: Windows build
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - claude/brave-planck-s249zd
+    paths:
+      - release_request.txt
 
 permissions:
   contents: write
@@ -18,6 +20,12 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+
+      - name: Read the release name
+        run: |
+          TAG=$(head -n 1 release_request.txt | tr -d '\r\n ')
+          test -n "$TAG"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
 
       - name: Get Godot 4.7.2 and its export templates
         run: |
@@ -45,12 +53,17 @@ jobs:
           ./godot --headless --path game --export-release "Windows Desktop" ../build/InfDNA.exe
           ls -la build
           cd build
-          zip -9 "../InfDNA_${GITHUB_REF_NAME}_windows.zip" InfDNA.exe
+          zip -9 "../InfDNA_${TAG}_windows.zip" InfDNA.exe
 
       - name: Publish the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "$GITHUB_REF_NAME" "InfDNA_${GITHUB_REF_NAME}_windows.zip" \
-            --title "InfDNA $GITHUB_REF_NAME" \
-            --notes "Windows build. Unzip it and double-click InfDNA.exe (Windows asks once: More info, Run anyway)."
+          ZIP="InfDNA_${TAG}_windows.zip"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" "$ZIP" --clobber
+          else
+            gh release create "$TAG" "$ZIP" --target "$GITHUB_SHA" \
+              --title "InfDNA $TAG" \
+              --notes "Windows build. Unzip it and double-click InfDNA.exe (Windows asks once: More info, Run anyway)."
+          fi
