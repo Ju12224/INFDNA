@@ -17,6 +17,7 @@ var _sim_t0 := 0.0
 var _us := 0                 # the units view's _draw cost, summed over the measured window
 var _us_n := 0
 var _ants_sum := 0
+var _ab := [[0, 0, 0], [0, 0, 0]]     # ab=1: draw cost [us, frames, ants] with the step interpolation on / off, alternating every 30 frames
 var _ant := -1               # shots=<png>: the walking ant followed by the six crops, 3 frames apart, that end up side by side in that png
 var _crops := []
 var _cells := []
@@ -43,6 +44,8 @@ func _process(_delta: float) -> bool:
 	if _uv.debug_stamp == _stamp:
 		return false                     # nothing drawn since the last look
 	_stamp = _uv.debug_stamp
+	if _args.has("ab"):
+		_uv.debug_interp = (_frames / 30) % 2 == 0
 	var df: Dictionary = _uv.debug_frames
 	var nfb := 0
 	for id in df:
@@ -54,6 +57,11 @@ func _process(_delta: float) -> bool:
 		_grab(df)
 	if _frames > n - int(_args["window"]):
 		_us += _uv.draw_us
+		if _args.has("ab"):
+			var m = int(_uv.debug_interp)
+			_ab[m][0] += _uv.draw_us
+			_ab[m][1] += 1
+			_ab[m][2] += df.size()
 		_us_n += 1
 		_ants_sum += df.size()
 		for id in df:
@@ -133,6 +141,7 @@ func _report() -> void:
 	full.sort_custom(func(a, b):
 		return Vector2(_series[a][0][6], _series[a][0][7]).distance_to(cx) < Vector2(_series[b][0][6], _series[b][0][7]).distance_to(cx))
 	var sample = full.slice(0, 20)
+	var why := {}                # mid-step ant-frames drawn standing, by cause
 	var tot := {"frames": 0, "fallback": 0, "mid": 0, "mid_stand": 0, "mid_still": 0, "moved_nogait": 0, "flips": 0, "static_ants": 0, "mid_ants": 0, "cells": 0, "gait_n": 0, "gait_sum": 0.0, "gait_cap": 0, "jumps": 0, "disp": [], "jit": 0.0, "jit_n": 0}
 	var rows := []
 	for id in sample:
@@ -153,6 +162,8 @@ func _report() -> void:
 				cells[r[1]] = true
 				if r[1] == 6:
 					mid_stand += 1
+					var k = "digging" if r[11] else ("task %d, a.t %s" % [r[10], "<0 (paused)" if r[12] < 0.0 else ">=0"])
+					why[k] = why.get(k, 0) + 1
 				if r[3] <= 0.001:
 					mid_still += 1
 			if i > 0:
@@ -190,6 +201,10 @@ func _report() -> void:
 	out.append_array(rows)
 	var pct = func(a, b): return 100.0 * a / max(1, b)
 	out.append("units view _draw: %.2f ms per frame on average, %.1f ants per frame, %.1f us per ant" % [_us / 1000.0 / max(1, _us_n), float(_ants_sum) / max(1, _us_n), float(_us) / max(1, _ants_sum)])
+	if _args.has("ab"):
+		for m in [1, 0]:
+			var e = _ab[m]
+			out.append("A/B interpolation %s: %.2f ms per frame, %.1f us per ant (%d frames)" % ["on " if m == 1 else "off", e[0] / 1000.0 / max(1, e[1]), float(e[0]) / max(1, e[2]), e[1]])
 	out.append("TOTAL ant-frames %d" % tot["frames"])
 	out.append("  fallback picture      : %d (%.1f%%)" % [tot["fallback"], pct.call(tot["fallback"], tot["frames"])])
 	out.append("  mid-step ant-frames   : %d" % tot["mid"])
@@ -198,6 +213,7 @@ func _report() -> void:
 	out.append("  moved on screen but gait did not advance: %d" % tot["moved_nogait"])
 	out.append("  stand<->walk cell flips while mid-step: %d (%.1f per ant-second)" % [tot["flips"], tot["flips"] / max(0.01, tot["mid"] / 60.0)])
 	out.append("  walking frames: mean gait %.3f cycles/frame (cap 0.15), at the cap %d, spot jumps > 12 px: %d" % [tot["gait_sum"] / max(1, tot["gait_n"]), tot["gait_cap"], tot["jumps"]])
+	out.append("  mid-step but drawn standing, by cause: %s" % str(why))
 	var dsp: Array = tot["disp"]
 	dsp.sort()
 	if not dsp.is_empty():
