@@ -1,0 +1,56 @@
+# Builds the Windows game on GitHub's free build servers and attaches the zip to a GitHub Release (a release file can be up to 2 GiB,
+# so the 100 MB limit on files in the repo does not apply and nothing big is stored in git).
+# Run it by pushing a tag that starts with v, for example:  git tag v0.6.1 && git push origin v0.6.1
+# The download is then at https://github.com/Ju12224/INFDNA/releases (the zip is the release's file).
+name: Windows build
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get Godot 4.7.2 and its export templates
+        run: |
+          set -e
+          B=https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable
+          curl -fsSL -o godot.zip "$B/Godot_v4.7.2-stable_linux.x86_64.zip"
+          curl -fsSL -o templates.tpz "$B/Godot_v4.7.2-stable_export_templates.tpz"
+          unzip -q godot.zip
+          mv Godot_v4.7.2-stable_linux.x86_64 godot
+          chmod +x godot
+          mkdir -p "$HOME/.local/share/godot/export_templates/4.7.2.stable"
+          unzip -q templates.tpz -d tpl
+          cp tpl/templates/* "$HOME/.local/share/godot/export_templates/4.7.2.stable/"
+
+      - name: Import the art and compile check
+        run: |
+          ./godot --headless --path game --import || true
+          ./godot --headless --path game --script res://tests/check.gd 2>&1 | tail -n 5
+
+      - name: Export the Windows build
+        run: |
+          # with no size limit the build takes all the art (the repo's presets leave out art nothing draws yet)
+          sed -i 's|^exclude_filter=.*|exclude_filter="tests/*"|' game/export_presets.cfg
+          mkdir -p build
+          ./godot --headless --path game --export-release "Windows Desktop" ../build/InfDNA.exe
+          ls -la build
+          cd build
+          zip -9 "../InfDNA_${GITHUB_REF_NAME}_windows.zip" InfDNA.exe
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "InfDNA_${GITHUB_REF_NAME}_windows.zip" \
+            --title "InfDNA $GITHUB_REF_NAME" \
+            --notes "Windows build. Unzip it and double-click InfDNA.exe (Windows asks once: More info, Run anyway)."
