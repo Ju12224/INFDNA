@@ -26,15 +26,15 @@ const C = WorldGrid.CELL
 const GRASS_Z = 47             # absolute z of the grass: above units (40) and creatures (45), below effects (50) and weather (55)
 const GRASS_ZOOM_CLOSED = 1.2  # at this zoom and below the grass stands closed ...
 const GRASS_ZOOM_OPEN = 3.5    # ... and at this one and above it is gone (the fade runs between them, evenly in the zoom's logarithm)
-const GRASS_H = 52.0           # the row's height, world px (an ant stands about 12): the solid half of the strip is taller than an ant
+const GRASS_H = 58.0           # the row's height, world px (an ant stands about 12): the solid half of the strip is taller than an ant
 const GRASS_SINK = 0.45        # fading, the blades sink to this much shorter ...
 const GRASS_LEAN = 0.28        # ... and lean apart (away from the middle of the screen) by this share of their height
 const GRASS_KEEP = 0.12        # the share of the grass a nest's cleared patch keeps (a trodden fringe)
 const VLINE = 0.9              # share of the strip's height above the ground line: its flat foot sinks the rest into the ground
 const RIM = 3.0                # world px the grass's foot reaches below the soil's top edge, at the least
 const SWAY = 0.035             # wind: the tips sway this share of the row's height
-const CLEAR_IN = 14.0          # cells from a mouth where the clearing is fully trodden (grown with the anthill's width) ...
-const CLEAR_PAD = 5.0          # ... never less than the heap's half width plus this ...
+const CLEAR_IN = 14.0          # cells from a mouth where the clearing is fully trodden: at least this, and this share of ...
+const CLEAR_COVER = 0.9        # ... the anthill's half width (nest_view.gd draws it as wide as its heap needs) ...
 const CLEAR_FADE = 14.0        # ... and the cells it takes the grass to stand full again
 # --- the lawn behind the ants
 const LAWN_H = 26.0            # world px, the strip's height; it stands on the ground line, its foot hidden by the soil
@@ -98,10 +98,11 @@ func _process(delta: float) -> void:
 	_mouths.clear()
 	var g = colony.grid
 	var nest = colony.views.get("nest")
+	var mound_ws = nest.get("_mound_ws") if nest != null else null
 	for i in g.entrances.size():
 		var r_in = CLEAR_IN
-		if i == 0 and nest != null:
-			r_in = maxf(r_in, 0.5 * float(nest.get("_heap_w")) / C + CLEAR_PAD)        # the main mouth's heap grows
+		if mound_ws != null and i < mound_ws.size():
+			r_in = maxf(r_in, CLEAR_COVER * 0.5 * float(mound_ws[i]) / C)          # the anthill (it grows with the heap) stands in the clearing
 		_mouths.append([(float(g.entrances[i].x) + 0.5) * C, r_in * C, (r_in + CLEAR_FADE) * C])
 	_scenery.queue_redraw()
 	_grass.visible = _open < 0.996

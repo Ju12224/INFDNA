@@ -135,6 +135,7 @@ var _egg_floor := {}           # Vector3(egg pos, plane) -> world y of the drawn
 var _badges: Node2D            # the chamber badges: a child drawn above the ants (zoomed out they are what the view is for)
 var _heap_w := 0.0             # width of the spoil heap round the main mouth, world px
 var _heap_ws := []             # the same for every mouth (_heap_w is the first)
+var _mound_ws := []            # how wide the anthill is drawn at every mouth, world px (surface_view.gd clears the grass round it)
 var props_rebuilds := 0
 var props_ms := 0.0
 
@@ -935,6 +936,7 @@ func _draw_mounds(vr: Rect2) -> void:
 			grow = i
 	var tint = colony.day.tint
 	tint.a = 1.0
+	_mound_ws.resize(g.entrances.size())
 	for i in g.entrances.size():
 		var en = g.entrances[i]
 		var ex = int(en.x)
@@ -956,6 +958,7 @@ func _draw_mounds(vr: Rect2) -> void:
 		var m = _mounds[pick]
 		var hole: Vector2 = m["hole"]
 		var r = Rect2(Vector2((en.x + 0.5) * C - hole.x * s, ground - m["h"] * s), Vector2(m["w"], m["h"]) * s)
+		_mound_ws[i] = r.size.x
 		if not vr.intersects(r):
 			continue
 		draw_texture_rect(m["tex"], r, false, tint)
