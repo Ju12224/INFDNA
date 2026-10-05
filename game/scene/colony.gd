@@ -223,9 +223,15 @@ func _clamp_camera() -> void:
 func _zoom_at(screen_pos: Vector2, k: float) -> void:
 	_zoom_target = clamp(_zoom_target * k, min_zoom(), ZOOM_MAX)
 	_zoom_anchor = screen_pos
-	if k > 1.0:
+	if k > 1.0 and _frame_t <= 0.0:
+		# the focus is picked when a wheel gesture starts (not again for each notch: the camera frames the lane while the zoom moves, so
+		# the lane under a still mouse would drift), and the camera frames it again if it changed
+		var f0 = focus_target
 		focus_target = lane_under(screen_pos)
-		focus_meadow = _screen_to_world(screen_pos).y < views["surface"].ground_y(_screen_to_world(screen_pos).x) + 6.0 if views.has("surface") else true
+		var w = _screen_to_world(screen_pos)
+		focus_meadow = w.y < views["surface"].ground_y(w.x) + 6.0 if views.has("surface") else true
+		if abs(focus_target - f0) > 0.5:
+			_frame_t = FRAME_HOLD
 
 
 # The meadow lane number under a screen point: 1 below the soil's top line (zooming into the nest never cuts the meadow), the back lane

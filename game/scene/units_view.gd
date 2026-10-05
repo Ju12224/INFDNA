@@ -159,7 +159,8 @@ const S_NL = 44        # nest ants: body length this frame, world px
 const S_VX = 45        # nest ants: its velocity, smoothed (px/s): the way it heads
 const S_VY = 46
 const S_TR = 47        # nest ants: what its genes add to the top-down body (see _traits), null for a plain worker
-const S_N = 48
+const S_TDTINT = 48    # nest ants: the strain's tint for the top-down body
+const S_N = 49
 
 const DIRS = 16
 
@@ -186,6 +187,10 @@ var _td_size := Vector2(512, 310)
 var _td_k := Color.WHITE     # KIT_BASE over the top-down body's own mean colour: the strain's tint is made for the kit
 var _glow_tex: Texture2D
 var _wing_pics := {}
+var _kv := 0.0               # this frame's smoothing factors for the nest ants (worked out once, not per ant)
+var _kp := 0.0
+var _kh := 0.0
+var _hlim := 0.0
 var draw_us := 0            # how long the last _draw took (tests read it)
 var debug_on := false       # tests (ants_anim_test.gd): fill debug_frames with how each ant was drawn this frame
 var debug_frames := {}      # ant id -> [baked, frame cell (-1: whole-body picture), walking, moved px, mid-step, gait, p.x, p.y, drawn spot x, y, task, digging, a.t, drawn tilt, body length px, row, surface 0..1, tilt before the pose]
@@ -312,6 +317,10 @@ func _draw() -> void:
 	var poses = zoom >= POSE_ZOOM
 	var ground = zoom >= GROUND_ZOOM
 	var ks = 1.0 - exp(-_dt * SURF_RATE)
+	_kv = 1.0 - exp(-_dt / HEAD_TAU)
+	_kp = 1.0 - exp(-_dt * NEST_PUSH_RATE)
+	_kh = 1.0 - exp(-_dt * TD_EASE)
+	_hlim = TD_TURN_MAX * _dt
 	var kl = 1.0 - exp(-_dt * LANE_RATE)
 	var ctl = colony.views.get("controls")
 	var sel = ctl.get("selected") if ctl != null else null
@@ -589,24 +598,24 @@ func _draw_nest_ant(a, p: Vector2, st: Array, far: float, poses: bool, sel: Dict
 	var sk: float = st[S_SURF]
 	var length: float = float(st[S_NL]) * (_pop(a.age) if a.age < 0.5 else 1.0)
 	# the way it heads: the velocity of the ant itself (not of the crowd's shoving), averaged a little, then eased
-	var kv: float = 1.0 - exp(-_dt / HEAD_TAU)
-	var vx: float = (p.x - float(st[S_PX])) / max(_dt, 0.001)
-	var vy: float = (p.y - float(st[S_PY])) / max(_dt, 0.001)
+	var idt: float = 1.0 / max(_dt, 0.001)
+	var vx: float = (p.x - float(st[S_PX])) * idt
+	var vy: float = (p.y - float(st[S_PY])) * idt
 	st[S_PX] = p.x
 	st[S_PY] = p.y
-	if abs(vx) + abs(vy) < 2000.0:
-		st[S_VX] = lerp(float(st[S_VX]), vx, kv)
-		st[S_VY] = lerp(float(st[S_VY]), vy, kv)
-	var head: float = st[S_HEAD]
 	var svx: float = st[S_VX]
 	var svy: float = st[S_VY]
+	if abs(vx) + abs(vy) < 2000.0:
+		svx += (vx - svx) * _kv
+		svy += (vy - svy) * _kv
+		st[S_VX] = svx
+		st[S_VY] = svy
+	var head: float = st[S_HEAD]
 	if svx * svx + svy * svy > 36.0:
-		var lim: float = TD_TURN_MAX * _dt
-		head = wrapf(head + clamp(wrapf(atan2(svy, svx) - head, -PI, PI) * (1.0 - exp(-_dt * TD_EASE)), -lim, lim), -PI, PI)
+		head = wrapf(head + clamp(wrapf(atan2(svy, svx) - head, -PI, PI) * _kh, -_hlim, _hlim), -PI, PI)
 		st[S_HEAD] = head
 	# the crowd's push, with a share of it to the ant's right so two ants meeting in a tunnel pass instead of walking through each other
 	var z: int = a.tz if a.t > 0.5 else a.z
-	var kp: float = 1.0 - exp(-_dt * NEST_PUSH_RATE)
 	var px: float = st[S_PUX]
 	var py: float = st[S_PUY]
 	var ps: float = st[S_PUS]
@@ -617,8 +626,10 @@ func _draw_nest_ant(a, p: Vector2, st: Array, far: float, poses: bool, sel: Dict
 	if gm > gmax:
 		gx *= gmax / gm
 		gy *= gmax / gm
-	var dx: float = lerp(float(st[S_DX]), gx, kp)
-	var dy: float = lerp(float(st[S_DY]), gy, kp)
+	var dx: float = float(st[S_DX])
+	var dy: float = float(st[S_DY])
+	dx += (gx - dx) * _kp
+	dy += (gy - dy) * _kp
 	if abs(dx) + abs(dy) > 1.0 and _field(p.x + dx, p.y + dy, z) >= 8.0 and _field(p.x, p.y, z) < 8.0:
 		dx *= 0.6                              # pushed into the rock: back toward the open
 		dy *= 0.6
@@ -631,7 +642,7 @@ func _draw_nest_ant(a, p: Vector2, st: Array, far: float, poses: bool, sel: Dict
 	var moved: float = sqrt(cmx * cmx + cmy * cmy)
 	st[S_FX] = c.x
 	st[S_FY] = c.y
-	var walking: bool = moved / max(_dt, 0.001) > 3.0
+	var walking: bool = moved * idt > 3.0
 	if walking and moved < 90.0:
 		st[S_GAIT] = float(st[S_GAIT]) + min(moved / max(2.0, TD_CYCLE * length), TD_STRIDE_CAP)
 	var fr: int = TD_SEQ[int(fposmod(float(st[S_GAIT]), 1.0) * 4.0) % 4] if walking else 1
@@ -648,9 +659,9 @@ func _draw_nest_ant(a, p: Vector2, st: Array, far: float, poses: bool, sel: Dict
 	var light = Color(shade, shade, shade, alpha)
 	if hurt > 0.0:
 		light *= Color.WHITE.lerp(HURT, hurt)
-	if sel.has(a.id):
+	if not sel.is_empty() and sel.has(a.id):
 		light *= SELECTED
-	var tint: Color = Color(st[S_TINT]) * _td_k
+	var tint: Color = st[S_TDTINT]
 	st[S_SPOT_X] = pos.x
 	st[S_SPOT_Y] = pos.y
 	st[S_SPOT_R] = length * 0.5
@@ -766,6 +777,7 @@ func _new_state(a, p: Vector2, g) -> Array:
 		st[S_VX] = cos(float(st[S_HEAD])) * 30.0
 		st[S_VY] = sin(float(st[S_HEAD])) * 30.0
 	st[S_TR] = _traits(a)
+	st[S_TDTINT] = Color(st[S_TINT]) * _td_k
 	st[S_FX] = p.x + down.x
 	st[S_FY] = p.y + down.y
 	st[S_HASH] = fmod(a.id * 0.6180339887, 1.0)

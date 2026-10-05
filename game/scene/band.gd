@@ -126,7 +126,7 @@ static func curtain_part(lane: float) -> float:
 # How much of the curtain to draw: solid while it parts (it leans away, bows and slides toward the camera, never see-through), gone in the
 # last of the parting, and gone with the camera's cut as for everything else.
 static func curtain_alpha(lane: float) -> float:
-	return lane_alpha(lane) * (1.0 - smoothstep(0.85, 1.0, curtain_part(lane)))
+	return lane_alpha(lane) * (1.0 - smoothstep(0.7, 1.0, curtain_part(lane)))
 
 
 # Distance haze, 0..1: how much of the horizon colour a lane takes. Light, growing with depth, and a little more well behind the focus
