@@ -17,6 +17,7 @@ var _sim_t0 := 0.0
 var _us := 0                 # the units view's _draw cost, summed over the measured window
 var _us_n := 0
 var _ants_sum := 0
+var _push_us := 0
 var _prev := {}              # crowd=1: ant id -> its last frame's entry (for the turn rate)
 var _rates := []             # drawn turn rate of underground ants that are walking, rad/s
 var _cw := {"frames": 0, "ants": 0, "stacked": 0, "overlap": 0, "pile": 0, "pile_sum": 0, "upside": 0, "und": 0, "far": []}
@@ -69,6 +70,7 @@ func _process(_delta: float) -> bool:
 			_ab[m][1] += 1
 			_ab[m][2] += df.size()
 		_us_n += 1
+		_push_us += _uv.push_us
 		_ants_sum += df.size()
 		for id in df:
 			if not _series.has(id):
@@ -245,7 +247,7 @@ func _report() -> void:
 	out.append("sample of %d ants over %d frames (%.1f s at 60 fps):" % [sample.size(), win, win / 60.0])
 	out.append_array(rows)
 	var pct = func(a, b): return 100.0 * a / max(1, b)
-	out.append("units view _draw: %.2f ms per frame on average, %.1f ants per frame, %.1f us per ant" % [_us / 1000.0 / max(1, _us_n), float(_ants_sum) / max(1, _us_n), float(_us) / max(1, _ants_sum)])
+	out.append("units view _draw: %.2f ms per frame on average, %.1f ants per frame, %.1f us per ant, nest crowd pushing %.2f ms" % [_us / 1000.0 / max(1, _us_n), float(_ants_sum) / max(1, _us_n), float(_us) / max(1, _ants_sum), _push_us / 1000.0 / max(1, _us_n)])
 	if _args.has("ab"):
 		for m in [1, 0]:
 			var e = _ab[m]

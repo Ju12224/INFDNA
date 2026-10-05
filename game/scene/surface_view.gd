@@ -304,6 +304,9 @@ func _draw_row(it: Node2D, n: int) -> void:
 	var p = Band.persp(lane)
 	var h = ROW_K * p * p
 	var col = colony.day.tint
+	if n < 6:                 # the front strip is brighter than the middle one: ease into it (a bright band showed where the strips meet)
+		var sh = 0.78 + 0.22 * (6.0 - n) / 5.0
+		col = Color(col.r * sh, col.g * sh, col.b * sh, 1.0)
 	col.a = a
 	var pts := PackedVector2Array()
 	var uvs := PackedVector2Array()
@@ -401,8 +404,8 @@ func _draw_curtain(rid: RID, i: int, lit: bool) -> void:
 		xb.append(bx)
 		yb.append(bot)
 		us.append(x / w + i * 0.37)
-		vt.append(lerp(V0, V1, sunk / tall))                 # trodden down: the strip's bottom part, its bushy foot, not its tips
-		vb.append(V1 - (nat - bot) / tall * (V1 - V0))
+		vt.append(V0)                                       # trodden down: the whole strip squashed shorter, blades whole (cropped, it was sliced
+		vb.append(V1 - (nat - bot) / max(nat - top, 0.001) * (V1 - V0))       # along a straight slope)
 		x += step
 	var col = colony.day.tint * CURTAIN_SHADE[i]
 	if not lit:
@@ -473,8 +476,8 @@ func _cover_rows(it: Node2D, under: bool) -> void:
 		yb.append(foot)
 		ys.append(max(b, foot))                                # its solid foot, stretched down to the bottom where the row ends above it
 		us.append(x / ww + 0.11)
-		vt.append(V1 - (nat - min(top, foot)) / h * (V1 - V0))
-		vb.append(V1 - (nat - foot) / h * (V1 - V0))
+		vt.append(V0 if top < foot else V1)                    # trodden down: the strip squashed shorter, its blades whole
+		vb.append(V1 - (nat - foot) / max(nat - top, 0.001) * (V1 - V0) if top < foot else V1)
 		v72.append(0.72)
 		v1.append(V1)
 		x += step

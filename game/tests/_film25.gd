@@ -16,6 +16,9 @@ func _process(_d: float) -> bool:
 	if _f == 1:
 		print("DBG before setup cam ", _node.cam.position, " entrance ", _node.grid.entrance, " ground_y ", _node.ground_y())
 		_node.debug_setup(_a)
+		for v in str(_a.get("hide", "")).split(",", false):
+			if _node.views.has(v):
+				_node.views[v].visible = false
 		print("DBG after setup cam ", _node.cam.position, " time ", _node.sim.time, " collapsed ", _node.sim.collapsed, " entrance ", _node.grid.entrance, " center ", _node.grid.center(int(_node.grid.entrance.x), int(_node.grid.entrance.y)), " ents ", _node.grid.entrances.size())
 	if _f <= 5:
 		print("DBG f", _f, " cam ", _node.cam.position, " zoom ", _node.zoom(), " focus ", _node.focus, " frame_t ", _node._frame_t, " dolly ", _node.Band.dolly)

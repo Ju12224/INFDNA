@@ -14,6 +14,13 @@ extends Node2D
 # as the old view: fight lunges, the dig jackhammer, rearing up on guard, a flinch when bitten, nursing rock, idle breathing and
 # grooming, a nod on picking food up and a hop on delivering it, newborns pop out and wobble, winged ants take off over open ground.
 # Food is held at the jaws. The queen (queen_full) breathes, paces her chamber floor and squeezes when she lays.
+#
+# INSIDE THE NEST the ants are seen from above, lying flat on the glass like an ant farm (_draw_nest_ant): one quad of the owner's
+# top-down worker (art/antkit/topdown_worker_0..2.png, head to the right), centred on the ant, turned to the way it walks, so floors,
+# slopes, shafts, corners and roofs are all just a heading. The legs walk 0, 1, 2, 1 by the ground covered; standing, frame 1 with a
+# sway. NEST_SCALE makes them smaller than the ants outside; at the nest mouth the top view squashes flat and the side view opens
+# (and the size blends), so nobody pops. Ants too close push each other apart (_push_pairs) and step to their right to pass. The strain
+# is the body's tint and size, plus a few cheap hints of its genes (_traits). Without the top-down art, nests use the side-view path.
 # Hooks: ants in colony.views["controls"].selected are drawn brighter; ant_spot(a) says where an ant is drawn (for picking).
 
 const Art = preload("res://scene/art.gd")
@@ -152,9 +159,6 @@ const S_DY = 37
 const S_FX = 38        # where its feet were drawn last frame
 const S_FY = 39
 const S_HEAD = 40      # nest ants: the way it faces (radians, eased toward its heading)
-const S_PUX = 41       # nest ants: the push of the ants too close to it, this frame (world px)
-const S_PUY = 42
-const S_PUS = 43       # ... and the sum of the pushes (the sidestep that makes ants pass instead of walking through each other)
 const S_NL = 44        # nest ants: body length this frame, world px
 const S_VX = 45        # nest ants: its velocity, smoothed (px/s): the way it heads
 const S_VY = 46
@@ -187,10 +191,18 @@ var _td_size := Vector2(512, 310)
 var _td_k := Color.WHITE     # KIT_BASE over the top-down body's own mean colour: the strain's tint is made for the kit
 var _glow_tex: Texture2D
 var _wing_pics := {}
+var _ba_x := PackedFloat32Array()   # the nest crowd, ant by ant this frame: where it is, half the distance it keeps from another, its push so far
+var _ba_y := PackedFloat32Array()
+var _ba_r := PackedFloat32Array()
+var _ba_ux := PackedFloat32Array()
+var _ba_uy := PackedFloat32Array()
+var _ba_us := PackedFloat32Array()
+var _ba_n := 0
 var _kv := 0.0               # this frame's smoothing factors for the nest ants (worked out once, not per ant)
 var _kp := 0.0
 var _kh := 0.0
 var _hlim := 0.0
+var push_us := 0            # how long the nest crowd's pushing took in the last _draw (tests read it)
 var draw_us := 0            # how long the last _draw took (tests read it)
 var debug_on := false       # tests (ants_anim_test.gd): fill debug_frames with how each ant was drawn this frame
 var debug_frames := {}      # ant id -> [baked, frame cell (-1: whole-body picture), walking, moved px, mid-step, gait, p.x, p.y, drawn spot x, y, task, digging, a.t, drawn tilt, body length px, row, surface 0..1, tilt before the pose]
@@ -317,6 +329,7 @@ func _draw() -> void:
 	var poses = zoom >= POSE_ZOOM
 	var ground = zoom >= GROUND_ZOOM
 	var ks = 1.0 - exp(-_dt * SURF_RATE)
+	_ba_n = 0
 	_kv = 1.0 - exp(-_dt / HEAD_TAU)
 	_kp = 1.0 - exp(-_dt * NEST_PUSH_RATE)
 	_kh = 1.0 - exp(-_dt * TD_EASE)
@@ -383,7 +396,7 @@ func _draw() -> void:
 		st[S_SURF] = sk
 		if sk > 0.001 or surf > 0.0:
 			st[S_LANE] = lerp(float(st[S_LANE]), _lane_goal(g, a, piles), kl)
-		var it = [a, p, st]
+		var it = [a, p, st, -1]
 		if sk >= 0.5:
 			lanes[clampi(int(float(st[S_LANE]) * LANE_BUCKETS), 0, LANE_BUCKETS - 1)].append(it)
 			continue
@@ -392,16 +405,25 @@ func _draw() -> void:
 			# seen from above: no ground to stand on, and a crowd is pushed apart on the wall (see _push_pairs)
 			var plane0: float = a.z + (a.tz - a.z) * t
 			st[S_NL] = float(st[S_WLEN]) * far * (lerp(1.0, BACK_SCALE, plane0) if plane0 > 0.0 else 1.0) * lerp(NEST_SCALE, 1.0, clamp(sk, 0.0, 1.0))
-			st[S_PUX] = 0.0
-			st[S_PUY] = 0.0
-			st[S_PUS] = 0.0
+			var idx: int = _ba_n
+			_ba_n += 1
+			if idx >= _ba_x.size():
+				for arr in [_ba_x, _ba_y, _ba_r, _ba_ux, _ba_uy, _ba_us]:
+					arr.resize(idx + 128)
+			it[3] = idx
+			_ba_x[idx] = p.x
+			_ba_y[idx] = p.y
+			_ba_r[idx] = NEST_GAP * 0.5 * float(st[S_NL])
+			_ba_ux[idx] = 0.0
+			_ba_uy[idx] = 0.0
+			_ba_us[idx] = 0.0
 			if ground:
 				var tkey = (((int(p.x / (C * NEST_BUCKET)) + 1024) * 4096 + int(p.y / (C * NEST_BUCKET))) * 2 + z)
 				var tc = crowd.get(tkey)
 				if tc == null:
-					crowd[tkey] = [it]
+					crowd[tkey] = PackedInt32Array([idx])
 				else:
-					tc.append(it)
+					tc.append(idx)
 		elif ground:
 			_place(a, p, st, float(st[S_WLEN]) * far * (BACK_SCALE if z == 1 else 1.0), z)
 			var key = ((int(p.x / C) >> 2) * 8192 + (int(p.y / C) >> 2)) * 2 + z
@@ -419,9 +441,10 @@ func _draw() -> void:
 		else:
 			front[int(st[S_ROW])].append(it)
 	_state = state
+	var tp0 := Time.get_ticks_usec()
 	if _td_tex != null:
 		for key in crowd:
-			var c: Array = crowd[key]
+			var c: PackedInt32Array = crowd[key]
 			if c.size() > 1:
 				_push_pairs(c, c, true)
 			for nb in NEST_NEIGHBOURS:
@@ -432,19 +455,20 @@ func _draw() -> void:
 		for c in crowd.values():
 			if c.size() > 1 or abs(float(c[0][2][S_SPREAD])) > 0.3 or float(c[0][2][S_CROWD]) > 0.01:
 				_spread(c, far)
+	push_us = Time.get_ticks_usec() - tp0
 	var kf: int = kit._frame if kit != null else 0
 	var td: bool = _td_tex != null
 	for r in [2, 1, 0]:
 		for it in back[r]:
 			if td:
-				_draw_nest_ant(it[0], it[1], it[2], far, poses, sel)
+				_draw_nest_ant(it[0], it[1], it[2], far, poses, sel, it[3])
 			else:
 				_draw_ant(it[0], it[1], it[2], far, poses, sel, day_tint, kf)
 	_draw_queen(vr, far)
 	for r in [2, 1, 0]:
 		for it in front[r]:
 			if td:
-				_draw_nest_ant(it[0], it[1], it[2], far, poses, sel)
+				_draw_nest_ant(it[0], it[1], it[2], far, poses, sel, it[3])
 			else:
 				_draw_ant(it[0], it[1], it[2], far, poses, sel, day_tint, kf)
 	for i in lanes.size():
@@ -551,20 +575,21 @@ func _build_td() -> void:
 
 
 # Nest ants too close to each other push each other apart (world px, from the sim's positions, so the push is a smooth function of where
-# they walk: no slots to change, no jitter). `same`: c is one bucket of the crowd grid, else its pairs with the bucket c2 next to it.
-func _push_pairs(c: Array, c2: Array, same: bool) -> void:
+# they walk: no slots to change, no jitter). `same`: c is one bucket of the crowd grid (indices into the _ba_ arrays), else its pairs with
+# the bucket c2 next to it.
+func _push_pairs(c: PackedInt32Array, c2: PackedInt32Array, same: bool) -> void:
 	var n: int = c.size()
 	var m: int = c2.size()
-	for i in n:
-		var si: Array = c[i][2]
-		var pi: Vector2 = c[i][1]
-		var li: float = si[S_NL]
-		for j in range(i + 1 if same else 0, m):
-			var sj: Array = c2[j][2]
-			var pj: Vector2 = c2[j][1]
-			var d0: float = NEST_GAP * (li + float(sj[S_NL])) * 0.5
-			var dx: float = pi.x - pj.x
-			var dy: float = pi.y - pj.y
+	for ii in n:
+		var i: int = c[ii]
+		var xi: float = _ba_x[i]
+		var yi: float = _ba_y[i]
+		var ri: float = _ba_r[i]
+		for jj in range(ii + 1 if same else 0, m):
+			var j: int = c2[jj]
+			var dx: float = xi - _ba_x[j]
+			var dy: float = yi - _ba_y[j]
+			var d0: float = ri + _ba_r[j]
 			var d2: float = dx * dx + dy * dy
 			if d2 >= d0 * d0:
 				continue
@@ -572,24 +597,24 @@ func _push_pairs(c: Array, c2: Array, same: bool) -> void:
 			var ux: float
 			var uy: float
 			if dist < 0.05:
-				var ang: float = float(c[i][0].id * 7 + c2[j][0].id * 13)
+				var ang: float = float(i * 7 + j * 13)
 				ux = cos(ang)
 				uy = sin(ang)
 			else:
 				ux = dx / dist
 				uy = dy / dist
 			var push: float = (d0 - dist) * 0.5
-			si[S_PUX] += ux * push
-			si[S_PUY] += uy * push
-			si[S_PUS] += push
-			sj[S_PUX] -= ux * push
-			sj[S_PUY] -= uy * push
-			sj[S_PUS] += push
+			_ba_ux[i] += ux * push
+			_ba_uy[i] += uy * push
+			_ba_us[i] += push
+			_ba_ux[j] -= ux * push
+			_ba_uy[j] -= uy * push
+			_ba_us[j] += push
 
 
 # An ant inside the nest, seen from above on the glass: one quad of the top-down worker, centred on the ant and turned to the way it
 # heads. The legs walk the cycle 0, 1, 2, 1 by the ground covered; standing, it rests on frame 1 and sways and breathes a little.
-func _draw_nest_ant(a, p: Vector2, st: Array, far: float, poses: bool, sel: Dictionary) -> void:
+func _draw_nest_ant(a, p: Vector2, st: Array, far: float, poses: bool, sel: Dictionary, idx: int) -> void:
 	var t: float = clamp(a.t, 0.0, 1.0)
 	var plane: float = a.z + (a.tz - a.z) * t
 	var hidden := 0.0
@@ -616,9 +641,9 @@ func _draw_nest_ant(a, p: Vector2, st: Array, far: float, poses: bool, sel: Dict
 		st[S_HEAD] = head
 	# the crowd's push, with a share of it to the ant's right so two ants meeting in a tunnel pass instead of walking through each other
 	var z: int = a.tz if a.t > 0.5 else a.z
-	var px: float = st[S_PUX]
-	var py: float = st[S_PUY]
-	var ps: float = st[S_PUS]
+	var px: float = _ba_ux[idx]
+	var py: float = _ba_uy[idx]
+	var ps: float = _ba_us[idx]
 	var gx: float = px - sin(head) * ps * NEST_SIDE
 	var gy: float = py + cos(head) * ps * NEST_SIDE
 	var gm: float = sqrt(gx * gx + gy * gy)
@@ -1249,6 +1274,8 @@ func ant_spot(a) -> Vector3:
 	if wl <= 0.0:
 		wl = _length(a.ph.get("size", 74.0))
 	var length = wl * CASTE_SCALE[clampi(a.caste, 0, 2)] * clamp(sqrt(FAR_ZOOM / colony.zoom()), 1.0, FAR_MAX)
+	if _td_tex != null and not colony.grid.is_surface_cell(a.tx, a.ty):
+		return Vector3(p.x, p.y, length * NEST_SCALE * 0.5)          # a nest ant: small, and its middle is where the sim keeps it
 	var mid = p + down * C * 0.5 - down * length * 0.2
 	return Vector3(mid.x, mid.y, length * 0.5)
 

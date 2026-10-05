@@ -232,6 +232,8 @@ func _zoom_at(screen_pos: Vector2, k: float) -> void:
 		focus_meadow = w.y < views["surface"].ground_y(w.x) + 6.0 if views.has("surface") else true
 		if abs(focus_target - f0) > 0.5:
 			_frame_t = FRAME_HOLD
+		if Band.dolly < 0.02:
+			focus = focus_target             # nothing is cut yet: no one sees the focus move, so it need not slide from the last one
 
 
 # The meadow lane number under a screen point: 1 below the soil's top line (zooming into the nest never cuts the meadow), the back lane
