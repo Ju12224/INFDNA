@@ -569,6 +569,7 @@ func _draw_worm(ci: CanvasItem, e, p: Vector2, st: Vector3, kk: float, col: Colo
 	var acc := 0.0
 	var target := 0.0
 	var nominal = WORM_LEN * kk / N
+	var cut := false
 	for i in range(1, N + 1):
 		var li = nominal * (1.0 - 0.8 * amp * sin(TAU * WORM_WAVES * (i - 0.5) / N + ph))
 		target += li
@@ -587,7 +588,8 @@ func _draw_worm(ci: CanvasItem, e, p: Vector2, st: Vector3, kk: float, col: Colo
 			acc += c
 			seg += 1
 		if not found:
-			# the trail ran out (it has not come that far yet): the body ends where the tunnel does
+			# the trail ran out (it has not come that far yet): the body ends where the tunnel does, in a rounded tail
+			cut = true
 			var f = clampf((acc - (target - li)) / li, 0.0, 1.0)
 			if f > 0.08:
 				ps.append(pol[m - 1])
@@ -630,7 +632,11 @@ func _draw_worm(ci: CanvasItem, e, p: Vector2, st: Vector3, kk: float, col: Colo
 			tdir = tv.normalized()
 		var u = 1.0 - pu[i] / N
 		var pr = _wp_at(u * tw)
-		var nrm = tdir.rotated(PI * 0.5) * (flip * pr.y * hk * pk[i] * (1.0 + amp * sin(TAU * WORM_WAVES * pu[i] / N + ph)))
+		var tip := 1.0
+		if cut and i >= cnt - 3:
+			var q = float(i - (cnt - 4)) / 3.0
+			tip = maxf(sqrt(1.0 - q * q), 0.12)
+		var nrm = tdir.rotated(PI * 0.5) * (flip * tip * pr.y * hk * pk[i] * (1.0 + amp * sin(TAU * WORM_WAVES * pu[i] / N + ph)))
 		pts.append(ps[i] - nrm)
 		pts.append(ps[i] + nrm)
 		uvs.append(Vector2(u, (pr.x - pr.y) / th))
