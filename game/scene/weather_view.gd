@@ -546,7 +546,7 @@ func _snow_level(it: CanvasItem, n: int, la: float, sn: float, w: float, level: 
 			var cp = colony.cam.position
 			var sy = ((rect.end.y - cp.y) * colony.zoom() + 360.0) * 1.468
 			var sx = ((x - cp.x) * colony.zoom() + 640.0) * 1.468
-			if sx > 500 and sx < 900 and sy < 780:
+			if sy < 800:
 				print("PIECE n ", n, " lv ", level, " screen ", snappedf(sx, 1.0), ",", snappedf(sy, 1.0), " x ", snappedf(x, 1.0), " gy ", snappedf(gy, 1.0), " w ", snappedf(sw, 1.0), " h ", snappedf(sh, 1.0), " raise ", snappedf(_lraise[n], 0.1), " cam ", cp)
 		if a > 0.5:
 			it.draw_set_transform(Vector2(x * 2.0, 0.0), 0.0, Vector2(-1.0, 1.0))
