@@ -286,8 +286,9 @@ func _step() -> float:
 	return max(6.0, STEP_PX / colony.zoom())
 
 
-# A lawn row, fading in over the lanes behind the camera's cut. While the camera is in the band the rows nearest the cut keep their solid
-# foot stretched down to the bottom of the screen, so no sky shows under the front-most one however the ground lies.
+# A lawn row, fading in over the lanes behind the camera's cut. While the camera is in the band the first opaque lanes behind the cut
+# carry on downward with copies of their own row, a few steps in front of it, to the cover strip, so no sky shows under the front-most
+# one however the ground lies (stretching the foot instead drew vertical streaks).
 func _draw_row(it: Node2D, n: int) -> void:
 	var c = Band.cover_n()
 	if n == 1 and c < FILL_TO:
@@ -306,37 +307,32 @@ func _draw_row(it: Node2D, n: int) -> void:
 	col.a = a
 	var pts := PackedVector2Array()
 	var uvs := PackedVector2Array()
-	var xs := PackedFloat32Array()
-	var yf := PackedFloat32Array()
-	var yb := PackedFloat32Array()
-	var us := PackedFloat32Array()
-	var skirt = c > 1.001 and n >= c + Band.FADE - 0.001 and n < c + Band.FADE + SKIRT_LANES
 	var w = tex.get_width() * h / tex.get_height()
 	var step = _step()
 	var view = colony.view_rect(0.0)
 	var x = floor((view.position.x - step) / step) * step
 	var u0 = n * 0.37
+	var gap = 0.0
+	var want = view.end.y - 0.4 * COVER_FRAC * view.size.y
+	var skirt = c > 1.001 and n >= c + Band.FADE - 0.001 and n < c + Band.FADE + SKIRT_LANES
 	while x <= view.end.x + step:
 		var line = Band.lane_y(lane_ground(x, n), lane)
 		pts.append(Vector2(x, line - (1.0 - ROW_SINK) * h))
 		pts.append(Vector2(x, line + ROW_SINK * h))
 		uvs.append(Vector2(x / w + u0, V0))
 		uvs.append(Vector2(x / w + u0, V1))
-		if skirt:
-			xs.append(x)
-			yf.append(line + ROW_SINK * h)
-			yb.append(max(view.end.y - 0.5 * COVER_FRAC * view.size.y, line + ROW_SINK * h))
-			us.append(x / w + u0)
+		gap = max(gap, want - (line + ROW_SINK * h))
 		x += step
 	_strip(it, tex, pts, uvs, col)
-	if skirt:
-		var v72 := PackedFloat32Array()
-		var v1 := PackedFloat32Array()
-		v72.resize(xs.size())
-		v72.fill(0.94)                        # (one colour down the skirt, the foot's own, not a stretched picture)
-		v1.resize(xs.size())
-		v1.fill(V1)
-		_ribbon(it.get_canvas_item(), tex, xs, yf, xs, yb, us, v72, v1, col)
+	if skirt and gap > 0.0:
+		var dy = 0.55 * h
+		for k in range(1, min(8, int(ceil(gap / dy))) + 1):
+			var cp := pts.duplicate()
+			var cu := uvs.duplicate()
+			for q in cp.size():
+				cp[q].y += k * dy
+				cu[q].x += k * 0.173
+			_strip(it, tex, cp, cu, col)
 
 
 # Landmarks standing in lane number n (in front of its row, behind the next one; the back curtain among them), then whatever other
@@ -369,9 +365,9 @@ func _draw_curtain(rid: RID, i: int, lit: bool) -> void:
 	var a = Band.curtain_alpha(lane)
 	if a <= 0.004:
 		return
+	var pt = Band.curtain_part(lane)
 	var tex: Texture2D = _strips["thick"]
 	var n = Band.num(lane)
-	var pt = 1.0 - a
 	var p = Band.persp(lane)
 	var h = CURTAIN_H[i] * p
 	var w = tex.get_width() * h / tex.get_height()

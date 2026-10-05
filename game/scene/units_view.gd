@@ -97,7 +97,7 @@ const TD_CYCLE = 0.95                     # body lengths walked per leg cycle (t
 const TD_STRIDE_CAP = 0.22                # cycles per frame at most
 const TD_EASE = 12.0                      # 1/s: how fast the body turns to its heading
 const TD_TURN_MAX = 14.0                  # rad/s at most
-const NEST_GAP = 0.62                     # body lengths between the middles of two ants in a nest crowd
+const NEST_GAP = 0.74                     # body lengths between the middles of two ants in a nest crowd
 const NEST_PUSH_MAX = 2.6                 # cells: how far a crowd may shove an ant off the cell the sim keeps it in
 const NEST_PUSH_RATE = 5.0
 const NEST_SIDE = 0.45                    # share of a push that goes to the ant's right instead (two-way traffic keeps to its right)
@@ -158,7 +158,8 @@ const S_PUS = 43       # ... and the sum of the pushes (the sidestep that makes 
 const S_NL = 44        # nest ants: body length this frame, world px
 const S_VX = 45        # nest ants: its velocity, smoothed (px/s): the way it heads
 const S_VY = 46
-const S_N = 47
+const S_TR = 47        # nest ants: what its genes add to the top-down body (see _traits), null for a plain worker
+const S_N = 48
 
 const DIRS = 16
 
@@ -184,6 +185,7 @@ var _td_tex: Texture2D       # the three top-down worker frames side by side (pr
 var _td_size := Vector2(512, 310)
 var _td_k := Color.WHITE     # KIT_BASE over the top-down body's own mean colour: the strain's tint is made for the kit
 var _glow_tex: Texture2D
+var _wing_pics := {}
 var draw_us := 0            # how long the last _draw took (tests read it)
 var debug_on := false       # tests (ants_anim_test.gd): fill debug_frames with how each ant was drawn this frame
 var debug_frames := {}      # ant id -> [baked, frame cell (-1: whole-body picture), walking, moved px, mid-step, gait, p.x, p.y, drawn spot x, y, task, digging, a.t, drawn tilt, body length px, row, surface 0..1, tilt before the pose]
@@ -447,6 +449,49 @@ func _draw() -> void:
 	draw_us = Time.get_ticks_usec() - t0
 
 
+# What the genes add to the top-down body, approximately and cheaply (the owner's top-down art is one plain body; every gene detail the
+# side-view kit draws properly is only hinted at here): wings laid flat behind (2 quads), the soldier's big head (a bigger copy of the head
+# end), a glow (an additive dot), more or longer legs (a wider copy behind), and in one batch of lines the spikes, fur and sting; armour
+# darkens it. At most two extra quads. null for a plain worker.
+func _traits(a):
+	var gn = a.genome
+	var M: Dictionary = gn.morph
+	var spk := 0
+	var arm := 0
+	var lp := 0
+	var ll := 0.0
+	var nl := 0
+	for sg in gn.segments:
+		spk += int(sg.get("spikes", 0))
+		arm += int(sg.get("armor", 0))
+		if str(sg.get("limb", "")) != "" and int(sg.get("n", 0)) > 0:
+			lp += int(sg["n"])
+			ll += float(sg.get("len", 55.0))
+			nl += 1
+	var tr := {
+		"wings": int(M.get("wings", 0)) > 0, "major": clamp(float(M.get("major", 0.0)) + (AntKit.SOLDIER_MAJOR if a.caste == 2 else 0.0), 0.0, 1.0),
+		"spk": min(spk, 6), "arm": min(arm, 4), "hair": float(M.get("hair", 0.0)), "sting": int(M.get("stinger", 0)) > 0,
+		"glow": int(M.get("glow", 0)) > 0, "legs": lp, "legk": clamp(ll / max(1, nl) / 55.0, 0.85, 1.25) if nl > 0 else 1.0}
+	if not (tr["wings"] or tr["major"] > 0.05 or tr["spk"] > 0 or tr["arm"] > 0 or tr["hair"] > 0.1 or tr["sting"] or tr["glow"] or tr["legs"] > 3 or abs(tr["legk"] - 1.0) > 0.05):
+		return null
+	return tr
+
+
+# A wing of the kit, premultiplied for this view (cached): role "wing_fore" or "wing_hind".
+func _wing_pic(role: String):
+	if _wing_pics.has(role):
+		return _wing_pics[role]
+	var out = null
+	var inf: Dictionary = kit._piece(kit._rolename(role)) if kit != null and kit.ok else {}
+	if not inf.is_empty():
+		var e = kit._pieces.get(inf["name"])
+		var tex = _premul(Art.tex(str(e.get("file", "")))) if e is Dictionary else null
+		if tex != null:
+			out = {"tex": tex, "size": inf["size"], "pivot": inf["pivot"], "len": (inf["far"] - inf["pivot"]).length(), "ang": (inf["far"] - inf["pivot"]).angle()}
+	_wing_pics[role] = out
+	return out
+
+
 # The three top-down worker frames (art/antkit/topdown_worker_0..2.png) side by side in one texture, so every nest ant is one quad of one
 # texture (a batch), with a transparent border so the mipmaps of one frame do not bleed into the next. Also the strain's tint, made for the
 # kit's drab body, is scaled to this body's own colour; and a soft dot for glowing strains.
@@ -616,7 +661,65 @@ func _draw_nest_ant(a, p: Vector2, st: Array, far: float, poses: bool, sel: Dict
 	else:
 		draw_set_transform(pos, ang, Vector2(sx, sy))
 	var cw: float = _td_size.x + 2.0 * TD_GUTTER
-	draw_texture_rect_region(_td_tex, Rect2(-TD_PIVOT, _td_size), Rect2(cw * fr + TD_GUTTER, TD_GUTTER, _td_size.x, _td_size.y), _pm(light * tint))
+	var src := Rect2(cw * fr + TD_GUTTER, TD_GUTTER, _td_size.x, _td_size.y)
+	var tr = st[S_TR]
+	var budget := 2
+	if tr != null:
+		# behind the body
+		if tr["wings"] and kit != null:
+			budget = 0
+			for w in 2:
+				var wp = _wing_pic("wing_hind" if w == 0 else "wing_fore")
+				if wp != null:
+					var k: float = TD_BODY * (0.5 if w == 0 else 0.58) / max(1.0, float(wp["len"]))
+					var wsz: Vector2 = wp["size"] * k
+					draw_set_transform_matrix(Transform2D(ang, Vector2(sx, sy), 0.0, pos) * Transform2D(PI + (0.5 if w == 0 else -0.5) - float(wp["ang"]), Vector2.ONE, 0.0, Vector2(30.0, 0.0)))
+					draw_texture_rect(wp["tex"], Rect2(-wp["pivot"] * k, wsz), false, _pm(light * Color(1.0, 1.0, 1.0, 0.7).lerp(tint, WING_TINT)))
+			draw_set_transform(pos, ang, Vector2(sx, sy))
+		else:
+			if tr["glow"] and budget > 0:
+				budget -= 1
+				var gl: float = 0.5 + 0.2 * sin(_t * 3.0 + a.id)
+				draw_texture_rect(_glow_tex, Rect2(Vector2(-330.0, -240.0), Vector2(660.0, 480.0)), false, Color(0.45 * gl * shade, 0.95 * gl * shade, 0.4 * gl * shade, 0.0))
+			if (tr["legs"] > 3 or abs(float(tr["legk"]) - 1.0) > 0.05) and budget > 0:
+				budget -= 1
+				var wide: float = max(1.0, float(tr["legk"])) * (1.0 + 0.1 * max(0, int(tr["legs"]) - 3)) * 1.12
+				draw_set_transform(pos, ang, Vector2(sx, sy * wide))
+				draw_texture_rect_region(_td_tex, Rect2(-TD_PIVOT, _td_size), src, _pm(light * tint * Color(0.8, 0.8, 0.8, 1.0)))
+				draw_set_transform(pos, ang, Vector2(sx, sy))
+			if tr["arm"] > 0:
+				light *= Color(1.0, 1.0, 1.0).lerp(Color(0.8, 0.84, 0.95), min(1.0, tr["arm"] * 0.4))
+	draw_texture_rect_region(_td_tex, Rect2(-TD_PIVOT, _td_size), src, _pm(light * tint))
+	if tr != null:
+		# in front: the big head, then the spikes, fur and sting as one batch of lines
+		if tr["major"] > 0.05 and budget > 0:
+			var hk: float = 1.0 + 0.45 * float(tr["major"])
+			var hc := Rect2(src.position.x + 335.0, src.position.y + 85.0, 140.0, 140.0)
+			draw_texture_rect_region(_td_tex, Rect2(Vector2(150.0, 0.0) - Vector2(70.0, 70.0) * hk, Vector2(140.0, 140.0) * hk), hc, _pm(light * tint))
+		var pts := PackedVector2Array()
+		var cols := PackedColorArray()
+		var bone: Color = _pm(light * Color(1.0, 0.95, 0.8))
+		var n: int = min(int(tr["spk"]), 4)
+		for i in n:
+			var x: float = lerp(-170.0, 120.0, float(i) / max(1.0, float(n - 1))) if n > 1 else -20.0
+			for side in [-1.0, 1.0]:
+				pts.append(Vector2(x, side * 66.0))
+				pts.append(Vector2(x + 16.0, side * 112.0))
+				cols.append(bone)
+		if tr["hair"] > 0.1:
+			var fur: Color = _pm(light * Color(1.0, 0.9, 0.7))
+			for i in 5:
+				var x2: float = -160.0 + i * 70.0
+				for side in [-1.0, 1.0]:
+					pts.append(Vector2(x2, side * 70.0))
+					pts.append(Vector2(x2 - 16.0, side * (92.0 + 10.0 * float(i % 2))))
+					cols.append(fur)
+		if tr["sting"]:
+			pts.append(Vector2(-250.0, 0.0))
+			pts.append(Vector2(-340.0, 0.0))
+			cols.append(_pm(light * Color(0.3, 0.25, 0.25)))
+		if not cols.is_empty():
+			draw_multiline_colors(pts, cols, 14.0)
 	if a.carry > 0.0 and not _foods.is_empty():
 		var food = _foods[a.id % _foods.size()]
 		var size: Vector2 = food["size"] * length / FOOD_REF
@@ -658,6 +761,11 @@ func _new_state(a, p: Vector2, g) -> Array:
 	st[S_GKEY] = -1
 	st[S_ROW] = a.id % 3
 	st[S_HEAD] = 0.0 if a.facing > 0 else PI
+	if a.tx != a.x or a.ty != a.y:
+		st[S_HEAD] = atan2(a.ty - a.y, a.tx - a.x)          # (seen first mid-step: already facing the way it goes)
+		st[S_VX] = cos(float(st[S_HEAD])) * 30.0
+		st[S_VY] = sin(float(st[S_HEAD])) * 30.0
+	st[S_TR] = _traits(a)
 	st[S_FX] = p.x + down.x
 	st[S_FY] = p.y + down.y
 	st[S_HASH] = fmod(a.id * 0.6180339887, 1.0)

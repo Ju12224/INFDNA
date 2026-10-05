@@ -43,11 +43,13 @@ static var view_h := 1057.0               # the screen's height in world px at t
 
 
 # Once a frame from colony.gd: camera centre and zoom, the focus lane number, and the ground's y under the camera.
-static func update(cam: Vector2, zoom: float, f: float, ground: float, screen_h: float = 1057.0) -> void:
+# dolly_zoom: the zoom the dolly (the cut, the parting) follows, eased behind the real one so lanes drop over a few frames; 0 = the zoom.
+static func update(cam: Vector2, zoom: float, f: float, ground: float, screen_h: float = 1057.0, dolly_zoom: float = 0.0) -> void:
+	var d = max(dolly_zoom if dolly_zoom > 0.0 else zoom, 0.01)
 	view_h = screen_h / max(zoom, 0.01)
 	focus = f
-	cut = f - DOLLY / max(zoom, 0.01)
-	dolly = clamp(log(max(zoom, 0.01) / Z_ALL) / log(Z_MAX / Z_ALL), 0.0, 1.0)
+	cut = f - DOLLY / d
+	dolly = clamp(log(d / Z_ALL) / log(Z_MAX / Z_ALL), 0.0, 1.0)
 	lift = clamp(1.0 - (cam.y - ground) / LIFT_RANGE, LIFT_MIN, 1.0)
 
 
@@ -111,16 +113,20 @@ static func lane_alpha(lane: float, tall: bool = false) -> float:
 	return a
 
 
-# How much of the thick grass curtain at `lane` stands (1 closed, 0 parted). Zoomed out every curtain stands. Zooming in parts the
-# ones in front of the focus lane, the farthest in front first, so each step in opens one more (and the focus lane is clear when fully
-# in); the camera's cut takes the ones it passes, as for everything else.
-static func curtain_alpha(lane: float) -> float:
-	var a = lane_alpha(lane)
+# How far the thick grass curtain at `lane` has parted, 0 closed .. 1 gone. Zoomed out every curtain stands. Zooming in parts the ones
+# in front of the focus lane, the farthest in front first, so each step in opens one more (and the focus lane is clear when fully in).
+static func curtain_part(lane: float) -> float:
 	var dist = focus - num(lane)
-	if dist > 0.0 and dolly > 0.0:
-		var d0 = clamp(0.75 - 0.06 * dist, 0.0, 0.75)
-		a *= 1.0 - smoothstep(d0, d0 + PART_SPAN, dolly)
-	return a
+	if dist <= 0.0 or dolly <= 0.0:
+		return 0.0
+	var d0 = clamp(0.75 - 0.06 * dist, 0.0, 0.75)
+	return smoothstep(d0, d0 + PART_SPAN, dolly)
+
+
+# How much of the curtain to draw: solid while it parts (it leans away, bows and slides toward the camera, never see-through), gone in the
+# last of the parting, and gone with the camera's cut as for everything else.
+static func curtain_alpha(lane: float) -> float:
+	return lane_alpha(lane) * (1.0 - smoothstep(0.85, 1.0, curtain_part(lane)))
 
 
 # Distance haze, 0..1: how much of the horizon colour a lane takes. Light, growing with depth, and a little more well behind the focus

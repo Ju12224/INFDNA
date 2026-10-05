@@ -15,6 +15,8 @@ func _process(_d: float) -> bool:
 	_f += 1
 	if _f == 1:
 		_node.debug_setup(_a)
+	if _f <= 5:
+		print("DBG f", _f, " cam ", _node.cam.position, " zoom ", _node.zoom(), " focus ", _node.focus, " frame_t ", _node._frame_t, " dolly ", _node.Band.dolly)
 	var vs = _node.get_viewport_rect().size
 	var mp = Vector2(float(_a["mx"]) * vs.x, float(_a["my"]) * vs.y)
 	var st = int(_a["start"])
@@ -22,6 +24,9 @@ func _process(_d: float) -> bool:
 	for i in int(_a["notches"]):
 		if _f == st + i * gap:
 			_node._zoom_at(mp, float(_a["k"]))
+			if i == 0:
+				var w = _node._screen_to_world(mp)
+				print("DBG mouse world ", w, " ground ", _node.views["surface"].ground_y(w.x), " lane_under ", _node.lane_under(mp), " target ", _node.focus_target, " meadow ", _node.focus_meadow, " vs ", vs)
 	var k = int(_a["every"])
 	var idx = (_f - st) / k
 	if _f >= st and (_f - st) % k == 0 and idx < int(_a["n"]):

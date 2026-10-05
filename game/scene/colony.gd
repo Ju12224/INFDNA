@@ -24,6 +24,7 @@ const ZOOM_START = 2.5
 const ZOOM_STEP = 1.18
 const FOCUS_RATE = 5.0    # how fast the meadow's focus lane (band.gd) closes on the lane picked by the mouse (per second)
 const FRAME_RATE = 7.0    # how fast the camera eases the focus lane's ground line to its place on the screen while dollying (per second)
+const DOLLY_EASE = 4.0    # how fast the dolly (the cut, the parting grass) follows the zoom (per second, in log space): slower than the zoom itself
 const FRAME_HOLD = 0.7    # seconds it keeps framing after the zoom has stopped, so it settles
 const FOCUS_UNDER = 40.0  # world px: with the camera this far below the ground line it has left the meadow, and the focus goes to lane 1
 const ZOOM_EASE = 12.0    # how fast the zoom closes on its target (per second): smooth, never a jump
@@ -63,6 +64,7 @@ var focus := float(Band.LANES)          # the meadow lane number the camera doll
 var focus_target := float(Band.LANES)   # ... and the one it is easing to: the lane under the mouse when last zoomed in
 var focus_meadow := true                # ... and whether that mouse was over the meadow (not the nest): only then the camera frames the focus lane
 var _frame_t := 0.0
+var _dz := ZOOM_START                   # the zoom the dolly follows
 var _acc := 0.0
 var _report_t := 0.0
 var _drag := false
@@ -244,7 +246,8 @@ func _update_band(delta: float) -> void:
 	# the dolly frames the picture: while the zoom moves (and a moment after) the camera eases so the focus lane's ground line sits
 	# FRAME_Y down the screen (the lane and what stands on it in the middle, the cover grass a narrow strip along the bottom), over the
 	# meadow only, and the more the further in
-	_frame_t = FRAME_HOLD if abs(log(zoom() / _zoom_target)) > 0.002 else max(_frame_t - delta, 0.0)
+	_dz *= exp((log(zoom()) - log(_dz)) * (1.0 - exp(-DOLLY_EASE * delta)))
+	_frame_t = FRAME_HOLD if abs(log(zoom() / _zoom_target)) > 0.002 or abs(log(zoom() / _dz)) > 0.01 else max(_frame_t - delta, 0.0)
 	if _frame_t > 0.0 and focus_meadow and cam.position.y < ground_y() + FOCUS_UNDER:
 		_frame_focus((1.0 - exp(-FRAME_RATE * delta)) * smoothstep(0.0, 0.25, Band.dolly))
 		_clamp_camera()
@@ -252,7 +255,7 @@ func _update_band(delta: float) -> void:
 
 
 func _band_update() -> void:
-	Band.update(cam.position, zoom(), focus, ground_y() - 80.0, get_viewport_rect().size.y)
+	Band.update(cam.position, zoom(), focus, ground_y() - 80.0, get_viewport_rect().size.y, _dz)
 
 
 # Move the camera up or down by `w` (0..1) of the way to where the focus lane's ground line is at its place on the screen: halfway
@@ -311,6 +314,7 @@ func debug_setup(args: Dictionary) -> void:
 	if args.has("zoom"):
 		cam.zoom = Vector2.ONE * float(args["zoom"])
 		_zoom_target = float(args["zoom"])
+		_dz = float(args["zoom"])
 	var at = str(args.get("at", ""))
 	if at == "nest":
 		cam.position = grid.center(int(grid.chamber.x), int(grid.chamber.y))

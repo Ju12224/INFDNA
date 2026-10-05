@@ -3,7 +3,7 @@ extends SceneTree
 # (sim stepping as in play) and saves 8 crops of it, `every` frames apart, side by side in one png (4 x 2).
 #   xvfb-run -a -s "-screen 0 1920x1080x24" godot --path game --rendering-driver opengl3 --resolution 1920x1057 --fixed-fps 30 \
 #     --script res://tests/ants_film.gd -- t=600 zoom=2.5 follow=flat every=3 out=/tmp/film.png
-# follow = flat | corner | slope | shaft | ceiling | floor | crowd | any (see _wanted); at=nest|surface|x,y; seed= repeats a colony.
+# follow = flat | corner | slope | shaft | ceiling | floor | crowd | mouth | any (see _wanted); at=nest|surface|x,y; seed= repeats a colony.
 # Prints, per saved frame, the ant's drawn cell, gait, tilt and body length (units_view.debug_frames) next to its sim state.
 
 var _args := {"scene": "res://scene/colony.tscn", "t": "600", "zoom": "2.5", "at": "nest", "ph": "0.45", "follow": "flat", "every": "3", "out": "/tmp/film.png", "n": "8", "start": "10"}
@@ -30,6 +30,8 @@ func _init() -> void:
 # Is this ant what we are looking for? (cells; rot 0 = standing on a floor, PI = on a roof)
 func _wanted(a, kind: String) -> bool:
 	var g = _node.grid
+	if kind == "mouth":
+		return g.is_surface_cell(a.tx, a.ty) != g.is_surface_cell(a.x, a.y)
 	if not g.is_under(a.x, a.y) or not g.is_under(a.tx, a.ty) or a.dig_timer > 0.0 or a.z != a.tz:
 		return false
 	var moving: bool = a.tx != a.x or a.ty != a.y
@@ -102,11 +104,8 @@ func _process(_delta: float) -> bool:
 		print("ant ", _ant, " is gone")
 		_finish()
 		return true
-	var wp := Vector2.ZERO
-	if df.has(_ant):
-		wp = Vector2(df[_ant][8], df[_ant][9])
-	else:
-		wp = Vector2((a.x + 0.5) * 6.0, (a.y + 0.5) * 6.0)
+	var spot: Vector3 = _uv.ant_spot(a)               # where the ant is drawn (the surface bands move it on screen)
+	var wp := Vector2(spot.x, spot.y)
 	_last_p = wp
 	_node.cam.position = _node.cam.position.lerp(wp, 0.5)
 	var every: int = int(_args["every"])
