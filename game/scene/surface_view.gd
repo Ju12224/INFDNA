@@ -29,7 +29,8 @@ const GRASS_ZOOM_OPEN = 3.5    # ... and at this one and above it is gone (the f
 const GRASS_H = 58.0           # the row's height, world px (an ant stands about 12): the solid half of the strip is taller than an ant
 const GRASS_SINK = 0.45        # fading, the blades sink to this much shorter ...
 const GRASS_LEAN = 0.28        # ... and lean apart (away from the middle of the screen) by this share of their height
-const GRASS_KEEP = 0.12        # the share of the grass a nest's cleared patch keeps (a trodden fringe)
+const GRASS_KEEP = 0.0         # the share of the grass a nest's cleared patch keeps ...
+const GRASS_MIN = 0.07         # ... the row stops where it is trodden down to less than this share of its height (no hairline of grass)
 const VLINE = 0.9              # share of the strip's height above the ground line: its flat foot sinks the rest into the ground
 const RIM = 3.0                # world px the grass's foot reaches below the soil's top edge, at the least
 const SWAY = 0.035             # wind: the tips sway this share of the row's height
@@ -130,6 +131,24 @@ func ground_y(px: float, smooth: int = SMOOTH) -> float:
 	return lerp(_gcache[c0], _gcache[c0 + 1], cx - c0) * C
 
 
+# The original ground's top at world x (px), smoothed the same way but without the spoil mound: where the thick grass stands.
+func _base_ground(px: float) -> float:
+	var cx = px / C - 0.5
+	var c0 = int(floor(cx))
+	var key = c0 + 1000000
+	if not _gcache.has(key):
+		var a := 0.0
+		for d in range(-SMOOTH, SMOOTH + 1):
+			a += colony.grid.base_y(c0 + d)
+		_gcache[key] = a / (2 * SMOOTH + 1)
+	if not _gcache.has(key + 1):
+		var b := 0.0
+		for d in range(-SMOOTH, SMOOTH + 1):
+			b += colony.grid.base_y(c0 + 1 + d)
+		_gcache[key + 1] = b / (2 * SMOOTH + 1)
+	return lerp(_gcache[key], _gcache[key + 1], cx - c0) * C
+
+
 func _col(c: int, smooth: int) -> float:
 	var g = colony.grid
 	var a := 0.0
@@ -219,9 +238,10 @@ func _draw_lawn(it: Node2D) -> void:
 
 # ---- in front of the ants --------------------------------------------------------------------------------------------------------
 
-# The thick grass: one row standing on the ground line. How much of it shows is 1 - _open (see grass_open): fading it leans the blades
-# apart, sinks them and makes them see-through together, so nothing pops. Over the clearing round a nest mouth it is trodden down to a
-# fringe (the whole strip squashed shorter, blades whole).
+# The thick grass: one row standing on the ORIGINAL ground line (never climbing a spoil heap). How much of it shows is 1 - _open (see
+# grass_open): fading it leans the blades apart, sinks them and makes them see-through together, so nothing pops. Round a nest mouth the
+# ants have trodden it away: its height ramps down (the whole strip squashed shorter, blades whole) and the row ends before it is a
+# line, so over the heap, under the anthill, there is no grass at all (the row is drawn in pieces).
 func _draw_grass(it: Node2D) -> void:
 	var tex: Texture2D = _strips.get("thick")
 	if tex == null:
@@ -243,10 +263,24 @@ func _draw_grass(it: Node2D) -> void:
 	var us := PackedFloat32Array()
 	var vt := PackedFloat32Array()
 	var vb := PackedFloat32Array()
+	var col = colony.day.tint
+	col.a = a
+	var rid = it.get_canvas_item()
 	var x = floor((view.position.x - step) / step) * step
 	while x <= view.end.x + step:
-		var line = ground_y(x)
 		var hs = 1.0 - (1.0 - GRASS_KEEP) * _clearing(x)           # trodden down: the strip's height here
+		if hs < GRASS_MIN:
+			_ribbon(rid, tex, xt, yt, xb, yb, us, vt, vb, col)      # the row ends here: a clearing
+			xt.clear()
+			xb.clear()
+			yt.clear()
+			yb.clear()
+			us.clear()
+			vt.clear()
+			vb.clear()
+			x += step
+			continue
+		var line = _base_ground(x)
 		var hh = h * hs
 		var rel = clampf((x - cx) / half, -1.3, 1.3)
 		var sway = SWAY * hh * (0.6 * sin(_t * 1.1 + x * 0.013) + 0.4 * sin(_t * 2.3 - x * 0.029 + 1.0))
@@ -258,9 +292,7 @@ func _draw_grass(it: Node2D) -> void:
 		vt.append(V0)
 		vb.append(V1)
 		x += step
-	var col = colony.day.tint
-	col.a = a
-	_ribbon(it.get_canvas_item(), tex, xt, yt, xb, yb, us, vt, vb, col)
+	_ribbon(rid, tex, xt, yt, xb, yb, us, vt, vb, col)
 
 
 # A strip of grass as one draw on any canvas item (it needs no texture repeat): quads between consecutive points, top (xt, yt) at vt
