@@ -5,7 +5,7 @@ config_version=5
 
 config/name="InfDNA"
 config/description="An evolving ant colony."
-config/version="0.5.0"
+config/version="0.5.1"
 run/main_scene="res://scene/title.tscn"
 config/use_custom_user_dir=true
 config/custom_user_dir_name="InfDNA"
