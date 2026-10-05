@@ -9,7 +9,7 @@ extends RefCounted
 
 const SPRING = Color(1.12, 1.10, 0.80)
 const AUTUMN = [Color(2.3, 0.97, 0.95), Color(2.0, 0.44, 0.76), Color(2.4, 1.38, 1.04)]     # orange, red, gold (x the owner's green)
-const WINTER = Color(1.30, 0.82, 0.95)
+const WINTER = Color(1.25, 0.80, 0.80)
 const EVERGREEN_WINTER = Color(0.80, 0.88, 1.0)
 # [year phase, state] where state is 0 spring, 1 summer, 2 autumn, 3 winter: the thaw turns winter into spring over 0.06..0.14 (the snow is
 # gone by 0.05), spring into summer over 0.24..0.34, the leaves turn over 0.42..0.60 (Seasons.autumn) and the cold takes them over 0.70..0.82
