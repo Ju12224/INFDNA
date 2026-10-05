@@ -1,0 +1,415 @@
+{
+ "_about": "The owner's armor kit (tools/art/make_armor.py). All pieces face right like the part kit. over = the part of the ant it goes over.",
+ "pieces": [
+  {
+   "name": "head_helmet_plain",
+   "file": "antkit/armor/head_helmet_plain.png",
+   "w": 151,
+   "h": 141,
+   "over": "head",
+   "tier": 0,
+   "style": "plain",
+   "row": 0
+  },
+  {
+   "name": "head_helmet_spiked",
+   "file": "antkit/armor/head_helmet_spiked.png",
+   "w": 156,
+   "h": 152,
+   "over": "head",
+   "tier": 2,
+   "style": "spiked",
+   "row": 0
+  },
+  {
+   "name": "head_helmet_horned",
+   "file": "antkit/armor/head_helmet_horned.png",
+   "w": 154,
+   "h": 162,
+   "over": "head",
+   "tier": 2,
+   "style": "horned",
+   "row": 0
+  },
+  {
+   "name": "head_helmet_visored",
+   "file": "antkit/armor/head_helmet_visored.png",
+   "w": 150,
+   "h": 137,
+   "over": "head",
+   "tier": 1,
+   "style": "visored",
+   "row": 0
+  },
+  {
+   "name": "head_helmet_crested",
+   "file": "antkit/armor/head_helmet_crested.png",
+   "w": 164,
+   "h": 165,
+   "over": "head",
+   "tier": 2,
+   "style": "crested",
+   "row": 0
+  },
+  {
+   "name": "head_helmet_royal",
+   "file": "antkit/armor/head_helmet_royal.png",
+   "w": 175,
+   "h": 184,
+   "over": "head",
+   "tier": 3,
+   "style": "royal",
+   "row": 0
+  },
+  {
+   "name": "head_helmet_bone",
+   "file": "antkit/armor/head_helmet_bone.png",
+   "w": 155,
+   "h": 153,
+   "over": "head",
+   "tier": 3,
+   "style": "bone",
+   "row": 0
+  },
+  {
+   "name": "head_helmet_resin",
+   "file": "antkit/armor/head_helmet_resin.png",
+   "w": 148,
+   "h": 153,
+   "over": "head",
+   "tier": 3,
+   "style": "resin",
+   "row": 0
+  },
+  {
+   "name": "mandible_blades",
+   "file": "antkit/armor/mandible_blades.png",
+   "w": 140,
+   "h": 124,
+   "over": "mandible",
+   "tier": 0,
+   "style": "blades",
+   "row": 1
+  },
+  {
+   "name": "mandible_clamps",
+   "file": "antkit/armor/mandible_clamps.png",
+   "w": 154,
+   "h": 121,
+   "over": "mandible",
+   "tier": 1,
+   "style": "clamps",
+   "row": 1
+  },
+  {
+   "name": "mandible_spiked",
+   "file": "antkit/armor/mandible_spiked.png",
+   "w": 152,
+   "h": 118,
+   "over": "mandible",
+   "tier": 2,
+   "style": "spiked",
+   "row": 1
+  },
+  {
+   "name": "mandible_scissor",
+   "file": "antkit/armor/mandible_scissor.png",
+   "w": 154,
+   "h": 120,
+   "over": "mandible",
+   "tier": 1,
+   "style": "scissor",
+   "row": 1
+  },
+  {
+   "name": "mandible_axe",
+   "file": "antkit/armor/mandible_axe.png",
+   "w": 161,
+   "h": 132,
+   "over": "mandible",
+   "tier": 2,
+   "style": "axe",
+   "row": 1
+  },
+  {
+   "name": "cheek_guard",
+   "file": "antkit/armor/cheek_guard.png",
+   "w": 120,
+   "h": 128,
+   "over": "head",
+   "tier": 1,
+   "style": "guard",
+   "row": 1
+  },
+  {
+   "name": "cheek_spiked",
+   "file": "antkit/armor/cheek_spiked.png",
+   "w": 126,
+   "h": 129,
+   "over": "head",
+   "tier": 2,
+   "style": "spiked",
+   "row": 1
+  },
+  {
+   "name": "cheek_ornate",
+   "file": "antkit/armor/cheek_ornate.png",
+   "w": 113,
+   "h": 133,
+   "over": "head",
+   "tier": 3,
+   "style": "ornate",
+   "row": 1
+  },
+  {
+   "name": "thorax_plate_plain",
+   "file": "antkit/armor/thorax_plate_plain.png",
+   "w": 157,
+   "h": 134,
+   "over": "thorax",
+   "tier": 0,
+   "style": "plain",
+   "row": 2
+  },
+  {
+   "name": "thorax_plate_layered",
+   "file": "antkit/armor/thorax_plate_layered.png",
+   "w": 166,
+   "h": 136,
+   "over": "thorax",
+   "tier": 1,
+   "style": "layered",
+   "row": 2
+  },
+  {
+   "name": "thorax_plate_spiked",
+   "file": "antkit/armor/thorax_plate_spiked.png",
+   "w": 159,
+   "h": 144,
+   "over": "thorax",
+   "tier": 2,
+   "style": "spiked",
+   "row": 2
+  },
+  {
+   "name": "thorax_plate_heavy",
+   "file": "antkit/armor/thorax_plate_heavy.png",
+   "w": 164,
+   "h": 136,
+   "over": "thorax",
+   "tier": 2,
+   "style": "heavy",
+   "row": 2
+  },
+  {
+   "name": "thorax_plate_bone",
+   "file": "antkit/armor/thorax_plate_bone.png",
+   "w": 163,
+   "h": 135,
+   "over": "thorax",
+   "tier": 3,
+   "style": "bone",
+   "row": 2
+  },
+  {
+   "name": "thorax_plate_resin",
+   "file": "antkit/armor/thorax_plate_resin.png",
+   "w": 155,
+   "h": 133,
+   "over": "thorax",
+   "tier": 3,
+   "style": "resin",
+   "row": 2
+  },
+  {
+   "name": "thorax_plate_saddle",
+   "file": "antkit/armor/thorax_plate_saddle.png",
+   "w": 167,
+   "h": 134,
+   "over": "thorax",
+   "tier": 2,
+   "style": "saddle",
+   "row": 2
+  },
+  {
+   "name": "thorax_plate_royal",
+   "file": "antkit/armor/thorax_plate_royal.png",
+   "w": 161,
+   "h": 139,
+   "over": "thorax",
+   "tier": 3,
+   "style": "royal",
+   "row": 2
+  },
+  {
+   "name": "abdomen_cap_plain",
+   "file": "antkit/armor/abdomen_cap_plain.png",
+   "w": 151,
+   "h": 120,
+   "over": "abdomen",
+   "tier": 0,
+   "style": "plain",
+   "row": 3
+  },
+  {
+   "name": "abdomen_cap_segmented",
+   "file": "antkit/armor/abdomen_cap_segmented.png",
+   "w": 160,
+   "h": 134,
+   "over": "abdomen",
+   "tier": 1,
+   "style": "segmented",
+   "row": 3
+  },
+  {
+   "name": "abdomen_cap_spiked",
+   "file": "antkit/armor/abdomen_cap_spiked.png",
+   "w": 180,
+   "h": 140,
+   "over": "abdomen",
+   "tier": 2,
+   "style": "spiked",
+   "row": 3
+  },
+  {
+   "name": "abdomen_cap_heavy",
+   "file": "antkit/armor/abdomen_cap_heavy.png",
+   "w": 164,
+   "h": 143,
+   "over": "abdomen",
+   "tier": 2,
+   "style": "heavy",
+   "row": 3
+  },
+  {
+   "name": "abdomen_cap_bone",
+   "file": "antkit/armor/abdomen_cap_bone.png",
+   "w": 170,
+   "h": 135,
+   "over": "abdomen",
+   "tier": 3,
+   "style": "bone",
+   "row": 3
+  },
+  {
+   "name": "abdomen_cap_resin",
+   "file": "antkit/armor/abdomen_cap_resin.png",
+   "w": 166,
+   "h": 135,
+   "over": "abdomen",
+   "tier": 3,
+   "style": "resin",
+   "row": 3
+  },
+  {
+   "name": "abdomen_cap_egg_guard",
+   "file": "antkit/armor/abdomen_cap_egg_guard.png",
+   "w": 175,
+   "h": 143,
+   "over": "abdomen",
+   "tier": 2,
+   "style": "egg_guard",
+   "row": 3
+  },
+  {
+   "name": "abdomen_cap_royal",
+   "file": "antkit/armor/abdomen_cap_royal.png",
+   "w": 165,
+   "h": 138,
+   "over": "abdomen",
+   "tier": 3,
+   "style": "royal",
+   "row": 3
+  },
+  {
+   "name": "leg_greave_plain",
+   "file": "antkit/armor/leg_greave_plain.png",
+   "w": 106,
+   "h": 183,
+   "over": "leg",
+   "tier": 0,
+   "style": "plain",
+   "row": 4
+  },
+  {
+   "name": "leg_greave_spiked",
+   "file": "antkit/armor/leg_greave_spiked.png",
+   "w": 110,
+   "h": 192,
+   "over": "leg",
+   "tier": 2,
+   "style": "spiked",
+   "row": 4
+  },
+  {
+   "name": "leg_greave_blade",
+   "file": "antkit/armor/leg_greave_blade.png",
+   "w": 128,
+   "h": 193,
+   "over": "leg",
+   "tier": 2,
+   "style": "blade",
+   "row": 4
+  },
+  {
+   "name": "leg_greave_heavy",
+   "file": "antkit/armor/leg_greave_heavy.png",
+   "w": 131,
+   "h": 192,
+   "over": "leg",
+   "tier": 2,
+   "style": "heavy",
+   "row": 4
+  },
+  {
+   "name": "leg_greave_bone",
+   "file": "antkit/armor/leg_greave_bone.png",
+   "w": 112,
+   "h": 194,
+   "over": "leg",
+   "tier": 3,
+   "style": "bone",
+   "row": 4
+  },
+  {
+   "name": "leg_greave_resin",
+   "file": "antkit/armor/leg_greave_resin.png",
+   "w": 133,
+   "h": 193,
+   "over": "leg",
+   "tier": 3,
+   "style": "resin",
+   "row": 4
+  },
+  {
+   "name": "leg_knee_guard",
+   "file": "antkit/armor/leg_knee_guard.png",
+   "w": 120,
+   "h": 188,
+   "over": "leg",
+   "tier": 1,
+   "style": "guard",
+   "row": 4
+  },
+  {
+   "name": "leg_knee_spiked",
+   "file": "antkit/armor/leg_knee_spiked.png",
+   "w": 124,
+   "h": 183,
+   "over": "leg",
+   "tier": 2,
+   "style": "spiked",
+   "row": 4
+  },
+  {
+   "name": "leg_knee_royal",
+   "file": "antkit/armor/leg_knee_royal.png",
+   "w": 121,
+   "h": 187,
+   "over": "leg",
+   "tier": 3,
+   "style": "royal",
+   "row": 4
+  }
+ ]
+}

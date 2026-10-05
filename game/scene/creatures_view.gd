@@ -7,8 +7,8 @@ extends Node2D
 # its manifest says (art_manifest "spider"/"void", critter_manifest, fauna_rig_manifest) and swung about its hinge, so one set of pictures
 # walks, bites and flaps. The anteater has its own four parts (anteater/), the bird its five (bird_*.png).
 #
-# Placement copies units_view.gd: a raider stands on its cell's floor; on the surface it walks in a lane of the meadow band (band.gd), lifted,
-# smaller and hazier toward the back, in the daylight tint; underground it stands flat in the cross-section, smaller and dimmer in the back
+# Placement copies units_view.gd: a raider stands on its cell's floor; on the surface it walks on the single ground line (the meadow is
+# one lane), in the daylight tint, and the surface view's thick grass stands in front of it; underground it stands flat in the cross-section, smaller and dimmer in the back
 # tunnel plane and ghosted where front dirt hides it. Sizes are the old mod's (the manifests' game_len times the raid roster's art_scale).
 # Zoomed out, every creature grows a little like the ants do, and a boss never shrinks below BOSS_MIN_PX on screen.
 #
@@ -17,7 +17,6 @@ extends Node2D
 # A creature that has no picture (the grasshopper and the butterfly) is not drawn.
 
 const Art = preload("res://scene/art.gd")
-const Band = preload("res://scene/band.gd")
 const WorldGrid = preload("res://core/world_grid.gd")
 const EnemyDefs = preload("res://core/enemy_defs.gd")
 const Hives = preload("res://core/hives.gd")
@@ -26,14 +25,11 @@ const WF = preload("res://core/world_features.gd")
 const C = WorldGrid.CELL
 const MARGIN = 420.0                 # world px past the view a creature can still reach into it (the Void Maw is 420 px wide)
 const BACK_Z = -8                    # the back canvas, relative to this view: under the ants (40), over the nest (30)
-const LANE_BUCKETS = 16
 const BACK_SCALE = 0.8               # the back tunnel plane, as units_view.gd
 const BACK_SHADE = 0.5
 const HIDDEN_SHADE = 0.7
 const HIDDEN_ALPHA = 0.55
-const HAZE = Color(0.88, 0.92, 0.97)
 const SURF_RATE = 3.0
-const LANE_RATE = 4.0
 const TURN_RATE = 6.0
 const TURN_MIN = 0.3
 const FAR_ZOOM = 0.45                # zoomed out past this, creatures grow (up to FAR_MAX), as the ants do
@@ -70,7 +66,6 @@ const ANTEATER_LEN = 380.0
 const ANTEATER_STEP = 0.07
 # the bird (the old rig_art.gd and predator_view.gd): its five pieces flapped about the shoulder
 const BIRD_K = 0.5
-const BIRD_LANE = 0.5
 const BIRD_SPAN = 600.0                 # art px from wing tip to beak
 const BIRD_DROP = 260.0                 # art px from the shoulder origin down to the talons and the low wing tip
 const BIRD_FALL_T = 1.3                 # seconds the sim lets bird_fall drop (colony_sim._step_bird_fall)
@@ -92,14 +87,12 @@ const HANGING = ["hive_whole", "hive_drip", "hive_damaged"]
 const HIVE_BEES = 3
 const TREE_PICK_FALLBACK = [[0.30, "oak1", 0.88], [0.58, "oak2", 0.88], [0.68, "mossoak", 0.55], [0.76, "acacia", 0.4], [0.82, "grove", 0.5],
 	[0.93, "spruce", 0.95], [0.97, "stump", 0.38], [1.0, "log", 0.16]]
-# piles: the lane they lie in (units_view.gd pulls foragers onto it), the food pictures, honey pieces
-const PILE_LANE = 0.5
+# piles: the food pictures, honey pieces
 const PILE_FOODS = ["seeds", "crumb", "berries", "honeydew", "seeds", "crumb"]
 const PILE_K = 0.8                  # food pictures at this share of their manifest size (sized for a 40 px worker; ours are about 25)
 const PILE_ROWS = [[0, 0], [-1, 0], [1, 0], [-2, 0], [2, 0], [-0.5, 1], [0.5, 1], [-1.5, 1], [1.5, 1], [0, 2]]
 const HONEY_PIECES = ["comb_three", "comb_one", "comb_chunk", "comb_cell", "comb_bit", "comb_drip", "comb_big"]
-# the rival mound (core/rival.gd): its lane and width at the front of the band
-const RIVAL_LANE = 0.5
+# the rival mound (core/rival.gd): its width
 const RIVAL_W = 290.0
 const RIVAL_TINT = Color(0.9, 0.78, 0.74)
 const RIVAL_IDLE = 8
@@ -114,14 +107,13 @@ var _kit := {}              # antkit body name -> {tex, feet, length}
 var _foods := []            # [{tex, size}] food pictures for piles
 var _trees := {}            # tree name -> manifest entry
 var _tree_pick := TREE_PICK_FALLBACK
+var _tree_k := 0.55         # surface_view's TREE_K: how big a tree is drawn next to its size in world_features.gd
 var _anteater := {}         # anteater_manifest.json
-var _state := {}            # raider id -> Vector3(surface 0..1, drawn lane, drawn facing)
+var _state := {}            # raider id -> Vector3(surface 0..1, 0, drawn facing)
 var _seen := {}             # raider id -> [raider, pos, state, k] as drawn last frame (for the death fall)
 var _dying := []            # [{e, p, st, k, t}]
 var _born := {}             # raider id -> sim time first seen (the Void Maw's climb out of the pit)
-var _lane_alpha := Callable()   # band.gd's lane_alpha(lane[, tall]) when it has one: the depth zoom cuts the near lanes
-var _alpha_tall := false        # ... and it takes the `tall` flag (for what hangs in the trees)
-var _worm := {}             # borer id -> {tr: the head's trail (cell-space samples, oldest first), last, p, spd, mv, ph (wave), flip, ftgt, lane, rear}
+var _worm := {}             # borer id -> {tr: the head's trail (cell-space samples, oldest first), last, p, spd, mv, ph (wave), flip, ftgt, rear}
 var _worm_gc_t := 0.0
 var _earthworm := {}        # fauna_manifest "earthworm": the Tunnel Borer's picture
 var _wp := {}               # its outline per column (_worm_profile)
@@ -142,11 +134,6 @@ func _ready() -> void:
 	_back.draw.connect(_draw_back)
 	add_child(_back)
 	_load_rigs()
-	var band: Object = Band
-	for m in band.get_script_method_list():
-		if m["name"] == "lane_alpha":
-			_lane_alpha = Callable(band, "lane_alpha")
-			_alpha_tall = m.get("args", []).size() >= 2
 	var kit = Art.manifest("antkit_manifest.json").get("pieces", {})
 	for name in ["worker_full", "soldier_full", "worker_small_full"]:
 		var p = kit.get(name)
@@ -163,7 +150,9 @@ func _ready() -> void:
 	if ResourceLoader.exists("res://scene/surface_view.gd"):
 		var sv = load("res://scene/surface_view.gd")
 		if sv != null:
-			_tree_pick = sv.get_script_constant_map().get("TREE_PICK", TREE_PICK_FALLBACK)
+			var cm = sv.get_script_constant_map()
+			_tree_pick = cm.get("TREE_PICK", TREE_PICK_FALLBACK)
+			_tree_k = float(cm.get("TREE_K", _tree_k))
 	_anteater = Art.manifest("anteater/anteater_manifest.json")
 	_earthworm = Art.manifest("fauna_manifest.json").get("items", {}).get("earthworm", {})
 	_worm_profile()
@@ -370,7 +359,7 @@ func _rig_body(ci: CanvasItem, r: Dictionary, base: Transform2D, fv: Vector2, bt
 # picture cut into WORM_SEGS slices, each a quad between two points of the trail pushed half a thickness out either side, so it follows the
 # tunnel it bored round every corner and is never drawn where it has not been. The picture's own S-curve is straightened first (_worm_profile:
 # per column, where the body's middle and edges are). A wave of thick and thin runs tail to head while it crawls (shorter and fatter, then
-# long and thin), a slow breathing while it rests. On the meadow it lies along the ground in its lane, head lifted, and goes down the hole at
+# long and thin), a slow breathing while it rests. On the meadow it lies along the ground, head lifted, and goes down the hole at
 # the lip. The back of the picture stays up: when the head turns round the body rolls over, it never hangs upside down.
 func _worm_profile() -> void:
 	var tex = _tx(str(_earthworm.get("file", "")))
@@ -476,7 +465,7 @@ func _worm_new(e, p: Vector2) -> Dictionary:
 	pts.reverse()
 	pts.append(p)
 	var f = 1.0 if e.facing >= 0 else -1.0
-	return {"tr": pts, "last": p, "p": p, "spd": 0.0, "mv": 0.0, "ph": randf() * TAU, "flip": f, "ftgt": f, "lane": -1.0, "rear": 1.0}
+	return {"tr": pts, "last": p, "p": p, "spd": 0.0, "mv": 0.0, "ph": randf() * TAU, "flip": f, "ftgt": f, "rear": 1.0}
 
 
 func _worm_track(e, p: Vector2) -> void:
@@ -523,14 +512,8 @@ func _draw_worm(ci: CanvasItem, e, p: Vector2, st: Vector3, kk: float, col: Colo
 	if tex == null or w == null or _wp.is_empty():
 		return false
 	var g = colony.grid
-	# the lane it lies in: it comes forward to the lip as it gets ready to dive, so it goes in at the ground line
-	var lane_t = lerpf(st.y, 1.0, smoothstep(0.3, 2.0, e.timer)) if e.state == 0 else 1.0
-	var lane = lane_t if w["lane"] < 0.0 else lerpf(w["lane"], lane_t, 1.0 - exp(-_dt * 5.0))
-	w["lane"] = lane
-	var rz = Band.raise(lane)
-	var pl = Band.persp(lane)
 	var half = WORM_THICK * 0.5 * kk
-	# the trail as drawn, head first: on the meadow raised to its lane, in the soil where it was
+	# the trail as drawn, head first: on the meadow along the ground line, in the soil where it was
 	var tr: Array = w["tr"]
 	var raw := PackedVector2Array()
 	var sc := PackedFloat32Array()
@@ -540,9 +523,8 @@ func _draw_worm(ci: CanvasItem, e, p: Vector2, st: Vector3, kk: float, col: Colo
 		var q: Vector2 = p if j < 0 else tr[n - 1 - j]
 		var gy = float(g.surf_y(int(floor(q.x / C)))) * C
 		var s = clampf((gy + 1.5 * C - q.y) / (2.0 * C), 0.0, 1.0)
-		var k = lerpf(1.0, pl, s)
-		raw.append(Vector2(q.x, q.y + s * (C * 0.5 - rz - half * k)))
-		sc.append(k)
+		raw.append(Vector2(q.x, q.y + s * (C * 0.5 - half)))
+		sc.append(1.0)
 		wg.append(s)
 	var m = raw.size()
 	var pol := PackedVector2Array()
@@ -706,19 +688,15 @@ func _draw() -> void:
 	var sim = colony.sim
 	var g = colony.grid
 	var vr = colony.view_rect(MARGIN)
-	vr.size.y += Band.DEPTH * Band.LANE_K + 120.0     # surface creatures stand up to a lane above their cell, fliers higher
-	vr.position.y -= 120.0
+	vr.position.y -= 120.0                            # fliers stand higher than their cell
 	var zoom = colony.zoom()
 	var far = clamp(sqrt(FAR_ZOOM / zoom), 1.0, FAR_MAX)
 	var ks = 1.0 - exp(-_dt * SURF_RATE)
-	var kl = 1.0 - exp(-_dt * LANE_RATE)
 	var state := {}
 	var seen := {}
 	var back := []
 	var front := []
-	var lanes := []
-	for i in LANE_BUCKETS:
-		lanes.append([])
+	var ground := []                                  # on the surface, all on the one ground line
 	for e in sim.enemies:
 		if not _born.has(e.id):
 			_born[e.id] = sim.time
@@ -728,12 +706,12 @@ func _draw() -> void:
 		if not vr.has_point(p):
 			continue
 		var surf = 1.0 if e.ty <= g.surf_y(e.tx) else 0.0
-		var st: Vector3 = _state.get(e.id, Vector3(surf, e.lane, e.facing))
-		st = Vector3(lerp(st.x, surf, ks), lerp(st.y, e.lane, kl), move_toward(st.z, e.facing, _dt * TURN_RATE))
+		var st: Vector3 = _state.get(e.id, Vector3(surf, 0.0, e.facing))
+		st = Vector3(lerp(st.x, surf, ks), 0.0, move_toward(st.z, e.facing, _dt * TURN_RATE))
 		state[e.id] = st
 		var it = [e, p, st]
 		if st.x >= 0.5:
-			lanes[clampi(int(st.y * LANE_BUCKETS), 0, LANE_BUCKETS - 1)].append(it)
+			ground.append(it)
 		elif lerp(float(e.z), float(e.tz), clamp(e.t, 0.0, 1.0)) > 0.5:
 			back.append(it)
 		else:
@@ -743,9 +721,8 @@ func _draw() -> void:
 		seen[it[0].id] = _draw_enemy(self, it[0], it[1], it[2], far, zoom)
 	for it in front:
 		seen[it[0].id] = _draw_enemy(self, it[0], it[1], it[2], far, zoom)
-	for bucket in lanes:
-		for it in bucket:
-			seen[it[0].id] = _draw_enemy(self, it[0], it[1], it[2], far, zoom)
+	for it in ground:
+		seen[it[0].id] = _draw_enemy(self, it[0], it[1], it[2], far, zoom)
 	_note_deaths(seen)
 	_draw_dying(far, zoom)
 	_worm_gc()
@@ -768,17 +745,11 @@ func _draw_enemy(ci: CanvasItem, e, p: Vector2, st: Vector3, far: float, zoom: f
 	var plane = lerp(float(e.z), float(e.tz), t)
 	var hidden = lerp(_behind(g, e.x, e.y, e.z), _behind(g, e.tx, e.ty, e.tz), t)
 	var surf = st.x
-	var lane = st.y
-	var depth = lerp(1.0, Band.persp(lane), surf) * lerp(1.0, BACK_SCALE, plane)
+	var depth = lerp(1.0, BACK_SCALE, plane)
 	var feet = p + Vector2(0, C * 0.5)
-	feet.y = lerp(feet.y, Band.lane_y(feet.y, lane), surf)
 	var shade = lerp(1.0, BACK_SHADE, plane) * lerp(1.0, HIDDEN_SHADE, hidden)
 	var col = Color(shade, shade, shade, lerp(1.0, HIDDEN_ALPHA, hidden) * (RETREAT_ALPHA if e.state == 2 else 1.0))
-	col *= Color.WHITE.lerp(HAZE.lerp(Color.WHITE, clamp(lane, 0.0, 1.0)) * colony.day.tint, surf)
-	if surf > 0.0 and not _is_boss(e):
-		col.a *= lerp(1.0, _la(lane), surf)        # the depth zoom cuts the near lanes (a boss always shows)
-		if col.a <= 0.01:
-			return [e, p, st]
+	col *= Color.WHITE.lerp(colony.day.tint, surf)
 	var face = st.z if abs(st.z) > TURN_MIN else (TURN_MIN if st.z >= 0.0 else -TURN_MIN)
 	var moving = (e.tx != e.x or e.ty != e.y) and e.stun_t <= 0.0 and die < 0.0
 	var tt = _t + e.id * 0.7
@@ -964,17 +935,16 @@ func _step_bird() -> void:
 
 # Where the live bird is: [position (where the neck meets the shoulders), facing].
 func _bird_pose(b: Dictionary) -> Array:
-	var ps = Band.persp(BIRD_LANE)
-	var gy = Band.lane_y(_ground((float(b["x"]) + 0.5) * C), BIRD_LANE)
-	var pos = Vector2((float(b["x"]) + 0.5) * C, gy - (34.0 + 230.0 * float(b["alt"])) * ps)
-	pos += Vector2(sin(_t * 1.1) * 60.0 * ps, sin(_t * 2.3) * 9.0 * ps) * _hover       # circling over its prey, never frozen
+	var gy = _ground((float(b["x"]) + 0.5) * C)
+	var pos = Vector2((float(b["x"]) + 0.5) * C, gy - (34.0 + 230.0 * float(b["alt"])))
+	pos += Vector2(sin(_t * 1.1) * 60.0, sin(_t * 2.3) * 9.0) * _hover       # circling over its prey, never frozen
 	var face = int(b["face"]) if _hover < 0.3 else (1 if cos(_t * 1.1) >= 0.0 else -1)
 	return [pos, face]
 
 
-# The bird's drawing scale: its lane's perspective, but never under BOSS_MIN_PX * 1.5 across on screen (BIRD_SPAN art px wide).
+# The bird's drawing scale: BIRD_K, but never under BOSS_MIN_PX * 1.5 across on screen (BIRD_SPAN art px wide).
 func _bird_scale(zoom: float) -> float:
-	return max(BIRD_K * 0.95 * Band.persp(BIRD_LANE), BOSS_MIN_PX * 1.5 / (BIRD_SPAN * max(0.05, zoom)))
+	return max(BIRD_K * 0.95, BOSS_MIN_PX * 1.5 / (BIRD_SPAN * max(0.05, zoom)))
 
 
 func _draw_bird(b: Dictionary, zoom: float) -> void:
@@ -991,7 +961,7 @@ func _draw_bird(b: Dictionary, zoom: float) -> void:
 		pos += Vector2(sin(_t * 83.0), cos(_t * 71.0)) * 3.0 * clamp(hit / 0.3, 0.0, 1.0)
 	var fade = clamp(float(b["t"]) / 2.0, 0.0, 1.0)
 	var s = _bird_scale(zoom)
-	pos.y -= (s - BIRD_K * 0.95 * Band.persp(BIRD_LANE)) * BIRD_DROP      # grown to stay readable: lifted so its talons stay off the ground
+	pos.y -= (s - BIRD_K * 0.95) * BIRD_DROP      # grown to stay readable: lifted so its talons stay off the ground
 	_bird(self, pos, s, _t, int(bp[1]), fold, fade, hurt)
 
 
@@ -1038,13 +1008,13 @@ func _bird(ci: CanvasItem, pos: Vector2, s: float, t: float, facing: int, fold: 
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
-# The foot of a carcass pile at column x: the ground five columns about it, at the pile lane (the falling bird lands exactly there).
+# The foot of a carcass pile at column x: the ground five columns about it (the falling bird lands exactly there).
 func _carcass_base(x: int) -> Vector2:
 	var g = colony.grid
 	var acc := 0.0
 	for k in range(-2, 3):
 		acc += g.surf_y(x + k)
-	return Vector2((float(x) + 0.5) * C, Band.lane_y(acc / 5.0 * C, PILE_LANE))
+	return Vector2((float(x) + 0.5) * C, acc / 5.0 * C)
 
 
 static func _carcass_pivot(base: Vector2, sc: float, spin: float) -> Vector2:
@@ -1058,10 +1028,9 @@ func _draw_bird_fall(f: Dictionary, zoom: float) -> void:
 	var face = int(f["face"])
 	var spin = float(f["spin"])
 	var landx = int(clamp(float(f["x"]), g.sim_l() + 3, g.sim_r() - 3))
-	var ps = Band.persp(BIRD_LANE)
-	var sc = BIRD_K * 0.95 * ps
+	var sc = BIRD_K * 0.95
 	var base = _carcass_base(landx)
-	var origin = _fall_origin if _fall_origin != null else Vector2((float(f["x"]) + 0.5) * C, base.y - (34.0 + 230.0 * float(f["alt"])) * ps)
+	var origin = _fall_origin if _fall_origin != null else Vector2((float(f["x"]) + 0.5) * C, base.y - (34.0 + 230.0 * float(f["alt"])))
 	var p0 = origin + Vector2(face * sc * DEAD_PIVOT.x, sc * DEAD_PIVOT.y)
 	var p1 = _carcass_pivot(base, sc, spin)
 	var pos = Vector2(lerp(p0.x, p1.x, smoothstep(0.0, 1.0, u)), lerp(p0.y, p1.y, u * u))
@@ -1138,15 +1107,9 @@ func _draw_back() -> void:
 	_back.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
-# How much of something on the surface in `lane` to draw (band.gd lane_alpha): 0 = cut by the depth zoom, skip it.
-func _la(lane: float, tall: bool = false) -> float:
-	if not _lane_alpha.is_valid():
-		return 1.0
-	return float(_lane_alpha.call(lane, tall)) if _alpha_tall else float(_lane_alpha.call(lane))
-
-
-func _lane_tint(lane: float) -> Color:
-	var c = HAZE.lerp(Color.WHITE, clamp(lane, 0.0, 1.0))
+# The daylight tint of what stands on the meadow.
+func _surface_tint() -> Color:
+	var c = Color.WHITE
 	c.a = 1.0
 	return c * colony.day.tint
 
@@ -1168,11 +1131,7 @@ func _draw_hives(sim, x0: int, x1: int, vr: Rect2) -> void:
 		if box.end.x < vr.position.x or box.position.x > vr.end.x or box.position.y > vr.end.y or tr["foot"].y + 60.0 < vr.position.y:
 			continue
 		var sd = float(h["seed"])
-		var lane = float(f["lane"])
-		var mod = _lane_tint(lane)
-		mod.a = _la(lane, true)
-		if mod.a <= 0.01:
-			continue
+		var mod = _surface_tint()
 		var hh = clamp(tr["size"].y * 0.09, 50.0, 130.0)     # bigger than an ant, small against a giant tree
 		var hang = Vector2(box.position.x + box.size.x * (0.3 + 0.4 * Hives.hash1(sd + 5.1)), box.end.y - box.size.y * 0.18)
 		var st = Hives.stage(h)
@@ -1190,7 +1149,6 @@ func _draw_hives(sim, x0: int, x1: int, vr: Rect2) -> void:
 			var tf = _tx("hive/hive_fallen.png")
 			if tf == null:
 				continue
-			mod.a = _la(lane)           # lying on the ground now, not hanging in the tree
 			var fw = hh * 1.5
 			var fh = fw * tf.get_height() / float(tf.get_width())
 			var by: float = tr["foot"].y
@@ -1228,16 +1186,14 @@ func _tree_rect(f: Dictionary) -> Dictionary:
 		return {}
 	var tw = float(def.get("w", 1.0))
 	var th = float(def.get("h", 1.0))
-	var lane: float = f["lane"]
-	var sc = Band.persp(lane)
 	var size: Vector2
 	if pick[1] == "log":
-		size = Vector2(f["w"] * sc * 5.5, f["w"] * sc * 5.5 * th / tw)
+		size = Vector2(f["w"] * _tree_k * 5.5, f["w"] * _tree_k * 5.5 * th / tw)
 	else:
-		var hgt = f["h"] * sc * pick[2]
+		var hgt = f["h"] * _tree_k * pick[2]
 		size = Vector2(hgt * tw / th, hgt)
 	var px = (f["x"] + 0.5) * C
-	var base = Vector2(px, Band.lane_y(_ground(px), lane))
+	var base = Vector2(px, _ground(px))
 	var foot = def.get("foot", [0.5, 1.0])
 	var flip = Hives.hash1(sd + 3.0) > 0.5
 	var pos = base - Vector2((1.0 - foot[0] if flip else foot[0]) * size.x, foot[1] * size.y)
@@ -1250,11 +1206,10 @@ func _tree_rect(f: Dictionary) -> Dictionary:
 # ---- the rival colony's mound (the owner's anthill, darker and redder than ours), and its idle ants going in and out round it
 func _draw_rival(r, vr: Rect2) -> void:
 	var px = (float(r.x) + 0.5) * C
-	var ps = Band.persp(RIVAL_LANE)
-	var W = RIVAL_W * ps
+	var W = RIVAL_W
 	if px + W < vr.position.x or px - W > vr.end.x:
 		return
-	var gy = Band.lane_y(_ground(px, 3), RIVAL_LANE)
+	var gy = _ground(px, 3)
 	if gy - W > vr.end.y or gy + 60.0 < vr.position.y:
 		return
 	var alive = r.alive()
@@ -1268,8 +1223,7 @@ func _draw_rival(r, vr: Rect2) -> void:
 		if tex != null:
 			var w = W * (1.0 if alive else 0.7)
 			var size = Vector2(w, w * tex.get_height() / tex.get_width())
-			var col = _lane_tint(RIVAL_LANE) * RIVAL_TINT * (1.0 if alive else 0.72)
-			col.a = _la(RIVAL_LANE)
+			var col = _surface_tint() * RIVAL_TINT * (1.0 if alive else 0.72)
 			if r.hit_t > 0.0:
 				col = _flash(col)
 			_back.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
@@ -1279,21 +1233,17 @@ func _draw_rival(r, vr: Rect2) -> void:
 		var hk = Hives.hash1(k * 11.0 + 0.5)
 		var ph = _t * (0.28 + 0.12 * hk) + k * 1.3
 		var ax = px + sin(ph) * W * (0.55 + 0.25 * Hives.hash1(k * 12.0 + 0.5))
-		var al = 0.25 + 0.7 * Hives.hash1(k * 13.0 + 0.5)
-		var ay = Band.lane_y(_ground(ax), al)
+		var ay = _ground(ax)
 		var face = 1.0 if cos(ph) >= 0.0 else -1.0
-		var col = _lane_tint(al)
-		col.a = _la(al)
-		if col.a <= 0.01:
-			continue
+		var col = _surface_tint()
 		if r.genome != null:
 			var b = _kit.get("worker_full")
 			if b != null:
-				var s = _ant_len(float(colony.sim.phenotype(r.genome).get("size", 74.0))) * Band.persp(al) / b["length"]
+				var s = _ant_len(float(colony.sim.phenotype(r.genome).get("size", 74.0))) / b["length"]
 				_back.draw_set_transform(Vector2(ax, ay), 0.0, Vector2(face * s, s))
 				_back.draw_texture(b["tex"], -b["feet"], col * _kin_tint(r.genome.color))
 		else:
-			_rig(_back, "redant_small", Vector2(ax, ay), Band.persp(al), face, _t + k, true, 0.2, col, false)
+			_rig(_back, "redant_small", Vector2(ax, ay), 1.0, face, _t + k, true, 0.2, col, false)
 	_back.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
@@ -1306,14 +1256,11 @@ func _draw_pile(p: Dictionary) -> void:
 		_draw_carcass(p)
 		return
 	var px = (float(x) + 0.5) * C
-	var base = Vector2(px, Band.lane_y(_ground(px), PILE_LANE))
+	var base = Vector2(px, _ground(px))
 	if not colony.view_rect(80.0).has_point(base):
 		return
-	var mod = _lane_tint(PILE_LANE)
-	mod.a = _la(PILE_LANE)
-	if mod.a <= 0.01:
-		return
-	var ps = Band.persp(PILE_LANE)
+	var mod = _surface_tint()
+	var ps = 1.0
 	var share = clamp(float(p["amount"]) / max(1.0, float(p["max"])), 0.0, 1.0)
 	if float(p["amount"]) <= 0.0:
 		return
@@ -1371,14 +1318,13 @@ func _draw_carcass(p: Dictionary) -> void:
 	var base = _carcass_base(int(p["x"]))
 	if not colony.view_rect(240.0).has_point(base):
 		return
-	var ps = Band.persp(BIRD_LANE)
 	var face = int(p.get("face", 1))
 	var spin = float(p.get("spin", 0.0))
 	var k = 0.72 + 0.28 * rot
-	var sc = BIRD_K * 0.95 * ps * k
+	var sc = BIRD_K * 0.95 * k
 	var flat = lerp(0.42, 1.0, smoothstep(0.0, 1.0, rot))
 	var slump = Transform2D(Vector2(1.0 + 0.12 * (1.0 - flat), 0.0), Vector2(0.0, flat), base) * Transform2D(0.0, -base)
-	var alpha = (0.4 + 0.6 * pow(rot, 0.6)) * _la(PILE_LANE)
+	var alpha = 0.4 + 0.6 * pow(rot, 0.6)
 	var tint = colony.day.tint * Color.WHITE.lerp(Color(0.62, 0.72, 0.58), clamp(e * 0.9, 0.0, 0.8))
 	var pa = [smoothstep(0.55, 0.75, rot), smoothstep(0.35, 0.6, rot), smoothstep(0.1, 0.35, rot), smoothstep(0.0, 0.16, rot), smoothstep(0.45, 0.65, rot)]
 	var piv = _carcass_pivot(base, sc, spin)

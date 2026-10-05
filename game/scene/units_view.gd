@@ -9,8 +9,8 @@ extends Node2D
 # ground it walks on; a.facing flips it. Underground the feet go on the dirt as the soil view DRAWS it (its mask is the solid cells
 # blurred 1-2-1, drawn over one half): along the body's down to the drawn ground, or, where the sim's footing is a crumb the soil view
 # smooths away, down onto the floor below, upright; ants crowding one spot spread out along the ground. Back-plane ants are smaller
-# and dimmer, and ghosted where front dirt hides them. On the surface every ant walks in a lane of the meadow band (band.gd): lifted,
-# smaller and hazier toward the back, in the daylight tint. The legs walk by the distance really covered (feet stay planted); poses
+# and dimmer, and ghosted where front dirt hides them. On the surface every ant walks on the single ground line (the meadow is one lane),
+# in the daylight tint, with the surface view's thick grass in front of it. The legs walk by the distance really covered (feet stay planted); poses
 # as the old view: fight lunges, the dig jackhammer, rearing up on guard, a flinch when bitten, nursing rock, idle breathing and
 # grooming, a nod on picking food up and a hop on delivering it, newborns pop out and wobble, winged ants take off over open ground.
 # Food is held at the jaws. The queen (queen_full) breathes, paces her chamber floor and squeezes when she lays.
@@ -24,7 +24,6 @@ extends Node2D
 # Hooks: ants in colony.views["controls"].selected are drawn brighter; ant_spot(a) says where an ant is drawn (for picking).
 
 const Art = preload("res://scene/art.gd")
-const Band = preload("res://scene/band.gd")
 const WorldGrid = preload("res://core/world_grid.gd")
 const AntKit = preload("res://scene/ant_kit.gd")
 
@@ -41,13 +40,7 @@ const BACK_SCALE = 0.8                     # the back tunnel plane: further away
 const BACK_SHADE = 0.5
 const HIDDEN_SHADE = 0.7                   # ... and where front dirt stands in front of it, darker still and see-through
 const HIDDEN_ALPHA = 0.55
-const HAZE = Color(0.88, 0.92, 0.97)       # the back of the meadow band, as surface_view.gd tints it
-const ENTRANCE_LANE = 1.0                  # near a nest mouth ants are drawn onto its lane (the front lip), at a pile onto the pile's
-const PILE_LANE = 0.5
-const ENTRANCE_REACH = 30.0                # cells
-const PILE_REACH = 10.0
 const SURF_RATE = 3.0                      # 1/s: climbing out of a mouth into the band takes about a second
-const LANE_RATE = 4.0
 const TURN_RATE = 9.0                      # facing per second: a turning ant squashes through its middle instead of flipping
 const TURN_MIN = 0.35
 const FOODS = ["crumb", "seeds", "berries"]
@@ -63,7 +56,6 @@ const SELECTED = Color(1.45, 1.45, 1.25)   # ants in the player's selection (con
 const FAR_ZOOM = 0.45                      # zoomed out past this, ants grow (up to FAR_MAX) so they stay more than specks
 const FAR_MAX = 1.6
 const MARGIN = 80.0                        # world px past the view an ant can still reach into it
-const LANE_BUCKETS = 16
 const POSE_ZOOM = 0.6                      # zoomed out below this the poses are too small to see and are skipped
 const GROUND_ZOOM = 0.5                    # ... and below this a cell is a pixel or two: ants stand where the sim keeps them
 const _NO_POSE = [Vector2.ZERO, 0.0, 1.0, 1.0, 1.0]
@@ -92,8 +84,9 @@ const BODY_MID = 0.36                      # the middle of an ant's body stands 
 const SQUEEZE = 1.2                        # cells: in a tight passage its feet may reach this far into the wall
 # flight (winged ants over open ground) and walking
 const AIR_RATE = 3.5
-const AIR_LIFT = 30.0                      # world px at full height (times the lane's perspective)
+const AIR_LIFT = 30.0                      # world px at full height
 const FLAP_HZ = 7.0                        # wing beats per second
+const USE_TOPDOWN = true                   # false: nests use the side-view ants (the kit path, as on the surface), as before the top-down art
 const NEST_SCALE = 0.62                   # an ant underground is drawn this big next to one on the surface (the owner's size knob)
 const TD_BODY = 470.0                     # topdown_worker_*.png: px from the tail to the jaw tips, of the picture's 512 x 310
 const TD_PIVOT = Vector2(255.0, 155.0)    # ... and the point it turns about (the middle of the body)
@@ -119,7 +112,7 @@ const QUEEN_LAY_T = 0.45
 
 # per-ant state, kept only for ants near the view: an Array indexed by these
 const S_SURF = 0       # 0 underground .. 1 surface (smoothed)
-const S_LANE = 1       # the lane it is drawn in (smoothed)
+# (1 is free: it held the lane an ant was drawn in)
 const S_FACE = 2       # drawn facing -1..1 (a turn squashes through the middle)
 const S_GAIT = 3       # walk-cycle phase (cycles)
 const S_PX = 4         # where it was last frame (world px)
@@ -208,8 +201,6 @@ var debug_on := false       # tests (ants_anim_test.gd): fill debug_frames with 
 var debug_frames := {}      # ant id -> [baked, frame cell (-1: whole-body picture), walking, moved px, mid-step, gait, p.x, p.y, drawn spot x, y, task, digging, a.t, drawn tilt, body length px, row, surface 0..1, tilt before the pose]
 var debug_stamp := 0        # counts the _draws that filled it
 var debug_interp := true    # tests: false draws the ants where the sim has them, as before the step interpolation
-var rows_hook := Callable()     # surface_view.gd sets this: draws its grass rows into this canvas between the surface lane buckets
-var _lane_alpha := Callable()   # band.gd's lane_alpha(lane), if it has one (the depth zoom cuts lanes): surface ants fade with it
 
 
 func _ready() -> void:
@@ -218,10 +209,6 @@ func _ready() -> void:
 	var mat = CanvasItemMaterial.new()
 	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_PREMULT_ALPHA
 	material = mat
-	var band: Object = Band
-	for m in band.get_script_method_list():
-		if m["name"] == "lane_alpha":
-			_lane_alpha = Callable(band, "lane_alpha")
 	kit = AntKit.new()
 	kit.name = "AntKit"
 	add_child(kit)
@@ -322,8 +309,7 @@ func _draw() -> void:
 		_gc = {}                    # entries expire one by one; this only stops the cache growing
 		_gc_t = _t
 	var vr: Rect2 = colony.view_rect(MARGIN)
-	vr.position.y -= Band.DEPTH * Band.LANE_K + AIR_LIFT    # a surface ant is drawn up to this far above its cell
-	vr.size.y += Band.DEPTH * Band.LANE_K + AIR_LIFT
+	vr.position.y -= AIR_LIFT                              # a flying ant is drawn up to this far above its cell
 	var zoom: float = colony.zoom()
 	var far: float = clamp(sqrt(FAR_ZOOM / zoom), 1.0, FAR_MAX)
 	var poses = zoom >= POSE_ZOOM
@@ -334,16 +320,10 @@ func _draw() -> void:
 	_kp = 1.0 - exp(-_dt * NEST_PUSH_RATE)
 	_kh = 1.0 - exp(-_dt * TD_EASE)
 	_hlim = TD_TURN_MAX * _dt
-	var kl = 1.0 - exp(-_dt * LANE_RATE)
 	var ctl = colony.views.get("controls")
 	var sel = ctl.get("selected") if ctl != null else null
 	if not (sel is Dictionary):
 		sel = {}
-	var piles := []
-	for p in sim.piles:
-		var px = (p["x"] + 0.5) * C
-		if px > vr.position.x - PILE_REACH * C and px < vr.end.x + PILE_REACH * C:
-			piles.append(p["x"])
 	_foes = PackedVector2Array()
 	if poses:
 		var fr = vr.grow(60.0)
@@ -356,9 +336,7 @@ func _draw() -> void:
 	var state := {}
 	var back := [[], [], []]          # underground ants by depth row (the back rows are drawn first)
 	var front := [[], [], []]
-	var lanes := []
-	for i in LANE_BUCKETS:
-		lanes.append([])
+	var ground := []           # on the surface, all on the one ground line
 	var crowd := {}            # spot -> [items]: underground ants close together
 	# The sim moves an ant in steps of 0.1 s, so its position only changes every sixth frame or so. An ant is drawn between its last two
 	# sim positions, by how far into the next step the colony's clock is: it moves (and walks) on every frame, one step behind the sim.
@@ -394,11 +372,9 @@ func _draw() -> void:
 		var surf = 1.0 if g.is_surface_cell(a.tx, a.ty) else 0.0
 		var sk: float = lerp(float(st[S_SURF]), surf, ks)
 		st[S_SURF] = sk
-		if sk > 0.001 or surf > 0.0:
-			st[S_LANE] = lerp(float(st[S_LANE]), _lane_goal(g, a, piles), kl)
 		var it = [a, p, st, -1]
 		if sk >= 0.5:
-			lanes[clampi(int(float(st[S_LANE]) * LANE_BUCKETS), 0, LANE_BUCKETS - 1)].append(it)
+			ground.append(it)
 			continue
 		var z: int = a.tz if t > 0.5 else a.z
 		if _td_tex != null:
@@ -471,13 +447,8 @@ func _draw() -> void:
 				_draw_nest_ant(it[0], it[1], it[2], far, poses, sel, it[3])
 			else:
 				_draw_ant(it[0], it[1], it[2], far, poses, sel, day_tint, kf)
-	for i in lanes.size():
-		if rows_hook.is_valid():
-			rows_hook.call(self, float(i) / LANE_BUCKETS)    # the meadow's grass rows standing behind this bucket (surface_view.gd)
-		for it in lanes[i]:
-			_draw_ant(it[0], it[1], it[2], far, poses, sel, day_tint, kf)
-	if rows_hook.is_valid():
-		rows_hook.call(self, 99.0)
+	for it in ground:
+		_draw_ant(it[0], it[1], it[2], far, poses, sel, day_tint, kf)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	draw_us = Time.get_ticks_usec() - t0
 
@@ -529,6 +500,8 @@ func _wing_pic(role: String):
 # texture (a batch), with a transparent border so the mipmaps of one frame do not bleed into the next. Also the strain's tint, made for the
 # kit's drab body, is scaled to this body's own colour; and a soft dot for glowing strains.
 func _build_td() -> void:
+	if not USE_TOPDOWN:
+		return
 	var imgs := []
 	for i in 3:
 		var tex = Art.tex("antkit/topdown_worker_%d.png" % i)
@@ -772,7 +745,6 @@ func _new_state(a, p: Vector2, g) -> Array:
 	st.fill(0.0)
 	var surf = 1.0 if g.is_surface_cell(a.tx, a.ty) else 0.0
 	st[S_SURF] = surf
-	st[S_LANE] = a.lane
 	st[S_FACE] = float(a.facing)
 	st[S_GAIT] = a.id * 0.37
 	st[S_PX] = p.x
@@ -808,22 +780,6 @@ func _new_state(a, p: Vector2, g) -> Array:
 	st[S_HASH] = fmod(a.id * 0.6180339887, 1.0)
 	st[S_FIT] = 1.0
 	return st
-
-
-# The lane an ant is drawn in on the surface: its own, pulled onto the nest mouth's lane near a mouth and, for a forager, onto the
-# pile's lane at a pile, so nobody walks into the hole or reaches for the food from another depth.
-func _lane_goal(g, a, piles: Array) -> float:
-	var lane: float = a.lane
-	for en in g.entrances:
-		var d = abs(a.x - en.x)
-		if d < ENTRANCE_REACH:
-			lane = lerp(lane, ENTRANCE_LANE, 1.0 - d / ENTRANCE_REACH)
-	if a.carry > 0.0 or a.task == 1:
-		for px in piles:
-			var d = abs(a.x - px)
-			if d < PILE_REACH:
-				lane = lerp(lane, PILE_LANE, 1.0 - d / PILE_REACH)
-	return lane
 
 
 # ------------------------------------------------------------------------------------------------ the drawn ground
@@ -1015,8 +971,7 @@ func _draw_ant(a, p: Vector2, st: Array, far: float, poses: bool, sel: Dictionar
 		var g = colony.grid
 		hidden = lerp(_behind(g, a.x, a.y, a.z), _behind(g, a.tx, a.ty, a.tz), t)
 	var surf: float = st[S_SURF]
-	var lane: float = st[S_LANE]
-	var depth: float = (lerp(1.0, Band.persp(lane), surf) if surf > 0.0 else 1.0) * (lerp(1.0, BACK_SCALE, plane) if plane > 0.0 else 1.0)
+	var depth: float = lerp(1.0, BACK_SCALE, plane) if plane > 0.0 else 1.0
 	var length: float = float(st[S_WLEN]) * far * depth * (_pop(a.age) if a.age < 0.5 else 1.0) * float(st[S_FIT])
 	var flipk := 1.0
 	if _td_tex != null and surf < 1.0:
@@ -1026,7 +981,7 @@ func _draw_ant(a, p: Vector2, st: Array, far: float, poses: bool, sel: Dictionar
 	var row: int = int(st[S_ROW])
 	if cr > 0.001:
 		length *= lerp(1.0, ROW_SCALE[row], cr)                      # in a crowd the back rows are smaller ...
-	# where it stands: underground on the drawn ground (_place, _spread), on the surface in its lane
+	# where it stands: underground on the drawn ground (_place, _spread), on the surface on the ground line
 	var rot: float = a.rot
 	var feet: Vector2
 	if surf >= 1.0:
@@ -1038,8 +993,6 @@ func _draw_ant(a, p: Vector2, st: Array, far: float, poses: bool, sel: Dictionar
 		if surf > 0.0:
 			feet = feet.lerp(p + Vector2(-sin(rot), cos(rot)) * (C * 0.5), surf)
 		rot = lerp_angle(float(st[S_ROT]), rot, surf)
-	if surf > 0.0:
-		feet.y = lerp(feet.y, Band.lane_y(feet.y, lane), surf)
 	# walking: the cycle advances by the ground really covered, so the feet stay planted
 	var mx: float = p.x - float(st[S_PX])
 	var my: float = p.y - float(st[S_PY])
@@ -1081,11 +1034,7 @@ func _draw_ant(a, p: Vector2, st: Array, far: float, poses: bool, sel: Dictionar
 	var alpha = (lerp(1.0, HIDDEN_ALPHA, hidden) if hidden > 0.0 else 1.0) * (0.55 if a.shelter_t > 0.0 else 1.0)
 	var light = Color(shade, shade, shade, alpha)
 	if surf > 0.0:
-		light *= Color.WHITE.lerp(HAZE.lerp(Color.WHITE, clamp(lane, 0.0, 1.0)) * day_tint, surf)
-		if _lane_alpha.is_valid():
-			light.a *= lerp(1.0, float(_lane_alpha.call(lane)), surf)
-			if light.a <= 0.01:
-				return
+		light *= Color.WHITE.lerp(day_tint, surf)
 	if hurt > 0.0:
 		light *= Color.WHITE.lerp(HURT, hurt)
 	if sel.has(a.id):

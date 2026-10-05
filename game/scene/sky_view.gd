@@ -5,7 +5,6 @@ extends Node2D
 # out of view when the camera goes down into the nest. All pictures come from art/sky (tools/art/make_sky.py).
 
 const Art = preload("res://scene/art.gd")
-const Band = preload("res://scene/band.gd")
 const Seasons = preload("res://core/seasons.gd")
 const FoliageTint = preload("res://scene/foliage_tint.gd")
 
@@ -136,14 +135,13 @@ func _draw() -> void:
 
 
 # The layout of the layers behind the meadow for this frame: [screen size, horizon y, hill strips' places, ridge]. A hill strip's place is
-# [its size on screen, y of its bottom]; their foot is tucked behind the back lanes of the meadow band (band.gd), which stand above the
-# ground line. ridge is the y of the highest point of the strips in front of the first one (the clouds stay above it).
+# [its size on screen, y of its bottom]; their foot stands on the ground line, behind the meadow's lawn and grass. ridge is the y of the highest point of the strips in front of the first one (the clouds stay above it).
 func _layout() -> Array:
 	var vs = get_viewport_rect().size
 	var z = colony.zoom()
 	var k = vs.y / REF_H
 	var hz = (colony.ground_y() - colony.cam_center().y) * z + vs.y * 0.5
-	var hh = hz - 0.25 * Band.DEPTH * Band.lift * z
+	var hh = hz
 	var geo := []
 	for h in _hills:
 		var e = h[1]
