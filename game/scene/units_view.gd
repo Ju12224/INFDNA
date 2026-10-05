@@ -139,7 +139,7 @@ var _q_face := 1.0
 var _q_x := 0.0
 var draw_us := 0            # how long the last _draw took (tests read it)
 var debug_on := false       # tests (ants_anim_test.gd): fill debug_frames with how each ant was drawn this frame
-var debug_frames := {}      # ant id -> [baked, frame cell (-1: whole-body picture), walking, moved px, mid-step, gait, p.x, p.y, drawn spot x, y, task, digging, a.t]
+var debug_frames := {}      # ant id -> [baked, frame cell (-1: whole-body picture), walking, moved px, mid-step, gait, p.x, p.y, drawn spot x, y, task, digging, a.t, drawn tilt, body length px]
 var debug_stamp := 0        # counts the _draws that filled it
 var debug_interp := true    # tests: false draws the ants where the sim has them, as before the step interpolation
 var rows_hook := Callable()     # surface_view.gd sets this: draws its grass rows into this canvas between the surface lane buckets
@@ -652,7 +652,7 @@ func _draw_ant(a, p: Vector2, st: Array, far: float, poses: bool, sel: Dictionar
 		var fr = int(fposmod(float(st[S_GAIT]), 1.0) * AntKit.FRAMES) % AntKit.FRAMES if (walking or air > 0.05) else AntKit.STAND
 		var dst = Rect2(-lk["feet"], cell)
 		if debug_on:
-			debug_frames[a.id] = [true, fr, walking, moved, a.tx != a.x or a.ty != a.y, st[S_GAIT], p.x, p.y, st[S_SPOT_X], st[S_SPOT_Y], a.task, a.dig_timer > 0.0, a.t]
+			debug_frames[a.id] = [true, fr, walking, moved, a.tx != a.x or a.ty != a.y, st[S_GAIT], p.x, p.y, st[S_SPOT_X], st[S_SPOT_Y], a.task, a.dig_timer > 0.0, a.t, rot, length]
 		draw_texture_rect_region(lk["tex"], dst, Rect2(cell.x * fr, 0.0, cell.x, cell.y), _pm(light * tint))
 		if lk["wings"]:
 			var wc = _pm(light * Color.WHITE.lerp(tint, WING_TINT))
@@ -677,7 +677,7 @@ func _draw_ant(a, p: Vector2, st: Array, far: float, poses: bool, sel: Dictionar
 		if b == null:
 			return
 	if debug_on:
-		debug_frames[a.id] = [false, -1, walking, moved, a.tx != a.x or a.ty != a.y, st[S_GAIT], p.x, p.y, st[S_SPOT_X], st[S_SPOT_Y], a.task, a.dig_timer > 0.0, a.t]
+		debug_frames[a.id] = [false, -1, walking, moved, a.tx != a.x or a.ty != a.y, st[S_GAIT], p.x, p.y, st[S_SPOT_X], st[S_SPOT_Y], a.task, a.dig_timer > 0.0, a.t, rot, length]
 	var s2 = length / b["length"]
 	draw_set_transform(at, rot, Vector2(face * s2 * pose[2], s2 * pose[3] * (1.0 + bob)))
 	draw_texture(b["tex"], -b["feet"], _pm(light * tint))
