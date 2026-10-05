@@ -24,6 +24,8 @@ const Art = preload("res://scene/art.gd")
 const Band = preload("res://scene/band.gd")
 const WF = preload("res://core/world_features.gd")
 const WorldGrid = preload("res://core/world_grid.gd")
+const Seasons = preload("res://core/seasons.gd")
+const FoliageTint = preload("res://scene/foliage_tint.gd")
 
 const C = WorldGrid.CELL
 const COVER_Z = 55             # absolute z of the cover row: above units (40), creatures (45) and effects (50)
@@ -536,7 +538,8 @@ func _draw_tree(it: Node2D, f: Dictionary) -> void:
 	var def = _trees.get(pick[1])
 	if def == null:
 		return
-	var tex = Art.tex(_look(def, sd))
+	var looks = _looks(def, sd)           # [[picture, weight]]: one picture, or two while the leaves change colour
+	var tex = Art.tex(looks[0][0])
 	if tex == null:
 		return
 	var lane: float = f["lane"]
@@ -553,24 +556,50 @@ func _draw_tree(it: Node2D, f: Dictionary) -> void:
 	var flip = _h(sd + 3.0) > 0.5
 	var pos = base - Vector2((1.0 - foot[0] if flip else foot[0]) * size.x, foot[1] * size.y)
 	var col = colony.day.tint * Color(0.94 + 0.12 * _h(sd + 5.0), 0.94 + 0.12 * _h(sd + 6.0), 0.94 + 0.12 * _h(sd + 7.0))
+	if pick[1] == "spruce":
+		col *= FoliageTint.evergreen(Seasons.phase(colony.sim.time))      # an evergreen: only darker and bluer in winter
 	col.a = Band.lane_alpha(lane, true)
 	if flip:
 		it.draw_set_transform(Vector2(pos.x * 2.0 + size.x, 0.0), 0.0, Vector2(-1, 1))
-	it.draw_texture_rect(tex, Rect2(pos, size), false, col)
+	var a_sum := 0.0
+	for lk in looks:
+		var t2 = Art.tex(lk[0])
+		if t2 == null:
+			continue
+		a_sum += lk[1]
+		var c2 = col
+		c2.a *= lk[1] / a_sum              # painted over each other: the sum of the weights is the picture's own opacity
+		it.draw_texture_rect(t2, Rect2(pos, size), false, c2)
 	it.draw_set_transform(Vector2.ZERO)
 
 
-# The tree's look for the time of year: spring and summer as drawn, autumn in one of three colours (chosen per tree). Winter keeps the
-# autumn look until the bare winter trees arrive (roadmap step 2.3).
-func _look(def: Dictionary, sd: float) -> String:
+# The tree's pictures for the time of year, [[file, weight]] with the weights adding up to 1: its spring, summer or autumn look (the
+# autumn one in orange, red or gold, chosen per tree), cross-faded while the year moves from one to the next (foliage_tint.gd has the
+# calendar). Winter keeps the autumn look until the bare winter trees arrive (roadmap step 2.3). A tree with no looks of its own (the
+# spruce, a stump, a log) has its one picture.
+func _looks(def: Dictionary, sd: float) -> Array:
 	var looks = def.get("looks", {})
-	var day = colony.day
-	var name = "summer"
-	if day.season == 0:
-		name = "spring"
-	elif day.season == 3 or (day.season == 2 and day.autumn > 0.5):
-		name = AUTUMN_LOOKS[int(_h(sd + 55.0) * 2.99)]
-	return str(looks.get(name, looks.get("summer", def.get("file", ""))))
+	var summer = str(looks.get("summer", def.get("file", "")))
+	if not looks.has("orange"):
+		return [[summer, 1.0]]
+	var k = FoliageTint.weights(Seasons.phase(colony.sim.time))
+	var autumn = str(looks.get(AUTUMN_LOOKS[int(_h(sd + 55.0) * 2.99)], summer))
+	var out := []
+	for e in [[str(looks.get("spring", summer)), k[0]], [summer, k[1]], [autumn, k[2] + k[3]]]:
+		if e[1] <= 0.004:
+			continue
+		if not out.is_empty() and out[out.size() - 1][0] == e[0]:
+			out[out.size() - 1][1] += e[1]
+		else:
+			out.append(e)
+	if out.is_empty():
+		return [[summer, 1.0]]
+	var sum := 0.0
+	for e in out:
+		sum += e[1]
+	for e in out:
+		e[1] /= sum
+	return out
 
 
 # A boulder, onto any canvas item (a lane's, or units_view's from pass_rows).

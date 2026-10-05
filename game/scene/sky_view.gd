@@ -6,6 +6,8 @@ extends Node2D
 
 const Art = preload("res://scene/art.gd")
 const Band = preload("res://scene/band.gd")
+const Seasons = preload("res://core/seasons.gd")
+const FoliageTint = preload("res://scene/foliage_tint.gd")
 
 # sky colour at the top of the screen and at the horizon: day, sunrise/sunset glow, night, overcast
 const DAY_TOP = Color("#4f8fd6")
@@ -26,6 +28,13 @@ const MOON_PX = 90.0
 const STARS = 90
 const CLOUDS = 9
 const CLOUD_SCROLL = 0.02    # clouds drift with the wind and barely with the camera
+const CLOUD_H0 = 0.08        # a cloud's height (_clouds, 0..1 of the sky) runs from this ...
+const CLOUD_H1 = 0.5         # ... to this: the top of the free sky to just above the highest hill
+const CLOUD_TOP = 0.03       # share of the screen's height kept clear above the highest cloud
+const CLOUD_AIR = 6.0        # px between a cloud's lowest edge and the hill behind which it would sink
+const CLOUD_FIT_MIN = 0.5    # how far a cloud shrinks to fit a thin strip of sky
+const TINTED = {"mid": 0.9, "near": 1.0}     # the hill strips that get the year's colour (their strength): the far ones are mountains
+const TILE_SLICES = 48       # slices across a tinted tile, each with its own colour
 
 var colony
 var _stars := []             # [x 0..1, y 0..1, size px, twinkle phase, picture]
@@ -99,29 +108,88 @@ func _draw() -> void:
 	if moon_u < 1.05 and man.has("moon_full"):
 		var moon = man["moon_full"] if day.day_n % 4 == 0 else man["moon_crescent"]
 		_draw_centered(Art.tex(moon["file"]), _arc(moon_u, vs, hz), MOON_PX * k, Color(1, 1, 1, 1.0 - day.cloud * 0.6))
-	# clouds
+	# the hill strips' places, far to near: [picture, size on screen, y of its bottom]. Their foot is tucked behind the back lanes of the meadow
+	# band (band.gd), which stand above the ground line
+	var hh = hz - 0.25 * Band.DEPTH * Band.lift * z
+	var geo := []
+	for h in _hills:
+		var e = h[1]
+		var size = h[0].get_size() * (e[2] * k * pow(z / REF_ZOOM, e[3]))
+		geo.append([size, hh - e[4] * size.y + 2.0])
+	var w = Seasons.phase(colony.sim.time)
+	if not _hills.is_empty():
+		_draw_hill(_hills[0], geo[0], vs, day.tint, w)               # the far mountains, behind the clouds
+	# Clouds, in front of the far mountains but behind the nearer hills, and kept whole above the highest point of those: a cloud that sank
+	# behind a hill would show only the arc of its thick outline over the ridge. They shrink to fit when the zoom leaves little sky.
+	var ridge = hh
+	for i in range(1, _hills.size()):
+		ridge = minf(ridge, geo[i][1] - geo[i][0].y)
 	var span = vs.x + 900.0 * k
 	var shade = Color.WHITE.lerp(Color(0.62, 0.66, 0.72), day.cloud) * day.tint
+	var y_lo = CLOUD_TOP * vs.y
 	for c in _clouds:
 		var tex: Texture2D = c[0]
-		var size = tex.get_size() * c[3] * k
-		var x = fposmod(c[1] * k + _t * c[4] - cpos.x * z * CLOUD_SCROLL, span) - size.x
-		draw_texture_rect(tex, Rect2(Vector2(x, c[2] * hz * 0.8), size), false, shade)
-	# hills, far to near, their foot tucked behind the back lanes of the meadow band (band.gd), which stand above the ground line
-	hz -= 0.25 * Band.DEPTH * Band.lift * z
-	for h in _hills:
-		var tex: Texture2D = h[0]
-		var e = h[1]
-		var s = e[2] * k * pow(z / REF_ZOOM, e[3])
-		var size = tex.get_size() * s
-		var bottom = hz - e[4] * size.y + 2.0
-		var x = -fposmod(cpos.x * z * e[1], size.x)
-		while x < vs.x:
-			draw_texture_rect(tex, Rect2(Vector2(x, bottom - size.y), size + Vector2(1, 0)), false, day.tint)
-			x += size.x
-		if bottom < vs.y:
-			# below the strip its own ground carries on, so a dip in the meadow never shows the sky
-			draw_rect(Rect2(0, bottom - 1.0, vs.x, vs.y - bottom + 1.0), h[2] * day.tint)
+		var full = tex.get_size() * c[3] * k
+		var fit = clampf((ridge - CLOUD_AIR - y_lo) / full.y, CLOUD_FIT_MIN, 1.0)
+		var size = full * fit
+		var x = fposmod(c[1] * k + _t * c[4] - cpos.x * z * CLOUD_SCROLL, span) - full.x * 0.5 - size.x * 0.5      # (the same centre whatever the fit)
+		var y_hi = ridge - CLOUD_AIR - size.y
+		var y = lerpf(y_lo, y_hi, clampf((c[2] - CLOUD_H0) / (CLOUD_H1 - CLOUD_H0), 0.0, 1.0)) if y_hi > y_lo else y_hi
+		draw_texture_rect(tex, Rect2(Vector2(x, y), size), false, shade)
+	for i in range(1, _hills.size()):
+		_draw_hill(_hills[i], geo[i], vs, day.tint, w)
+
+
+# One hill strip, tiled across the screen, with the ground its own colour carries on below it, so a dip in the meadow never shows the sky.
+# The green strips (TINTED) get the year's colour (foliage_tint.gd), the autumn colour sliding along the picture, so its trees and meadows
+# are not one colour.
+func _draw_hill(h: Array, g: Array, vs: Vector2, col: Color, w: float) -> void:
+	var tex: Texture2D = h[0]
+	var size: Vector2 = g[0]
+	var bottom: float = g[1]
+	var strength: float = TINTED.get(h[1][0], 0.0)
+	var plain = strength <= 0.0 or FoliageTint.weights(w)[1] > 0.999
+	var x = -fposmod(colony.cam_center().x * colony.zoom() * h[1][1], size.x)
+	while x < vs.x:
+		if plain:
+			draw_texture_rect(tex, Rect2(Vector2(x, bottom - size.y), size + Vector2(1, 0)), false, col)
+			if bottom < vs.y:
+				draw_rect(Rect2(x, bottom - 1.0, size.x + 1.0, vs.y - bottom + 1.0), h[2] * col)
+		else:
+			_tinted_tile(tex, Rect2(Vector2(x, bottom - size.y), size + Vector2(1, 0)), col, w, strength, h[2], vs.y)
+		x += size.x
+
+
+func _tinted_tile(tex: Texture2D, r: Rect2, col: Color, w: float, strength: float, ground: Color, bottom_y: float) -> void:
+	var pts := PackedVector2Array()
+	var uvs := PackedVector2Array()
+	var cols := PackedColorArray()
+	var gpts := PackedVector2Array()
+	var gcols := PackedColorArray()
+	var idx := PackedInt32Array()
+	var fill = r.end.y < bottom_y
+	for i in TILE_SLICES + 1:
+		var u = float(i) / TILE_SLICES
+		var c = col * FoliageTint.tint(w, FoliageTint.autumn_at(u), strength)
+		var px = r.position.x + u * r.size.x
+		pts.append(Vector2(px, r.position.y))
+		pts.append(Vector2(px, r.end.y))
+		uvs.append(Vector2(u, 0.0))
+		uvs.append(Vector2(u, 1.0))
+		cols.append(c)
+		cols.append(c)
+		if fill:
+			gpts.append(Vector2(px, r.end.y - 1.0))
+			gpts.append(Vector2(px, bottom_y))
+			gcols.append(c * ground)
+			gcols.append(c * ground)
+		if i < TILE_SLICES:
+			var b = i * 2
+			idx.append_array([b, b + 2, b + 3, b, b + 3, b + 1])
+	var ci = get_canvas_item()
+	RenderingServer.canvas_item_add_triangle_array(ci, idx, pts, cols, uvs, PackedInt32Array(), PackedFloat32Array(), tex.get_rid())
+	if fill:
+		RenderingServer.canvas_item_add_triangle_array(ci, idx, gpts, gcols, PackedVector2Array(), PackedInt32Array(), PackedFloat32Array(), RID())
 
 
 # The average colour of a picture's bottom rows (where a hill strip meets the ground).

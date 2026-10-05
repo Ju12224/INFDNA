@@ -16,7 +16,6 @@ const Band = preload("res://scene/band.gd")
 const WF = preload("res://core/world_features.gd")
 const WorldGrid = preload("res://core/world_grid.gd")
 
-const DBG_LINES = true
 const RAIN_MAX = 150          # streaks at full rain
 const FLAKE_MAX = 150         # flakes at full snowfall
 const LEAVES_PER_TREE = 70    # at most, for the biggest crowns
@@ -479,14 +478,6 @@ func draw_lane(it: CanvasItem, n: int) -> void:
 	if d.season == 0:
 		pw = maxf(pw, 0.8 * d.snow)                         # the thaw leaves puddles
 	var snow_on = d.snow > 0.03 and _cap != null
-	if DBG_LINES:
-		_ensure_tables()
-		var pts := PackedVector2Array()
-		var xx = _view.position.x
-		while xx <= _view.end.x:
-			pts.append(Vector2(xx, _lane_ground(xx, n)))
-			xx += 40.0
-		it.draw_polyline(pts, Color.from_hsv(float(n) / 15.0, 1.0, 1.0), 2.0 / colony.zoom())
 	var pud_on = pw > 0.04 and d.season != 3 and _puddle != null
 	if not (snow_on or pud_on):
 		return
