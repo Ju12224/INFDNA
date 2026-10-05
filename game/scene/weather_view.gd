@@ -252,19 +252,15 @@ func _rain(col: Color) -> void:
 		var ph = _t / _rk[k] + _rp[k]
 		var cyc = int(ph)
 		var f = ph - cyc
-		var q = 1 + int(_hi(k, cyc, 2) * Band.LANES)
-		var la = _lalpha[q]
-		if la <= 0.004:
-			continue
+		var near = pow(_hi(k, cyc, 2), 0.6)                # 0 .. 1: the far streaks are smaller and fainter
 		var xs = left + _hi(k, cyc, 1) * span
-		var raise = _lraise[q]
-		var g = _gt(xs) - raise
+		var g = _gt(xs)
 		var gx = xs - tan_a * (g - top)
-		g = _gt(gx) - raise
+		g = _gt(gx)
 		if g < top:
 			continue                                   # the ground is above the screen (the camera is underground)
 		var landing = g < bot
-		var pers = _lpers[q]
+		var pers = 0.55 + 0.45 * near
 		var v = _hi(k, cyc, 3)
 		if f < FALL:
 			var tex: Texture2D = _rain_tex[int(v * 7.77) % nr]
@@ -274,7 +270,7 @@ func _rain(col: Color) -> void:
 			var y = top + (y_end - top) * (f / FALL)
 			var x = xs - tan_a * (y - top)
 			var c = col
-			c.a = (0.45 + 0.027 * (Band.LANES - q)) * show * la * smoothstep(0.0, 0.1, f) * clampf(n_f - k, 0.0, 1.0)
+			c.a = (0.45 + 0.38 * near) * show * smoothstep(0.0, 0.1, f) * clampf(n_f - k, 0.0, 1.0)
 			# the picture's foot (a little in from its left edge) goes at (x, y)
 			draw_texture_rect(tex, Rect2(x * cs + y * sn - 0.2 * sw, y * cs - x * sn - sh, sw, sh), false, c)
 			sprites += 1
@@ -285,7 +281,7 @@ func _rain(col: Color) -> void:
 			_sp[o] = gx
 			_sp[o + 1] = g
 			_sp[o + 2] = w
-			_sp[o + 3] = pow(1.0 - p, 1.3) * (0.6 + 0.4 * (1.0 - q / float(Band.LANES))) * show * la * clampf(n_f - k, 0.0, 1.0)
+			_sp[o + 3] = pow(1.0 - p, 1.3) * (0.6 + 0.4 * near) * show * clampf(n_f - k, 0.0, 1.0)
 			_sp[o + 4] = float(int(v * 5.31) % ns)
 			nsp += 1
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
@@ -307,7 +303,7 @@ func _snowfall(col: Color) -> void:
 		return
 	# Flakes live in screen space: a flake's place on the screen is a function of the clock, its own numbers and the window's size alone,
 	# never of the zoom or where the camera is, so nothing jumps or reshuffles when the player zooms or pans. They are only turned into
-	# world coordinates to be drawn, and to stop at the ground (a flake lands, and fades, at its lane's ground line).
+	# world coordinates to be drawn, and to stop at the ground (a flake lands, and fades, at the ground line).
 	var view = _view
 	var z = colony.zoom()
 	var vw = view.size.x * z                            # the window in screen px
@@ -321,7 +317,7 @@ func _snowfall(col: Color) -> void:
 		flake_log.clear()
 	for k in n:
 		var q = _fq[k]
-		var pers = _lpers[q]                            # (no lane fade: flakes are in the air, whatever the dolly has cut from the ground)
+		var pers = q                                    # the flake's size class
 		var ph = _t / _fk[k] + _fp[k]
 		var cyc = int(ph)
 		var f = ph - cyc
@@ -330,7 +326,7 @@ func _snowfall(col: Color) -> void:
 		var ys = -size + f * (vh + 2.0 * size)
 		var xs = _hi(k, cyc, 7) * vw - drift * vh * 0.5 + drift * ys + sin(f * TAU * (2.0 + 2.0 * v) + k) * 14.0 * pers
 		var p = view.position + Vector2(xs, ys) / z
-		var above = (_gt(p.x) - _lraise[q] - p.y) * z   # screen px between the flake and its lane's ground
+		var above = (_gt(p.x) - p.y) * z                # screen px between the flake and the ground
 		if above <= 0.0:
 			continue
 		if debug:
@@ -339,7 +335,7 @@ func _snowfall(col: Color) -> void:
 		var w = size / z
 		var h = w * tex.get_height() / tex.get_width()
 		var c = col
-		c.a = (0.6 + 0.025 * (Band.LANES - q)) * show * smoothstep(0.0, 40.0, above) * clampf(n_f - k, 0.0, 1.0)
+		c.a = (0.6 + 0.35 * (q - 0.55) / 0.45) * show * smoothstep(0.0, 40.0, above) * clampf(n_f - k, 0.0, 1.0)
 		draw_set_transform(p, f * TAU * (0.4 * v - 0.2) + sin(f * 9.0 + k) * 0.3, Vector2.ONE)
 		draw_texture_rect(tex, Rect2(-0.5 * w, -0.5 * h, w, h), false, c)
 		sprites += 1
@@ -362,6 +358,7 @@ func _refresh_trees() -> void:
 		var cm = _surf.get_script().get_script_constant_map()
 		if cm.has("TREE_PICK"):
 			_pick = cm["TREE_PICK"]
+		_tree_k = float(cm.get("TREE_K", _tree_k))
 	var C = WorldGrid.CELL
 	var x0 = int(floor((view.position.x - TREE_MARGIN - 600.0) / C))
 	var x1 = int(ceil((view.end.x + TREE_MARGIN + 600.0) / C))
@@ -378,8 +375,7 @@ func _refresh_trees() -> void:
 		var def = _tree_defs.get(pick[1])
 		if def == null or not def.get("leafy", false):
 			continue
-		var lane: float = f["lane"]
-		var hgt: float = f["h"] * Band.persp(lane) * pick[2]
+		var hgt: float = f["h"] * _tree_k * pick[2]
 		var size = Vector2(hgt * float(def["w"]) / float(def["h"]), hgt)
 		var foot = def.get("foot", [0.5, 1.0])
 		var c = def.get("canopy", [0.1, 0.1, 0.9, 0.7])
@@ -389,7 +385,7 @@ func _refresh_trees() -> void:
 		var cx1 = (1.0 - c[0]) if flip else c[2]
 		var rect = Rect2(left + cx0 * size.x, (c[1] - foot[1]) * size.y, (cx1 - cx0) * size.x, (c[3] - c[1]) * size.y)
 		var px = (f["x"] + 0.5) * C
-		_trees.append({"x": px, "lane": lane, "num": Band.num(lane), "gy": _surf.ground_y(px) if _surf != null else colony.ground_y(), "canopy": rect,
+		_trees.append({"x": px, "gy": _surf.ground_y(px) if _surf != null else colony.ground_y(), "canopy": rect,
 			"sid": int(sd * 1000.0) & 0xFFFFF, "sel": int(_hs(sd + 55.0) * 2.99)})
 
 
@@ -406,16 +402,12 @@ func _leaves() -> void:
 	var nl = _leaf_tex.size()
 	var tint: Color = colony.day.tint
 	for tr in _trees:
-		var lane: float = tr["lane"]
-		var la = Band.lane_alpha(lane, true)
-		if la <= 0.004:
-			continue
 		var cr: Rect2 = tr["canopy"]
 		var tx: float = tr["x"]
 		if tx + cr.end.x < view.position.x - TREE_MARGIN or tx + cr.position.x > view.end.x + TREE_MARGIN:
 			continue
-		var pers = Band.persp(lane)
-		var base_y = Band.lane_y(tr["gy"], lane)
+		var pers = 1.0
+		var base_y: float = tr["gy"]
 		var sid: int = tr["sid"]
 		var pool: Array = LEAF_POOL[tr["sel"]]
 		for k in clampi(int(cr.size.x * 0.06), 10, LEAVES_PER_TREE):
@@ -452,7 +444,7 @@ func _leaves() -> void:
 			var flutter = 0.35 + 0.65 * absf(cos(air * 2.6 + qv * 20.0))
 			var rot = sin(air * 1.7 + qv * 9.0) * 0.9 + wind * 0.5
 			var c = tint
-			c.a = la * (1.0 - smoothstep(fall_t + 1.0, fall_t + 3.0, tf))
+			c.a = 1.0 - smoothstep(fall_t + 1.0, fall_t + 3.0, tf)
 			if landed:
 				flutter = 0.45
 				rot = qv * 6.0
@@ -466,9 +458,9 @@ func _leaves() -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
-# ---- on the ground: lying snow and puddles (called by surface_view for each lane, back to front) ---------------------------------
+# ---- on the ground: lying snow and puddles (called by surface_view after the trees, rocks and lawn) ----------------------------------
 
-func draw_lane(it: CanvasItem, n: int) -> void:
+func draw_ground(it: CanvasItem) -> void:
 	if colony == null or colony.sim == null:
 		return
 	var d = colony.day
@@ -481,53 +473,40 @@ func draw_lane(it: CanvasItem, n: int) -> void:
 		return
 	var t0 = Time.get_ticks_usec()
 	_ensure_tables()
-	var la = _lalpha[n]
-	if la > 0.004 or snow_on:
-		var lane = Band.lane_of(float(n))
-		if snow_on and la > 0.004 and n % 2 == 1:
-			_snow_row(it, n, la, d.snow)
-		if snow_on:
-			_tree_snow(it, n, d.snow)
-		if pud_on and la > 0.004:
-			_puddles(it, n, lane, la, pw)
-		it.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	if snow_on:
+		_snow_row(it, d.snow)
+		_tree_snow(it, d.snow)
+	if pud_on:
+		_puddles(it, pw)
+	it.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	lane_us += Time.get_ticks_usec() - t0
 
 
-# The y of lane n's ground line at world x: where surface_view stands the lane's grass and trees (its lane_ground, less the lane's rise).
-func _lane_ground(px: float, n: int) -> float:
-	var g = _gt(px)
-	if _lfar[n] > 0.0:
-		g = lerpf(g, _far(px), _lfar[n])
-	return g - _lraise[n]
-
-
-# Snow lying in this lane: rows of the owner's snow pieces that grow as the snow comes (patchy at first) and shrink when it melts. Zoomed
+# Snow lying on the ground: a row of the owner's snow pieces that grow as the snow comes (patchy at first) and shrink when it melts. Zoomed
 # out the pieces would be too many, so the row is also laid in coarser levels, each twice as wide as the one before and on its own fixed
 # grid; while the zoom is between two levels each piece of the next one grows (and each of the last one shrinks) at its own moment, so
 # nothing slides, pops or turns see-through as the zoom changes.
-func _snow_row(it: CanvasItem, n: int, la: float, sn: float) -> void:
-	var wb = SNOW_W * _lpers[n]
+func _snow_row(it: CanvasItem, sn: float) -> void:
+	var wb = SNOW_W
 	var wmin = _view.size.x / (SNOW_LIMIT * 0.62)
 	var lv = maxf(log(wmin / wb) / log(2.0), 0.0)
 	var lf = int(floor(lv))
 	var s = lv - lf
-	_snow_level(it, n, la, sn, wb * (1 << lf), lf, 1.0 - smoothstep(0.55, 1.0, s))
+	_snow_level(it, sn, wb * (1 << lf), lf, 1.0 - smoothstep(0.55, 1.0, s))
 	if s > 0.002:
-		_snow_level(it, n, la, sn, wb * (2 << lf), lf + 1, smoothstep(0.0, 0.45, s))
+		_snow_level(it, sn, wb * (2 << lf), lf + 1, smoothstep(0.0, 0.45, s))
 
 
-func _snow_level(it: CanvasItem, n: int, la: float, sn: float, w: float, level: int, fade: float) -> void:
+func _snow_level(it: CanvasItem, sn: float, w: float, level: int, fade: float) -> void:
 	if fade <= 0.004:
 		return
 	var view: Rect2 = _view.grow(w)
 	var step = w * 0.62
 	var hh = 0.85 * w * _cap.get_height() / _cap.get_width()
 	var col: Color = colony.day.tint
-	col.a = la
 	var i0 = int(floor(view.position.x / step))
 	var i1 = int(ceil(view.end.x / step))
-	var key = n + 16 * level
+	var key = 1 + 16 * level
 	for i in range(i0, i1 + 1):
 		var a = _hi(i, key, 1)
 		var m = clampf((fade - _hi(i, key, 3) * 0.75) * 4.0, 0.0, 1.0)      # this piece's own moment in the change of level
@@ -538,15 +517,15 @@ func _snow_level(it: CanvasItem, n: int, la: float, sn: float, w: float, level: 
 		var x = (i + 0.5 + (b - 0.5) * 0.7) * step
 		var sw = w * (0.75 + 0.6 * b) * m * (0.5 + 0.5 * k)
 		var sh = hh * (0.65 + 0.55 * a) * m * k
-		_drift(it, n, x, sw, sh, col, a > 0.5)
+		_drift(it, x, sw, sh, col, a > 0.5)
 		lane_sprites += 1
 
 
-# One piece of lying snow, standing at x on lane n's ground line: its flat foot a little way into the ground (the grass hides it), and the
+# One piece of lying snow, standing at x on the ground line: its flat foot a little way into the ground (the grass hides it), and the
 # whole piece draped along the ground across its width, so on a hill or the spoil mound it never hangs in the air over the lower side.
-func _drift(it: CanvasItem, n: int, x: float, sw: float, sh: float, col: Color, flip: bool) -> void:
+func _drift(it: CanvasItem, x: float, sw: float, sh: float, col: Color, flip: bool) -> void:
 	var cols = clampi(int(ceil(sw / DRIFT_COL)), 1, 24)
-	var gc = _lane_ground(x, n)
+	var gc = _gt(x)
 	var top = gc + SNOW_SINK * sh - sh
 	if cols == 1:
 		var rect = Rect2(x - 0.5 * sw, top, sw, sh)
@@ -567,7 +546,7 @@ func _drift(it: CanvasItem, n: int, x: float, sw: float, sh: float, col: Color, 
 	var dys := PackedFloat32Array()
 	dys.resize(cols + 1)
 	for j in cols + 1:
-		dys[j] = _lane_ground(x + (float(j) / cols - 0.5) * sw, n) - gc
+		dys[j] = _gt(x + (float(j) / cols - 0.5) * sw) - gc
 	var dx = sw / cols
 	for j in cols + 1:
 		var f = float(j) / cols
@@ -588,24 +567,18 @@ func _drift(it: CanvasItem, n: int, x: float, sw: float, sh: float, col: Color, 
 	RenderingServer.canvas_item_add_triangle_array(it.get_canvas_item(), idx, pts, cs, uvs, PackedInt32Array(), PackedFloat32Array(), _cap.get_rid())
 
 
-# Snow on the crowns of the leafy trees standing in lane n (drawn right after the trees, so it sits on them): a cap on top and one on
-# each shoulder, growing with the snow.
-func _tree_snow(it: CanvasItem, n: int, sn: float) -> void:
+# Snow on the crowns of the leafy trees (drawn right after the trees, so it sits on them): a cap on top and one on each shoulder,
+# growing with the snow.
+func _tree_snow(it: CanvasItem, sn: float) -> void:
 	_ensure_trees()
 	var grow = smoothstep(0.05, 0.9, sn)
 	if grow <= 0.15:
 		return                                             # (flatter caps would only show their outline)
 	var aspect = _cap.get_height() / float(_cap.get_width())
 	for tr in _trees:
-		if ceili(tr["num"] - 0.0001) != n:
-			continue
-		var la = Band.lane_alpha(tr["lane"], true)
-		if la <= 0.004:
-			continue
 		var cr: Rect2 = tr["canopy"]
-		var base = Vector2(tr["x"], Band.lane_y(tr["gy"], tr["lane"]))
+		var base = Vector2(tr["x"], tr["gy"])
 		var col: Color = colony.day.tint
-		col.a = la
 		# [centre across the crown, bottom edge down the crown, width as a share of the crown]
 		for cap in [[0.5, 0.2, 0.62], [0.2, 0.4, 0.34], [0.8, 0.4, 0.34]]:
 			var w = cr.size.x * cap[2] * (0.6 + 0.4 * grow)
@@ -616,28 +589,27 @@ func _tree_snow(it: CanvasItem, n: int, sn: float) -> void:
 			lane_sprites += 1
 
 
-# Puddles: slots along the lane, each with its own chance and size; they fill in the order of their size and dry the other way round.
-func _puddles(it: CanvasItem, n: int, lane: float, la: float, pw: float) -> void:
+# Puddles: slots along the ground, each with its own chance and size; they fill in the order of their size and dry the other way round.
+func _puddles(it: CanvasItem, pw: float) -> void:
 	var view: Rect2 = _view.grow(PUDDLE_W * 2.0)
-	var pers = _lpers[n]
 	var tier = clampf(colony.zoom() * 1.6, 0.25, 1.0)        # zoomed far out only some of them are drawn
 	var i0 = int(floor(view.position.x / PUDDLE_SPAN))
 	var i1 = int(ceil(view.end.x / PUDDLE_SPAN))
 	var ex = (colony.grid.entrance.x + 0.5) * WorldGrid.CELL
 	var col: Color = colony.day.tint
 	for i in range(i0, i1 + 1):
-		var hc = _hi(i, n, 11)
+		var hc = _hi(i, 1, 11)
 		if hc < 0.55 or (hc - 0.55) / 0.45 > tier:
 			continue
-		var x = (i + _hi(i, n, 13)) * PUDDLE_SPAN
+		var x = (i + _hi(i, 1, 13)) * PUDDLE_SPAN
 		if absf(x - ex) < 14.0 * WorldGrid.CELL:
 			continue                                         # not in the nest's mouth
 		var size = clampf((pw - (hc - 0.55) * 0.9) * 2.2, 0.0, 1.0)
 		if size <= 0.02:
 			continue
-		var w = PUDDLE_W * (0.55 + 0.7 * _hi(i, n, 14)) * pers * size
+		var w = PUDDLE_W * (0.55 + 0.7 * _hi(i, 1, 14)) * size
 		var h = w * _puddle.get_height() / _puddle.get_width()
-		col.a = la * clampf(size * 1.6, 0.0, 1.0)
-		var gy = _lane_ground(x, n)
+		col.a = clampf(size * 1.6, 0.0, 1.0)
+		var gy = _gt(x)
 		it.draw_texture_rect(_puddle, Rect2(x - 0.5 * w, gy - 0.45 * h, w, h), false, col)
 		lane_sprites += 1
