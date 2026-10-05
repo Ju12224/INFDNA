@@ -526,6 +526,7 @@ func _snow_level(it: CanvasItem, n: int, la: float, sn: float, w: float, level: 
 	var hh = 0.85 * w * _cap.get_height() / _cap.get_width()
 	var col: Color = colony.day.tint
 	col.a = la
+	col = Color.from_hsv(float(n) / 16.0, 1.0, 1.0, la)   # DBGCOLOR
 	var i0 = int(floor(view.position.x / step))
 	var i1 = int(ceil(view.end.x / step))
 	var key = n + 16 * level
