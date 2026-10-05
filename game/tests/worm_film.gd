@@ -5,7 +5,7 @@ extends SceneTree
 #     --script res://tests/worm_film.gd -- out=/tmp/worm zoom=2.5 n=10 every=2 speed=3 mode=live
 #   mode   live = a real borer from the meadow, down the hole and through the soil toward the queen; path = a borer driven along a
 #          bent tunnel (right, down, back left, up a shaft, right again) carved in the soil, so every kind of corner shows
-#   n, every   frames, and sim seconds between them;  speed  sim speed (the head crawls this much faster; path mode scales it likewise)
+#   n, every, from   frames, sim seconds between them, and the sim second the first is taken at;  speed  sim speed (the head crawls this much faster; path mode scales it likewise)
 #   crop   half width,half height of the middle of the screen kept in the contact sheet (it is made by tests/worm_sheet.py)
 var _node
 var _f := 0
@@ -24,6 +24,7 @@ func _init() -> void:
 		if kv.size() == 2:
 			_a[kv[0]] = kv[1]
 	seed(7)
+	_next = float(_a.get("from", "0"))
 	_node = load("res://scene/colony.tscn").instantiate()
 	root.add_child(_node)
 
@@ -47,7 +48,7 @@ func _process(_d: float) -> bool:
 		var ph0 = sim.phenotype(sim.ants[0].genome) if not sim.ants.is_empty() else {}
 		print("ant len px ", _node.views["creatures"]._ant_len(float(ph0.get("size", 74.0))), " size ", ph0.get("size"))
 		print("zoom ", _node.zoom(), " ants ", sim.ants.size(), " entrance ", g.entrance, " surf_y ", g.surf_y(int(g.entrance.x)))
-	if _e == null or not sim.enemies.has(_e):
+	if _e == null or (not sim.enemies.has(_e) and not _a.has("kill")):
 		if _f > 2:
 			print("borer gone at frame ", _f)
 			quit()
@@ -57,8 +58,12 @@ func _process(_d: float) -> bool:
 	elif _f > 1:
 		pass
 	_vt += (1.0 / 30.0) * float(_a["speed"])
+	if _a.has("kill") and _vt >= float(_a["kill"]) and sim.enemies.has(_e):
+		sim._enemy_die(_e)          # kill=<sim second>: the death fall (the worm keeps its trail until it has faded)
 	var view = _node.views["creatures"]
 	var p = sim.enemy_pos(_e)
+	if not sim.enemies.has(_e):
+		print("dead; trail kept ", view._worm.has(_e.id), " dying ", view._dying.size(), " worms ", view._worm.size())
 	var mid = p
 	var w = view._worm.get(_e.id)
 	if w != null and w["tr"].size() > 14:
@@ -70,7 +75,7 @@ func _process(_d: float) -> bool:
 		var fn = "%s_%02d.png" % [_a["out"], _saved]
 		img.save_png(fn)
 		_saved += 1
-		print("saved ", fn, " t=", snappedf(_vt, 0.1), " head ", p, " state ", _e.state)
+		print("saved ", fn, " t=", snappedf(_vt, 0.1), " head ", p, " state ", _e.state, " worms ", view._worm.size())
 		if _saved >= int(_a["n"]):
 			quit()
 	return false

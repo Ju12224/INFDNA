@@ -121,7 +121,7 @@ var _dying := []            # [{e, p, st, k, t}]
 var _born := {}             # raider id -> sim time first seen (the Void Maw's climb out of the pit)
 var _lane_alpha := Callable()   # band.gd's lane_alpha(lane[, tall]) when it has one: the depth zoom cuts the near lanes
 var _alpha_tall := false        # ... and it takes the `tall` flag (for what hangs in the trees)
-var _worm := {}             # borer id -> {tr: the head's trail (cell-space samples, oldest first), last, p, spd, mv, ph (wave), flip, ftgt, lane}
+var _worm := {}             # borer id -> {tr: the head's trail (cell-space samples, oldest first), last, p, spd, mv, ph (wave), flip, ftgt, lane, rear}
 var _worm_gc_t := 0.0
 var _earthworm := {}        # fauna_manifest "earthworm": the Tunnel Borer's picture
 var _wp := {}               # its outline per column (_worm_profile)
@@ -476,7 +476,7 @@ func _worm_new(e, p: Vector2) -> Dictionary:
 	pts.reverse()
 	pts.append(p)
 	var f = 1.0 if e.facing >= 0 else -1.0
-	return {"tr": pts, "last": p, "p": p, "spd": 0.0, "mv": 0.0, "ph": randf() * TAU, "flip": f, "ftgt": f, "lane": -1.0}
+	return {"tr": pts, "last": p, "p": p, "spd": 0.0, "mv": 0.0, "ph": randf() * TAU, "flip": f, "ftgt": f, "lane": -1.0, "rear": 1.0}
 
 
 func _worm_track(e, p: Vector2) -> void:
@@ -599,10 +599,11 @@ func _draw_worm(ci: CanvasItem, e, p: Vector2, st: Vector3, kk: float, col: Colo
 	if cnt < 2:
 		return false
 	# the head rears a little on the meadow, never in the soil (it would leave its tunnel)
-	var lift = half * 2.2 * (0.55 + 0.45 * sin(_t * 1.7 + e.id)) * (1.0 - 0.45 * mv)
+	w["rear"] = lerpf(w["rear"], pw[0], 1.0 - exp(-_dt * 4.0))
+	var lift = half * 2.2 * (0.55 + 0.45 * sin(_t * 1.7 + e.id)) * (1.0 - 0.45 * mv) * w["rear"]
 	for i in mini(cnt, WORM_LIFT_N):
 		var r = 1.0 - float(i) / WORM_LIFT_N
-		ps[i].y -= lift * r * r * pw[i]
+		ps[i].y -= lift * r * r
 	# the back stays up: the picture faces the way the head goes, rolling over when it turns round
 	var hd = ps[0] - ps[mini(3, cnt - 1)]
 	var tgt: float = w["ftgt"]
@@ -624,7 +625,7 @@ func _draw_worm(ci: CanvasItem, e, p: Vector2, st: Vector3, kk: float, col: Colo
 	var hk: float = _wp["k"] * kk
 	var tdir := Vector2.RIGHT
 	for i in cnt:
-		var tv = ps[maxi(i - 1, 0)] - ps[mini(i + 1, cnt - 1)]
+		var tv = ps[maxi(i - 2, 0)] - ps[mini(i + 2, cnt - 1)]      # the heading over a few slices, so a sharp bend does not twist one
 		if tv.length_squared() > 0.0001:
 			tdir = tv.normalized()
 		var u = 1.0 - pu[i] / N

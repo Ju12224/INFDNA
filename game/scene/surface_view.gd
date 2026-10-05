@@ -48,16 +48,16 @@ const COVER_FRAC = 0.14        # ... and, once the camera has dollied in, the sh
 const COVER_DARK = 0.15        # ... darkened by this much, and blurred by up to COVER_BLUR (mip bias), the further in
 const COVER_BLUR = 0.5
 const RIM = 3.0                # world px the cover row's foot reaches below the soil's top edge, hiding it
-const MOUTH_RIM = 6.0          # ... and this much more round a nest mouth, over the anthill's base
+const MOUTH_RIM = 9.0          # ... and this much more round a nest mouth, over the anthill's base
 const FILL_FROM = 1.0          # cut (lane number) where the cover row starts to move from the soil's top line to the bottom of the screen ...
 const FILL_TO = 2.0            # ... and where it is there
-const SKIRT_LANES = 3.5        # while the camera is in the band, lawn rows this near the cut keep their solid foot stretched to the bottom of the screen
+const SKIRT_LANES = 1.5        # while the camera is in the band, the first lanes behind the cut's fade keep their foot stretched down to the cover strip
 const COVER_SMOOTH = 1         # the cover row follows the soil's top closely (columns either side averaged)
 const HOLE_REACH = 14.0        # grass reaches at most this far down into a hole (the nest's mouth)
 const STEP_PX = 20.0           # screen px between ribbon points
 const SMOOTH = 2               # columns either side averaged into the ground height
-const FAR_FROM = 7.0           # lanes from here back to FAR_TO ease from the ground as dug onto the original ground, smoothed wide,
-const FAR_TO = 11.0            # so the spoil mound is not drawn out into a ridge running into the distance
+const FAR_FROM = 1.0           # lanes from here back to FAR_TO ease from the ground as dug onto the original ground, smoothed wide: the spoil
+const FAR_TO = 2.0             # heap stands in the front plane, and the meadow behind it is not drawn climbing it (an arch over the mouth)
 const FAR_SMOOTH = 12
 const MARGIN = 500.0           # world px past the screen edges that are still drawn (trees are wide)
 # which tree picture a tree landmark gets, by a hash of its seed: [upper bound, name, height share of the landmark's height]
@@ -310,7 +310,7 @@ func _draw_row(it: Node2D, n: int) -> void:
 	var yf := PackedFloat32Array()
 	var yb := PackedFloat32Array()
 	var us := PackedFloat32Array()
-	var skirt = c > 1.001 and n < c + SKIRT_LANES
+	var skirt = c > 1.001 and n >= c + Band.FADE - 0.001 and n < c + Band.FADE + SKIRT_LANES
 	var w = tex.get_width() * h / tex.get_height()
 	var step = _step()
 	var view = colony.view_rect(0.0)
@@ -325,7 +325,7 @@ func _draw_row(it: Node2D, n: int) -> void:
 		if skirt:
 			xs.append(x)
 			yf.append(line + ROW_SINK * h)
-			yb.append(max(view.end.y + 8.0, line + ROW_SINK * h))
+			yb.append(max(view.end.y - 0.5 * COVER_FRAC * view.size.y, line + ROW_SINK * h))
 			us.append(x / w + u0)
 		x += step
 	_strip(it, tex, pts, uvs, col)
@@ -333,7 +333,7 @@ func _draw_row(it: Node2D, n: int) -> void:
 		var v72 := PackedFloat32Array()
 		var v1 := PackedFloat32Array()
 		v72.resize(xs.size())
-		v72.fill(0.72)
+		v72.fill(0.94)                        # (one colour down the skirt, the foot's own, not a stretched picture)
 		v1.resize(xs.size())
 		v1.fill(V1)
 		_ribbon(it.get_canvas_item(), tex, xs, yf, xs, yb, us, v72, v1, col)
@@ -398,12 +398,15 @@ func _draw_curtain(rid: RID, i: int, lit: bool) -> void:
 		var sunk = TRAMPLE[i] * _clearing(x) * up           # trodden down: only its upper blades show, as drawn
 		var tall = up + (1.0 - VLINE) * h
 		xt.append(bx + 0.9 * rel * pt * (up - sunk) + sway)
-		yt.append(line - up + sunk)
+		var top = line - up + sunk
+		var nat = line + (1.0 - VLINE) * h
+		var bot = clamp(_lip(x) + 2.0, top, nat)             # the spoil heap stands in front of it: grass behind shows only above its outline
+		yt.append(top)
 		xb.append(bx)
-		yb.append(line + (1.0 - VLINE) * h)
+		yb.append(bot)
 		us.append(x / w + i * 0.37)
 		vt.append(lerp(V0, V1, sunk / tall))                 # trodden down: the strip's bottom part, its bushy foot, not its tips
-		vb.append(V1)
+		vb.append(V1 - (nat - bot) / tall * (V1 - V0))
 		x += step
 	var col = colony.day.tint * CURTAIN_SHADE[i]
 	if not lit:

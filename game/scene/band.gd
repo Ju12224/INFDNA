@@ -22,7 +22,7 @@ const FRONT_STEP = 39.6                   # past the lip (lane > 1): world px lo
 const DOLLY = 39.0                        # lanes from the camera to the focus at zoom 1: 6.5 lanes at zoom 6, nothing cut below 2.6
 const Z_ALL = 2.5                         # dolly 0 at this zoom and below ...
 const Z_MAX = 6.0                         # ... 1 at this one
-const FADE = 1.5                          # lanes behind the cut over which things fade in
+const FADE = 1.0                          # lanes behind the cut over which things fade in
 const TALL_GAP = 1.5                      # zoomed fully in, tall things (trees) more than this many lanes in front of the focus are gone
 # The thick grass curtains (surface_view.gd) stand at these lanes, each on a lane-bucket boundary of units_view.gd (lane * 16), so the
 # ants sort cleanly in front of or behind them: back (behind every tree), middle (in front of the food piles and the outgoing trail),
