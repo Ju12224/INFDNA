@@ -3,16 +3,14 @@ extends Node2D
 # that dry out, and leaves coming off the trees in autumn. All of it is a function of the sim (sim.rain, sim.wet) and the year
 # (colony.day: season, snow, autumn, leaf); nothing here feeds back into the sim.
 #
-# Two parts. _draw() (this node, z 55) is the air: streaks, flakes and falling leaves. Every drop belongs to a depth lane and lands on
-# that lane's ground line (band.gd), so the rain stops at the meadow and never falls into the nest. draw_lane(it, n) is called by
-# surface_view for every lane, back to front, and puts the ground decals (snow, puddles) at the right depth among the trees and rocks.
+# Two parts. _draw() (this node, z 55) is the air: streaks, flakes and falling leaves. Every drop lands on the ground line (the meadow is
+# one lane), so the rain stops at the meadow and never falls into the nest. draw_ground(it) is called by surface_view after it has drawn
+# the trees, rocks and lawn, and puts the ground decals (snow, puddles, the snow on the crowns) on the ground line, behind the ants.
 # Drops are not nodes: one draw_texture_rect each, about 250 at the very most. A drop's lap is hashed from its index and its lap number
-# (a table of fixed random numbers, so it is cheap), so nothing repeats. The ground is sampled once a frame into a table and the lanes'
-# scale, rise and fade once a frame into arrays. Pictures: art/weather (rain, splash, flake, snow_cap, puddle) and art/leaves; a picture
+# (a table of fixed random numbers, so it is cheap), so nothing repeats. The ground is sampled once a frame into a table. Pictures: art/weather (rain, splash, flake, snow_cap, puddle) and art/leaves; a picture
 # that is missing is left out. `wind` (signed, + = to the right) and `gust` (0..1) are read by ambience.gd so the sound follows the eye.
 
 const Art = preload("res://scene/art.gd")
-const Band = preload("res://scene/band.gd")
 const WF = preload("res://core/world_features.gd")
 const WorldGrid = preload("res://core/world_grid.gd")
 
@@ -25,21 +23,19 @@ const FALL = 0.8              # share of a streak's lap spent falling; the rest 
 const RAIN_LEN = 80.0         # screen px height of the nearest streak at zoom 1
 const SPLASH_W = 30.0         # world px width of the nearest splash, at its widest
 const FLAKE_PX = 30.0         # screen px width of the nearest flake (flakes are in screen space: zoom and pan never move them)
-const SNOW_W = 90.0           # world px width of a lying-snow piece in the front lane
-const SNOW_LIMIT = 8          # pieces per lane at most: zoomed out they grow instead of multiplying
+const SNOW_W = 90.0           # world px width of a lying-snow piece
+const SNOW_LIMIT = 8          # pieces at most along the screen: zoomed out they grow instead of multiplying
 const SNOW_SINK = 0.18        # how far down a piece's own height its foot sinks into the ground
 const DRIFT_COL = 18.0        # world px between the columns a piece is draped over the ground with
 const DRIFT_STEEP = 2.2       # most a piece thickens on a steep slope (to stay as thick across it)
 const PUDDLE_W = 120.0
-const PUDDLE_SPAN = 340.0     # world px between puddle slots (a lane's x axis)
+const PUDDLE_SPAN = 340.0     # world px between puddle slots
 const LEAF_W = 34.0
 # which of art/leaves/leaf_N.png fall from a tree, by the colour its autumn picture has (surface_view.gd picks it by the tree's seed:
 # orange, red, gold): mostly its own colour, with a few brown ones among them
 const LEAF_POOL = [[0, 8, 0, 8, 6], [1, 4, 9, 1, 3], [2, 5, 7, 2, 6]]
 const TREE_MARGIN = 420.0     # world px past the screen whose trees still shed leaves into it
 const GROUND_STEP = 12.0      # world px between the samples of the ground (two columns of the world's grid)
-const FAR_TO = 11.0           # (and its FAR_TO)
-const FAR_FROM = 7.0          # surface_view bends the back lanes' ground from this lane number on (its FAR_FROM)
 const TREES_FALLBACK = [[0.30, "oak1", 0.88], [0.58, "oak2", 0.88], [0.68, "mossoak", 0.55], [0.76, "acacia", 0.4], [0.82, "grove", 0.5],
 	[0.93, "spruce", 0.95], [0.97, "stump", 0.38], [1.0, "log", 0.16]]
 
@@ -47,7 +43,7 @@ var colony
 var wind := 0.0               # signed, roughly -1 .. 1; + blows to the right
 var gust := 0.3               # 0..1 how hard it blows (more in rain and winter)
 var sprites := 0              # drawn in the air this frame, on the ground (lane_sprites), and the script time each took (tests look)
-var lane_sprites := 0
+var lane_sprites := 0         # (tests read these: the ground decals drawn this frame, and the script time they took)
 var air_us := 0
 var lane_us := 0
 var debug := false            # tests: _t stands still and flake_log gets every flake's screen position
@@ -55,8 +51,7 @@ var flake_log := {}                # flake index -> screen position
 
 var _t := 0.0
 var _was := false
-var _surf                     # the surface view (ground height, lane ground)
-var _has_lane_ground := false
+var _surf                     # the surface view (ground height, tree sizes)
 var _rain_tex: Array = []
 var _splash_tex: Array = []
 var _flake_tex: Array = []
@@ -66,7 +61,7 @@ var _puddle: Texture2D
 var _precip := 0.0            # 0..1 how hard it is raining or snowing
 var _snowing := false
 var _leaf_rate := 0.0         # 0..1 how many leaves are coming down
-var _trees := []              # leafy trees near the screen: {x, lane, gy, canopy (rect relative to the foot), sid}
+var _trees := []              # leafy trees near the screen: {x, gy, canopy (rect relative to the foot), sid}
 var _trees_x := -1e9
 var _trees_age := 99.0
 var _pick := TREES_FALLBACK
@@ -76,16 +71,12 @@ var _rk := PackedFloat32Array()      # per streak / flake: seconds a lap takes, 
 var _rp := PackedFloat32Array()
 var _fk := PackedFloat32Array()
 var _fp := PackedFloat32Array()
-var _fq := PackedInt32Array()        # a flake's lane number never changes: its speed and size come from it
+var _fq := PackedFloat32Array()      # a flake's size class (0.55 far .. 1 near) never changes: its speed and size come from it
 var _sp := PackedFloat32Array()      # the splashes of this frame, 6 floats each (x, y, w, h, alpha, picture)
 var _tab_frame := -1                 # the tables below are built once a frame
 var _view := Rect2()
-var _gcache := {}                    # ground y samples of this frame, by grid index (_gt); the same for the far ground
-var _fcache := {}
-var _lraise := PackedFloat32Array()  # by lane number 1..LANES: how high its ground line stands, its scale, its fade
-var _lpers := PackedFloat32Array()
-var _lalpha := PackedFloat32Array()
-var _lfar := PackedFloat32Array()    # by lane number: how much of its ground is the far (original) ground
+var _gcache := {}                    # ground y samples of this frame, by grid index (_gt)
+var _tree_k := 0.55                  # surface_view's TREE_K
 
 
 func _ready() -> void:
@@ -117,13 +108,11 @@ func _ready() -> void:
 	_fp.resize(FLAKE_MAX)
 	_fq.resize(FLAKE_MAX)
 	for k in FLAKE_MAX:
-		var q = 1 + int(pow(_ht[(k * 19 + 41) & 8191], 1.6) * Band.LANES)       # more of them near the camera
+		var q = 1.0 - 0.45 * pow(_ht[(k * 19 + 41) & 8191], 1.6)       # more of them near
 		_fq[k] = q
-		_fk[k] = (6.0 + 5.0 * _ht[(k * 11 + 17) & 8191]) * (0.75 + 0.6 * (1.0 - Band.persp(Band.lane_of(float(q)))))    # far flakes drift slower
+		_fk[k] = (6.0 + 5.0 * _ht[(k * 11 + 17) & 8191]) * (0.75 + 0.6 * (1.0 - q))    # far flakes drift slower
 		_fp[k] = _ht[(k * 17 + 29) & 8191]
 	_sp.resize(RAIN_MAX * 6)
-	for a in [_lraise, _lpers, _lalpha, _lfar]:
-		a.resize(Band.LANES + 1)
 	_wind_at(0.0)
 
 
@@ -165,7 +154,6 @@ func _process(delta: float) -> void:
 	lane_us = 0
 	lane_sprites = 0
 	_surf = colony.views.get("surface")
-	_has_lane_ground = _surf != null and _surf.has_method("lane_ground")
 	_wind_at(_t)
 	var d = colony.day
 	var rain: float = colony.sim.rain
@@ -181,7 +169,7 @@ func _process(delta: float) -> void:
 	_was = on
 
 
-# Once a frame, when something first needs them: the screen, and each lane's rise, scale, fade and share of the far (original) ground.
+# Once a frame, when something first needs it: the screen.
 func _ensure_tables() -> void:
 	var fr = Engine.get_process_frames()
 	if fr == _tab_frame:
@@ -189,50 +177,28 @@ func _ensure_tables() -> void:
 	_tab_frame = fr
 	_view = colony.view_rect(0.0)
 	_gcache.clear()
-	_fcache.clear()
-	var f0 = FAR_FROM
-	var f1 = FAR_TO
-	if _surf != null and _surf.get_script() != null:
-		var cm = _surf.get_script().get_script_constant_map()
-		f0 = cm.get("FAR_FROM", f0)
-		f1 = cm.get("FAR_TO", f1)
-	for q in range(1, Band.LANES + 1):
-		var lane = Band.lane_of(float(q))
-		_lraise[q] = Band.raise(lane)
-		_lpers[q] = Band.persp(lane)
-		_lalpha[q] = Band.lane_alpha(lane)
-		_lfar[q] = smoothstep(f0, f1, float(q)) if _has_lane_ground else 0.0
 
 
 # The ground's y at world x (surface_view's ground_y). Sampled on a fixed grid of the world, GROUND_STEP px apart and the same at every
 # zoom (so zooming never moves what stands on it), and interpolated between the samples; only the ones asked for are computed.
 func _gt(x: float) -> float:
-	return _sample(_gcache, x, false)
-
-
-# The same for the original ground, smoothed wide, that the back lanes ease onto (surface_view's _far).
-func _far(x: float) -> float:
-	return _sample(_fcache, x, true)
-
-
-func _sample(cache: Dictionary, x: float, far: bool) -> float:
 	var f = x / GROUND_STEP
 	var i = int(floor(f))
-	var a = cache.get(i)
+	var a = _gcache.get(i)
 	if a == null:
-		a = _ground_at(i * GROUND_STEP, far)
-		cache[i] = a
-	var b = cache.get(i + 1)
+		a = _ground_at(i * GROUND_STEP)
+		_gcache[i] = a
+	var b = _gcache.get(i + 1)
 	if b == null:
-		b = _ground_at((i + 1) * GROUND_STEP, far)
-		cache[i + 1] = b
+		b = _ground_at((i + 1) * GROUND_STEP)
+		_gcache[i + 1] = b
 	return lerpf(a, b, f - i)
 
 
-func _ground_at(x: float, far: bool) -> float:
+func _ground_at(x: float) -> float:
 	if _surf == null:
 		return colony.ground_y()
-	return _surf.lane_ground(x, 99.0) if far and _has_lane_ground else _surf.ground_y(x)
+	return _surf.ground_y(x)
 
 
 # Screen-sized things (rain, snow) shrink a little as the camera dollies in, so they stay in proportion at any zoom.
