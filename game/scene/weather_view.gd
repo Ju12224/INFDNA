@@ -27,6 +27,8 @@ const SPLASH_W = 30.0         # world px width of the nearest splash, at its wid
 const FLAKE_PX = 30.0         # screen px width of the nearest flake (flakes are in screen space: zoom and pan never move them)
 const SNOW_W = 90.0           # world px width of a lying-snow piece in the front lane
 const SNOW_LIMIT = 8          # pieces per lane at most: zoomed out they grow instead of multiplying
+const SNOW_SINK = 0.18        # how far down a piece's own height its foot sinks into the ground
+const DRIFT_COL = 18.0        # world px between the columns a piece is draped over the ground with
 const PUDDLE_W = 120.0
 const PUDDLE_SPAN = 340.0     # world px between puddle slots (a lane's x axis)
 const LEAF_W = 34.0
@@ -75,7 +77,7 @@ var _tab_frame := -1                 # the tables below are built once a frame
 var _view := Rect2()
 var _tab := PackedFloat32Array()     # the ground's y every _tab_step px from _tab_x0
 var _tab_x0 := 0.0
-var _tab_step := 32.0
+var _tab_step := 16.0
 var _lraise := PackedFloat32Array()  # by lane number 1..LANES: how high its ground line stands, its scale, its fade
 var _lpers := PackedFloat32Array()
 var _lalpha := PackedFloat32Array()
@@ -183,7 +185,7 @@ func _ensure_tables() -> void:
 	_view = colony.view_rect(0.0)
 	# the samples stand on a fixed grid in the world (its spacing only ever doubles or halves), so panning never moves them
 	var span = _view.size.x + 2.0 * TAB_MARGIN
-	_tab_step = 32.0 * pow(2.0, ceil(log(maxf(span / 90.0 / 32.0, 1.0)) / log(2.0)))
+	_tab_step = 16.0 * pow(2.0, ceil(log(maxf(span / 90.0 / 16.0, 1.0)) / log(2.0)))
 	_tab_x0 = floor((_view.position.x - TAB_MARGIN) / _tab_step) * _tab_step
 	var n = int(ceil((_view.end.x + TAB_MARGIN - _tab_x0) / _tab_step)) + 2
 	_tab.resize(n)
@@ -526,7 +528,6 @@ func _snow_level(it: CanvasItem, n: int, la: float, sn: float, w: float, level: 
 	var hh = 0.85 * w * _cap.get_height() / _cap.get_width()
 	var col: Color = colony.day.tint
 	col.a = la
-	col = Color.from_hsv(float(n) / 16.0, 1.0, 1.0, la)   # DBGCOLOR
 	var i0 = int(floor(view.position.x / step))
 	var i1 = int(ceil(view.end.x / step))
 	var key = n + 16 * level
@@ -538,23 +539,49 @@ func _snow_level(it: CanvasItem, n: int, la: float, sn: float, w: float, level: 
 			continue                                      # (a flatter piece would only show its outline: a thin line)
 		var b = _hi(i, key, 2)
 		var x = (i + 0.5 + (b - 0.5) * 0.7) * step
-		var gy = _lane_ground(x, n) + (a - 0.5) * hh * 0.5
 		var sw = w * (0.75 + 0.6 * b) * m * (0.5 + 0.5 * k)
 		var sh = hh * (0.65 + 0.55 * a) * m * k
-		var rect = Rect2(x - 0.5 * sw, gy - 0.82 * sh, sw, sh)
-		if Engine.get_process_frames() == 40:   # DBGPRINT
-			var cp = colony.cam.position
-			var sy = ((rect.end.y - cp.y) * colony.zoom() + 360.0) * 1.468
-			var sx = ((x - cp.x) * colony.zoom() + 640.0) * 1.468
-			if sy < 800:
-				print("PIECE n ", n, " lv ", level, " screen ", snappedf(sx, 1.0), ",", snappedf(sy, 1.0), " x ", snappedf(x, 1.0), " gy ", snappedf(gy, 1.0), " w ", snappedf(sw, 1.0), " h ", snappedf(sh, 1.0), " raise ", snappedf(_lraise[n], 0.1), " cam ", cp)
-		if a > 0.5:
+		_drift(it, n, x, sw, sh, col, a > 0.5)
+		lane_sprites += 1
+
+
+# One piece of lying snow, standing at x on lane n's ground line: its flat foot a little way into the ground (the grass hides it), and the
+# whole piece draped along the ground across its width, so on a hill or the spoil mound it never hangs in the air over the lower side.
+func _drift(it: CanvasItem, n: int, x: float, sw: float, sh: float, col: Color, flip: bool) -> void:
+	var cols = clampi(int(ceil(sw / DRIFT_COL)), 1, 24)
+	var gc = _lane_ground(x, n)
+	var top = gc + SNOW_SINK * sh - sh
+	if cols == 1:
+		var rect = Rect2(x - 0.5 * sw, top, sw, sh)
+		if flip:
 			it.draw_set_transform(Vector2(x * 2.0, 0.0), 0.0, Vector2(-1.0, 1.0))
 			it.draw_texture_rect(_cap, rect, false, col)
 			it.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		else:
 			it.draw_texture_rect(_cap, rect, false, col)
-		lane_sprites += 1
+		return
+	var pts := PackedVector2Array()
+	var uvs := PackedVector2Array()
+	var cs := PackedColorArray()
+	var idx := PackedInt32Array()
+	pts.resize(2 * (cols + 1))
+	uvs.resize(2 * (cols + 1))
+	cs.resize(2 * (cols + 1))
+	for j in cols + 1:
+		var f = float(j) / cols
+		var px = x + (f - 0.5) * sw
+		var dy = _lane_ground(px, n) - gc
+		var u = 1.0 - f if flip else f
+		pts[2 * j] = Vector2(px, top + dy)
+		pts[2 * j + 1] = Vector2(px, top + sh + dy)
+		uvs[2 * j] = Vector2(u, 0.0)
+		uvs[2 * j + 1] = Vector2(u, 1.0)
+		cs[2 * j] = col
+		cs[2 * j + 1] = col
+		if j < cols:
+			var q = 2 * j
+			idx.append_array([q, q + 2, q + 3, q, q + 3, q + 1])
+	RenderingServer.canvas_item_add_triangle_array(it.get_canvas_item(), idx, pts, cs, uvs, PackedInt32Array(), PackedFloat32Array(), _cap.get_rid())
 
 
 # Snow on the crowns of the leafy trees standing in lane n (drawn right after the trees, so it sits on them): a cap on top and one on
