@@ -142,6 +142,10 @@ func _process(delta: float) -> void:
 # The camera eases toward where it is told to be: the zoom closes on its target around the point under the mouse, key panning
 # speeds up and slows down softly, and a drag let go of keeps gliding for a moment.
 func _move_camera(delta: float) -> void:
+	var zmin = min_zoom()
+	_zoom_target = clamp(_zoom_target, zmin, ZOOM_MAX)           # a taller window raises the floor: never show the void under the bedrock
+	if zoom() < zmin:
+		cam.zoom = Vector2.ONE * zmin
 	var z = zoom()
 	if abs(z - _zoom_target) > 0.0005:
 		# eased in log space (every doubling takes the same time) and capped, so a long zoom is a steady glide

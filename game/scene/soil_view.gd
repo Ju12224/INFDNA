@@ -97,6 +97,9 @@ void fragment() {
 	vec2 dy = vec2(0.0, TEXTURE_PIXEL_SIZE.y);
 	vec4 m = texture(TEXTURE, UV);      // r: solid front plane, g: underground
 	vec4 ax = texture(aux_tex, UV);     // r: solid back plane, g: stone or fossil, b: hole between the planes, a: 1 - fossil
+	if (m.r + m.g + ax.r + ax.g + ax.b < 0.01) {      // open air (above the ground, or no dirt at all): nothing to shade, skip the ~20 taps below
+		discard;
+	}
 	float s = m.r;
 	float lit = facing(vec2(texture(TEXTURE, UV + dx).r - texture(TEXTURE, UV - dx).r, texture(TEXTURE, UV + dy).r - texture(TEXTURE, UV - dy).r));
 	vec4 axx = texture(aux_tex, UV + dx) - texture(aux_tex, UV - dx);

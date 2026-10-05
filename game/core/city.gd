@@ -55,7 +55,7 @@ func step(sim, dt: float) -> void:
 	for k in ORDER:
 		if not unlocked.get(k, false) and n >= WORKSHOPS[k]["unlock"]:
 			unlocked[k] = true
-			sim.toasts.append({"text": "The colony has grown: it can now build a %s." % WORKSHOPS[k]["name"], "t": 8.0})
+			sim.toasts.append({"text": "The colony has grown: it can now build %s %s." % ["an" if WORKSHOPS[k]["name"].to_lower()[0] in "aeiou" else "a", WORKSHOPS[k]["name"]], "t": 8.0})
 	sim.planner.wanted_rooms = wanted(sim)
 	# reach: the nest spreads wider as the colony grows
 	var arch = sim.planner.count("architects")

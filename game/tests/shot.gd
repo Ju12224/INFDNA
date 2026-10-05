@@ -13,6 +13,8 @@ func _init() -> void:
 		var kv = a.split("=", true, 1)
 		if kv.size() == 2:
 			_args[kv[0]] = kv[1]
+	if _args.has("seed"):
+		seed(int(_args["seed"]))                              # seed=7: the same world every time (before/after comparisons)
 	if _args.has("queen"):
 		load("res://scene/run.gd").queen_id = _args["queen"]     # queen=vampire: the queen the title screen shows picked
 	_node = load(_args["scene"]).instantiate()
