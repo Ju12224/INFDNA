@@ -29,9 +29,11 @@ The roadmap is the plan: https://claude.ai/artifact/Ed2J4qRfFKQ52b8TNLwwu5
   into `releases/`, commit and push it. The chat can't send files over 30 MiB and the game zip is ~60 MB, so give the owner the
   GitHub download link (`https://github.com/Ju12224/INFDNA/raw/<branch>/releases/<zip>`). The owner unzips it and double-clicks
   InfDNA.exe (Windows asks once: More info, Run anyway).
-- Build hosting: GitHub refuses files over 100 MB in the repo, so a zip in `releases/` must stay under 100 MB (`exclude_filter` in
-  `game/export_presets.cfg` leaves out art nothing draws yet). `.github/workflows/build-windows.yml` builds the full game on GitHub's
-  servers and publishes it as a Release file (no size limit) when `release_request.txt` changes (first line = release name, e.g. v0.6.1).
-  It needs the owner's GitHub account to be free of its billing lock ("your account is locked due to a billing issue"); until then use
-  the zip-in-repo way. Git LFS is blocked by the same lock.
+- Build hosting: GitHub refuses any single file over 100 MiB in the repo, so a build bigger than that ships as parts: zip `InfDNA.exe`,
+  `split -n N --numeric-suffixes=1 -a 1` the zip into `releases/InfDNA_vX.Y.Z/InfDNA_vX.Y.Z.part1 ...` (each part well under 100 MiB), and
+  put `JOIN_ME.bat` (CRLF; joins with `copy /b`, unzips with `tar -xf`, deletes the parts, starts the game) and a README.txt beside them
+  (copy them from `releases/InfDNA_v0.6.1/` and change the name and the part list). Give the owner one raw link per file. No art compression
+  and no left-out art: the owner wants the art exactly as drawn. The free build server (`.github/workflows/build-windows.yml`, triggered by
+  changing `release_request.txt`) and Git LFS are both blocked while the owner's GitHub account has its billing lock, and other file hosts are
+  blocked by this environment's network policy, so parts are the way for now.
 
