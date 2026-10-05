@@ -29,3 +29,9 @@ The roadmap is the plan: https://claude.ai/artifact/Ed2J4qRfFKQ52b8TNLwwu5
   into `releases/`, commit and push it. The chat can't send files over 30 MiB and the game zip is ~60 MB, so give the owner the
   GitHub download link (`https://github.com/Ju12224/INFDNA/raw/<branch>/releases/<zip>`). The owner unzips it and double-clicks
   InfDNA.exe (Windows asks once: More info, Run anyway).
+- Build hosting: GitHub refuses files over 100 MB in the repo, so a zip in `releases/` must stay under 100 MB (`exclude_filter` in
+  `game/export_presets.cfg` leaves out art nothing draws yet). `.github/workflows/build-windows.yml` builds the full game on GitHub's
+  servers and publishes it as a Release file (no size limit) when `release_request.txt` changes (first line = release name, e.g. v0.6.1).
+  It needs the owner's GitHub account to be free of its billing lock ("your account is locked due to a billing issue"); until then use
+  the zip-in-repo way. Git LFS is blocked by the same lock.
+
