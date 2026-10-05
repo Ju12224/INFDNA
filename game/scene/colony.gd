@@ -1,6 +1,7 @@
 extends Node2D
 # The colony screen. It owns the simulation and the camera, steps the sim, and stacks the views in one fixed order, back to front:
-#   sky (with the hills) -> surface (trees, rocks) -> soil (the dirt and the tunnels) -> nest -> units (ants) -> effects -> interface
+#   sky (with the hills) -> surface (trees, rocks) -> soil (the dirt and the tunnels) -> nest -> units (ants) -> creatures
+#   -> [the surface view's thick grass, z 47, standing in front of the ants and creatures] -> effects -> weather -> interface
 # Every view is its own script under scene/, gets `colony` before it is added, and draws itself; anything without the owner's art
 # is left out. A view script that does not exist yet is skipped. Coordinates are world pixels: a grid cell is WorldGrid.CELL (6 px)
 # square and y grows downward.
@@ -12,7 +13,6 @@ const Sim = preload("res://core/colony_sim.gd")
 const Day = preload("res://scene/day.gd")
 const BugReport = preload("res://core/bug_report.gd")
 const WorldGrid = preload("res://core/world_grid.gd")
-const Band = preload("res://scene/band.gd")
 const Run = preload("res://scene/run.gd")
 
 const STEP = 0.1          # sim seconds per sim step
@@ -22,11 +22,6 @@ const ZOOM_MIN = 0.15
 const ZOOM_MAX = 6.0
 const ZOOM_START = 2.5
 const ZOOM_STEP = 1.18
-const FOCUS_RATE = 5.0    # how fast the meadow's focus lane (band.gd) closes on the lane picked by the mouse (per second)
-const FRAME_RATE = 7.0    # how fast the camera eases the focus lane's ground line to its place on the screen while dollying (per second)
-const DOLLY_EASE = 4.0    # how fast the dolly (the cut, the parting grass) follows the zoom (per second, in log space): slower than the zoom itself
-const FRAME_HOLD = 0.7    # seconds it keeps framing after the zoom has stopped, so it settles
-const FOCUS_UNDER = 40.0  # world px: with the camera this far below the ground line it has left the meadow, and the focus goes to lane 1
 const ZOOM_EASE = 12.0    # how fast the zoom closes on its target (per second): smooth, never a jump
 const ZOOM_MAX_RATE = 2.5  # at most e^2.5 (about 12x) zoom change per second
 const PAN_EASE = 14.0     # the same for key panning
@@ -60,11 +55,6 @@ var paused := false
 var colonies := 0
 var views := {}           # name -> view node
 var force_ph := -1.0      # >= 0 pins the time of day (screenshots)
-var focus := float(Band.LANES)          # the meadow lane number the camera dollies toward when zoomed in (band.gd)
-var focus_target := float(Band.LANES)   # ... and the one it is easing to: the lane under the mouse when last zoomed in
-var focus_meadow := true                # ... and whether that mouse was over the meadow (not the nest): only then the camera frames the focus lane
-var _frame_t := 0.0
-var _dz := ZOOM_START                   # the zoom the dolly follows
 var _acc := 0.0
 var _report_t := 0.0
 var _drag := false
@@ -138,7 +128,6 @@ func _process(delta: float) -> void:
 	day.update(sim.time, sim.rain, sim.overcast, force_ph)
 	_move_camera(delta)
 	_clamp_camera()
-	_update_band(delta)
 	_report_t += delta
 	if _report_t >= REPORT_EVERY:
 		_report_t = 0.0
@@ -218,62 +207,10 @@ func _clamp_camera() -> void:
 		_vel.x = 0.0           # a glide stops at the edge instead of pushing against it
 
 
-# Zoom by k (eased over the next frames), keeping the world point under the mouse where it is. Zooming in also aims the dolly
-# (band.gd) at the meadow lane under the mouse.
+# Zoom by k (eased over the next frames), keeping the world point under the mouse where it is.
 func _zoom_at(screen_pos: Vector2, k: float) -> void:
 	_zoom_target = clamp(_zoom_target * k, min_zoom(), ZOOM_MAX)
 	_zoom_anchor = screen_pos
-	if k > 1.0 and _frame_t <= 0.0:
-		# the focus is picked when a wheel gesture starts (not again for each notch: the camera frames the lane while the zoom moves, so
-		# the lane under a still mouse would drift), and the camera frames it again if it changed
-		var f0 = focus_target
-		focus_target = lane_under(screen_pos)
-		var w = _screen_to_world(screen_pos)
-		focus_meadow = w.y < views["surface"].ground_y(w.x) + 6.0 if views.has("surface") else true
-		if abs(focus_target - f0) > 0.5:
-			_frame_t = FRAME_HOLD
-		if Band.dolly < 0.02:
-			focus = focus_target             # nothing is cut yet: no one sees the focus move, so it need not slide from the last one
-
-
-# The meadow lane number under a screen point: 1 below the soil's top line (zooming into the nest never cuts the meadow), the back lane
-# above the band.
-func lane_under(screen_pos: Vector2) -> float:
-	var w = _screen_to_world(screen_pos)
-	var gy = views["surface"].ground_y(w.x) if views.has("surface") else ground_y()
-	var r = gy - w.y
-	return 1.0 if r < -6.0 else Band.num_at_raise(r)
-
-
-# Once a frame, before the views draw: the focus eases toward its target (lane 1 while the camera is down in the nest), and the band
-# learns where the camera is.
-func _update_band(delta: float) -> void:
-	var target = 1.0 if cam.position.y > ground_y() + FOCUS_UNDER else focus_target
-	focus = lerp(focus, target, 1.0 - exp(-FOCUS_RATE * delta))
-	_band_update()
-	# the dolly frames the picture: while the zoom moves (and a moment after) the camera eases so the focus lane's ground line sits
-	# FRAME_Y down the screen (the lane and what stands on it in the middle, the cover grass a narrow strip along the bottom), over the
-	# meadow only, and the more the further in
-	_dz *= exp((log(zoom()) - log(_dz)) * (1.0 - exp(-DOLLY_EASE * delta)))
-	_frame_t = FRAME_HOLD if abs(log(zoom() / _zoom_target)) > 0.002 or abs(log(zoom() / _dz)) > 0.01 else max(_frame_t - delta, 0.0)
-	if _frame_t > 0.0 and focus_meadow and cam.position.y < ground_y() + FOCUS_UNDER:
-		_frame_focus((1.0 - exp(-FRAME_RATE * delta)) * smoothstep(0.0, 0.25, Band.dolly))
-		_clamp_camera()
-		_band_update()
-
-
-func _band_update() -> void:
-	Band.update(cam.position, zoom(), focus, ground_y() - 80.0, get_viewport_rect().size.y, _dz)
-
-
-# Move the camera up or down by `w` (0..1) of the way to where the focus lane's ground line is at its place on the screen: halfway
-# down when the dolly starts, FRAME_Y when fully in.
-func _frame_focus(w: float) -> void:
-	var sv = views.get("surface")
-	var gy = sv.lane_ground(cam.position.x, focus) if sv != null else ground_y()
-	var f = lerp(0.5, Band.FRAME_Y, Band.dolly)
-	var goal = Band.lane_y(gy, Band.lane_of(focus)) - (f - 0.5) * get_viewport_rect().size.y / zoom()
-	cam.position.y += (goal - cam.position.y) * w
 
 
 # Zoomed out no further than the world is tall (sky room included), so nothing empty shows below the bedrock, nor wider
@@ -322,7 +259,6 @@ func debug_setup(args: Dictionary) -> void:
 	if args.has("zoom"):
 		cam.zoom = Vector2.ONE * float(args["zoom"])
 		_zoom_target = float(args["zoom"])
-		_dz = float(args["zoom"])
 	var at = str(args.get("at", ""))
 	if at == "nest":
 		cam.position = grid.center(int(grid.chamber.x), int(grid.chamber.y))
@@ -333,18 +269,5 @@ func debug_setup(args: Dictionary) -> void:
 		cam.position = grid.center(int(xy[0]), int(xy[1]))
 	if args.has("ph"):
 		force_ph = float(args["ph"])
-	if args.has("focus"):        # focus=<lane number>: the dolly's focus; lane=<n> centres the camera on that lane (dy= px higher)
-		focus = float(args["focus"])
-		focus_target = focus
-	if args.has("frame"):        # frame=1: the camera frames the focus lane as the dolly does (focus=<n> zoom=<z>)
-		_band_update()
-		_frame_focus(1.0)
-		_band_update()
-		_frame_focus(1.0)
-	if args.has("lane"):
-		_band_update()
-		var gy = views["surface"].ground_y(cam.position.x) if views.has("surface") else ground_y()
-		cam.position.y = gy - Band.raise(Band.lane_of(float(args["lane"]))) - float(args.get("dy", "0"))
-	_band_update()
 	if args.has("paused"):
 		paused = true
