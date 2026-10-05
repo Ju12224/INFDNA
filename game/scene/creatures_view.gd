@@ -56,7 +56,7 @@ const LEN_BASE = 24.0
 const LEN_K = 0.132
 # the Tunnel Borer: world px at scale 1. An ant is ~17 long and ~7 high; the worm is five or six ants long and fills the ~18 px tunnel it bores.
 const WORM_LEN = 96.0
-const WORM_THICK = 12.5              # mean thickness of the body (the head is wider)
+const WORM_THICK = 13.0              # mean thickness of the body (the head is wider)
 const WORM_SEGS = 16                 # slices of the picture along its length
 const WORM_STEP = 3.0                # px between the samples of the head's trail
 const WORM_KEEP = 90                 # samples kept: the longest body (zoomed out, thick and thin) with room to spare
