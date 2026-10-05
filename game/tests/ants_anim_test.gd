@@ -17,6 +17,9 @@ var _sim_t0 := 0.0
 var _us := 0                 # the units view's _draw cost, summed over the measured window
 var _us_n := 0
 var _ants_sum := 0
+var _prev := {}              # crowd=1: ant id -> its last frame's entry (for the turn rate)
+var _rates := []             # drawn turn rate of underground ants that are walking, rad/s
+var _cw := {"frames": 0, "ants": 0, "stacked": 0, "overlap": 0, "pile": 0, "pile_sum": 0, "upside": 0, "und": 0, "far": []}
 var _ab := [[0, 0, 0], [0, 0, 0]]     # ab=1: draw cost [us, frames, ants] with the step interpolation on / off, alternating every 30 frames
 var _ant := -1               # shots=<png>: the walking ant followed by the six crops, 3 frames apart, that end up side by side in that png
 var _crops := []
@@ -28,6 +31,7 @@ func _init() -> void:
 		var kv = a.split("=", true, 1)
 		if kv.size() == 2:
 			_args[kv[0]] = kv[1]
+	seed(int(_args.get("seed", "7")))               # the colony's seed comes from randi(): the same seed gives the same colony
 	_node = load(_args["scene"]).instantiate()
 	root.add_child(_node)
 
@@ -53,6 +57,8 @@ func _process(_delta: float) -> bool:
 			nfb += 1
 	_fb_at[_frames] = [df.size(), nfb]
 	var n: int = int(_args["frames"])
+	if _args.has("crowd") and _frames > n - int(_args["window"]):
+		_crowd_frame(df)
 	if _args.has("shots") and _frames >= n - 20 and (_frames - (n - 20)) % 3 == 0 and _crops.size() < 6:
 		_grab(df)
 	if _frames > n - int(_args["window"]):
@@ -77,6 +83,45 @@ func _process(_delta: float) -> bool:
 func _screen_of(wp: Vector2) -> Vector2:
 	var cam: Camera2D = _node.cam
 	return (wp - cam.get_screen_center_position()) * cam.zoom + root.get_visible_rect().size * 0.5
+
+
+# crowd=1: how piled up and how fast turning the underground ants are drawn (spot = the body's middle, drawn tilt in r[13], body length r[14])
+func _crowd_frame(df: Dictionary) -> void:
+	var fps := float(_args.get("fps", "60"))
+	var und := []
+	for id in df:
+		var r = df[id]
+		if r[16] >= 0.5:
+			continue
+		und.append(r)
+		var q = _prev.get(id)
+		if q != null and r[3] > 0.05:
+			_rates.append(abs(wrapf(r[17] - q[17], -PI, PI)) * fps)
+		_cw["und"] += 1
+		if abs(wrapf(r[17], -PI, PI)) > 2.4:
+			_cw["upside"] += 1
+		_cw["far"].append(Vector2(r[8], r[9]).distance_to(Vector2(r[6], r[7])))
+	for id in df:
+		_prev[id] = df[id]
+	if _frames % 6 != 0:
+		return
+	_cw["frames"] += 1
+	_cw["ants"] += und.size()
+	for i in und.size():
+		var a = und[i]
+		var near := 0
+		for j in range(i + 1, und.size()):
+			var b = und[j]
+			var d = Vector2(a[8], a[9]).distance_to(Vector2(b[8], b[9]))
+			var L = (a[14] + b[14]) * 0.5
+			if d < 0.35 * L:
+				_cw["stacked"] += 1
+			if d < 0.7 * L:
+				_cw["overlap"] += 1
+			if d < 0.5 * L:
+				near += 1
+		_cw["pile"] = max(_cw["pile"], near + 1)
+		_cw["pile_sum"] += near
 
 
 func _grab(df: Dictionary) -> void:
@@ -205,6 +250,14 @@ func _report() -> void:
 		for m in [1, 0]:
 			var e = _ab[m]
 			out.append("A/B interpolation %s: %.2f ms per frame, %.1f us per ant (%d frames)" % ["on " if m == 1 else "off", e[0] / 1000.0 / max(1, e[1]), float(e[0]) / max(1, e[2]), e[1]])
+	if _args.has("crowd") and _cw["frames"] > 0:
+		var nf: float = _cw["frames"]
+		_rates.sort()
+		var far: Array = _cw["far"]
+		far.sort()
+		out.append("CROWD underground ants per sampled frame %.1f: pairs closer than 0.35 body %.1f, closer than 0.7 body %.1f, most ants within half a body of one ant %d, mean neighbours %.2f" % [_cw["ants"] / nf, _cw["stacked"] / nf, _cw["overlap"] / nf, _cw["pile"], _cw["pile_sum"] / max(1.0, float(_cw["ants"]))])
+		if not _rates.is_empty():
+			out.append("TURN drawn turn rate of walking ants: median %.2f, p95 %.2f, max %.2f rad/s; frames upside down (|tilt| > 2.4): %.1f%%; drawn spot from sim cell: median %.1f, p95 %.1f px" % [_rates[_rates.size() / 2], _rates[int(_rates.size() * 0.95)], _rates[-1], 100.0 * _cw["upside"] / max(1, _cw["und"]), far[far.size() / 2], far[int(far.size() * 0.95)]])
 	out.append("TOTAL ant-frames %d" % tot["frames"])
 	out.append("  fallback picture      : %d (%.1f%%)" % [tot["fallback"], pct.call(tot["fallback"], tot["frames"])])
 	out.append("  mid-step ant-frames   : %d" % tot["mid"])

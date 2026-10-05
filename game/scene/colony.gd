@@ -23,6 +23,8 @@ const ZOOM_MAX = 6.0
 const ZOOM_START = 2.5
 const ZOOM_STEP = 1.18
 const FOCUS_RATE = 5.0    # how fast the meadow's focus lane (band.gd) closes on the lane picked by the mouse (per second)
+const FRAME_RATE = 7.0    # how fast the camera eases the focus lane's ground line to its place on the screen while dollying (per second)
+const FRAME_HOLD = 0.7    # seconds it keeps framing after the zoom has stopped, so it settles
 const FOCUS_UNDER = 40.0  # world px: with the camera this far below the ground line it has left the meadow, and the focus goes to lane 1
 const ZOOM_EASE = 12.0    # how fast the zoom closes on its target (per second): smooth, never a jump
 const ZOOM_MAX_RATE = 2.5  # at most e^2.5 (about 12x) zoom change per second
@@ -59,6 +61,8 @@ var views := {}           # name -> view node
 var force_ph := -1.0      # >= 0 pins the time of day (screenshots)
 var focus := float(Band.LANES)          # the meadow lane number the camera dollies toward when zoomed in (band.gd)
 var focus_target := float(Band.LANES)   # ... and the one it is easing to: the lane under the mouse when last zoomed in
+var focus_meadow := true                # ... and whether that mouse was over the meadow (not the nest): only then the camera frames the focus lane
+var _frame_t := 0.0
 var _acc := 0.0
 var _report_t := 0.0
 var _drag := false
@@ -219,6 +223,7 @@ func _zoom_at(screen_pos: Vector2, k: float) -> void:
 	_zoom_anchor = screen_pos
 	if k > 1.0:
 		focus_target = lane_under(screen_pos)
+		focus_meadow = _screen_to_world(screen_pos).y < views["surface"].ground_y(_screen_to_world(screen_pos).x) + 6.0 if views.has("surface") else true
 
 
 # The meadow lane number under a screen point: 1 below the soil's top line (zooming into the nest never cuts the meadow), the back lane
@@ -235,7 +240,29 @@ func lane_under(screen_pos: Vector2) -> float:
 func _update_band(delta: float) -> void:
 	var target = 1.0 if cam.position.y > ground_y() + FOCUS_UNDER else focus_target
 	focus = lerp(focus, target, 1.0 - exp(-FOCUS_RATE * delta))
-	Band.update(cam.position, zoom(), focus, ground_y() - 80.0)
+	_band_update()
+	# the dolly frames the picture: while the zoom moves (and a moment after) the camera eases so the focus lane's ground line sits
+	# FRAME_Y down the screen (the lane and what stands on it in the middle, the cover grass a narrow strip along the bottom), over the
+	# meadow only, and the more the further in
+	_frame_t = FRAME_HOLD if abs(log(zoom() / _zoom_target)) > 0.002 else max(_frame_t - delta, 0.0)
+	if _frame_t > 0.0 and focus_meadow and cam.position.y < ground_y() + FOCUS_UNDER:
+		_frame_focus((1.0 - exp(-FRAME_RATE * delta)) * smoothstep(0.0, 0.25, Band.dolly))
+		_clamp_camera()
+		_band_update()
+
+
+func _band_update() -> void:
+	Band.update(cam.position, zoom(), focus, ground_y() - 80.0, get_viewport_rect().size.y)
+
+
+# Move the camera up or down by `w` (0..1) of the way to where the focus lane's ground line is at its place on the screen: halfway
+# down when the dolly starts, FRAME_Y when fully in.
+func _frame_focus(w: float) -> void:
+	var sv = views.get("surface")
+	var gy = sv.lane_ground(cam.position.x, focus) if sv != null else ground_y()
+	var f = lerp(0.5, Band.FRAME_Y, Band.dolly)
+	var goal = Band.lane_y(gy, Band.lane_of(focus)) - (f - 0.5) * get_viewport_rect().size.y / zoom()
+	cam.position.y += (goal - cam.position.y) * w
 
 
 # Zoomed out no further than the world is tall (sky room included), so nothing empty shows below the bedrock, nor wider
@@ -297,10 +324,15 @@ func debug_setup(args: Dictionary) -> void:
 	if args.has("focus"):        # focus=<lane number>: the dolly's focus; lane=<n> centres the camera on that lane (dy= px higher)
 		focus = float(args["focus"])
 		focus_target = focus
+	if args.has("frame"):        # frame=1: the camera frames the focus lane as the dolly does (focus=<n> zoom=<z>)
+		_band_update()
+		_frame_focus(1.0)
+		_band_update()
+		_frame_focus(1.0)
 	if args.has("lane"):
-		Band.update(cam.position, zoom(), focus, ground_y() - 80.0)
+		_band_update()
 		var gy = views["surface"].ground_y(cam.position.x) if views.has("surface") else ground_y()
 		cam.position.y = gy - Band.raise(Band.lane_of(float(args["lane"]))) - float(args.get("dy", "0"))
-	Band.update(cam.position, zoom(), focus, ground_y() - 80.0)
+	_band_update()
 	if args.has("paused"):
 		paused = true

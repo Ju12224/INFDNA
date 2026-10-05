@@ -106,6 +106,7 @@ const BADGE_MAX = 84.0         # ... but never wider than this many world px (zo
 const MOUND_K = 0.28           # world px per picture px (the small mound's hole comes out about as tall as an ant on the surface)
 const MOUND_GROW = [0, 220, 900]   # spoil grains on the surface (world_grid.mound_cells) for the small, medium and large mound
 const MOUND_COVER = 0.6        # the anthill spans this share of the spoil heap round the main mouth ...
+const MOUND_SUNK = 0.07       # share of the anthill's picture below the soil's top line
 const MOUND_MAX = 1.5          # ... growing to at most this much over its own size
 
 var colony
@@ -957,7 +958,9 @@ func _draw_mounds(vr: Rect2) -> void:
 		if i == 0:
 			s *= clamp(MOUND_COVER * _heap_w / (m["w"] * MOUND_K), 1.0, MOUND_MAX)   # a wide heap carries a bigger anthill
 		var hole: Vector2 = m["hole"]
-		var r = Rect2(Vector2((en.x + 0.5) * C, top * C) - hole * s, Vector2(m["w"], m["h"]) * s)
+		# the picture's base stands on the soil's top line (a sliver of it tucked into the ground, under the grass fringe); anchored by the
+		# hole's centre, as before, half the heap hung down over the soil face like a slab
+		var r = Rect2(Vector2((en.x + 0.5) * C - hole.x * s, top * C - float(m["h"]) * s * (1.0 - MOUND_SUNK)), Vector2(m["w"], m["h"]) * s)
 		if not vr.intersects(r):
 			continue
 		draw_texture_rect(m["tex"], r, false, tint)

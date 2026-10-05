@@ -22,6 +22,7 @@ func _init() -> void:
 		var kv = a.split("=", true, 1)
 		if kv.size() == 2:
 			_args[kv[0]] = kv[1]
+	seed(int(_args.get("seed", "7")))               # the colony's seed comes from randi(): the same seed gives the same colony
 	_node = load(_args["scene"]).instantiate()
 	root.add_child(_node)
 

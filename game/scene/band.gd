@@ -29,6 +29,9 @@ const TALL_GAP = 1.5                      # zoomed fully in, tall things (trees)
 # front (in front of the fight lane). The fourth, the fringe on the soil's top line, is surface_view's cover row.
 const CURTAINS = [0.0625, 0.5625, 0.875]
 const PART_SPAN = 0.25                    # share of the dolly over which one curtain parts
+const TALL_SCREEN = 0.6                   # a tree (tall scenery) never stands taller than this share of the screen: zoomed in, a giant's trunk
+										  # would otherwise fill it as one blurry wall (tall_scale(); creatures_view hangs hives by it too)
+const FRAME_Y = 0.65                      # fully dollied in, the focus lane's ground line sits this far down the screen (colony.gd frames it)
 const LIFT_RANGE = 700.0                  # world px the camera goes below the ground for the band to flatten to LIFT_MIN
 const LIFT_MIN = 0.45
 
@@ -36,10 +39,12 @@ static var focus := float(LANES)          # lane number the camera dollies towar
 static var cut := -99.0                   # lane number of the camera's near plane (< 1: nothing is cut)
 static var dolly := 0.0                   # 0 zoomed out to Z_ALL or further .. 1 fully in
 static var lift := 1.0                    # the band flattens as the camera goes down into the nest (vertical parallax)
+static var view_h := 1057.0               # the screen's height in world px at this zoom
 
 
 # Once a frame from colony.gd: camera centre and zoom, the focus lane number, and the ground's y under the camera.
-static func update(cam: Vector2, zoom: float, f: float, ground: float) -> void:
+static func update(cam: Vector2, zoom: float, f: float, ground: float, screen_h: float = 1057.0) -> void:
+	view_h = screen_h / max(zoom, 0.01)
 	focus = f
 	cut = f - DOLLY / max(zoom, 0.01)
 	dolly = clamp(log(max(zoom, 0.01) / Z_ALL) / log(Z_MAX / Z_ALL), 0.0, 1.0)
@@ -83,6 +88,13 @@ static func num_at_raise(r: float) -> float:
 # Where the cover row stands (lane number): on the cut, or on the front lip when nothing is cut.
 static func cover_n() -> float:
 	return max(cut, 1.0)
+
+
+# The scale (1 or less) for a tree of world height `h` (world px at its lane, persp already in): 1 unless it would stand taller than
+# TALL_SCREEN of the screen, then shrunk about its foot to that (smoothly, so zooming never makes it pop).
+static func tall_scale(h: float) -> float:
+	var cap = TALL_SCREEN * view_h
+	return 1.0 if h <= cap else cap / h
 
 
 # How much of something in `lane` to draw: 0 in front of the camera's cut (do not draw it at all), fading in over FADE lanes behind

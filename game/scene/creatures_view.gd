@@ -14,7 +14,7 @@ extends Node2D
 #
 # Two canvases: this node (z 45, over the ants) draws the creatures and the bird; a child at BACK_Z (under the ants, over the nest) draws
 # what lies on the ground or hangs in the trees: piles, carcass, hives, the rival mound and its idle ants. Everything off screen is skipped.
-# A creature that has no picture (the Tunnel Borer, the grasshopper and the butterfly) is not drawn.
+# A creature that has no picture (the grasshopper and the butterfly) is not drawn.
 
 const Art = preload("res://scene/art.gd")
 const Band = preload("res://scene/band.gd")
@@ -54,9 +54,17 @@ const KIT_BASE = Color(0.60, 0.52, 0.46)  # the kit's mean fill (units_view.gd):
 const LEN_PER_SIZE = 2.2                  # ant length from phenotype size, as units_view.gd
 const LEN_BASE = 24.0
 const LEN_K = 0.132
-# the Tunnel Borer (the old mod drew it 4.2 times the burrower height long)
-const WORM_LEN = 200.0
-const WORM_THICK = 40.0
+# the Tunnel Borer: world px at scale 1. An ant is ~17 long and ~7 high; the worm is five or six ants long and fills the ~18 px tunnel it bores.
+const WORM_LEN = 96.0
+const WORM_THICK = 12.5              # mean thickness of the body (the head is wider)
+const WORM_SEGS = 16                 # slices of the picture along its length
+const WORM_STEP = 3.0                # px between the samples of the head's trail
+const WORM_KEEP = 90                 # samples kept: the longest body (zoomed out, thick and thin) with room to spare
+const WORM_SMOOTH = 3                # samples either side the trail is averaged over, so the cell steps do not kink the body
+const WORM_WAVES = 2.4               # peristaltic waves along the body
+const WORM_WAVE = 38.0               # px the head travels while the wave moves on one wavelength
+const WORM_LIFT_N = 5                # stations of the head that rear on the meadow
+const WORM_PROF = 5                  # columns the picture's outline is smoothed over
 # the anteater (the old creature_art.gd): nose to tail in world px, and how far its legs rock
 const ANTEATER_LEN = 380.0
 const ANTEATER_STEP = 0.07
@@ -113,8 +121,10 @@ var _dying := []            # [{e, p, st, k, t}]
 var _born := {}             # raider id -> sim time first seen (the Void Maw's climb out of the pit)
 var _lane_alpha := Callable()   # band.gd's lane_alpha(lane[, tall]) when it has one: the depth zoom cuts the near lanes
 var _alpha_tall := false        # ... and it takes the `tall` flag (for what hangs in the trees)
-var _worm := {}             # borer id -> its drawn heading (radians), turned smoothly toward the way it bores
+var _worm := {}             # borer id -> {tr: the head's trail (cell-space samples, oldest first), last, p, spd, mv, ph (wave), flip, ftgt, lane}
+var _worm_gc_t := 0.0
 var _earthworm := {}        # fauna_manifest "earthworm": the Tunnel Borer's picture
+var _wp := {}               # its outline per column (_worm_profile)
 var _hover := 0.0           # the bird wheels about over its prey
 var _bird_px := 0.0
 var _bird_last := Vector2.ZERO
@@ -156,6 +166,7 @@ func _ready() -> void:
 			_tree_pick = sv.get_script_constant_map().get("TREE_PICK", TREE_PICK_FALLBACK)
 	_anteater = Art.manifest("anteater/anteater_manifest.json")
 	_earthworm = Art.manifest("fauna_manifest.json").get("items", {}).get("earthworm", {})
+	_worm_profile()
 
 
 func reset() -> void:
@@ -179,7 +190,6 @@ func _process(delta: float) -> void:
 			if _born.has(e.id):
 				live[e.id] = _born[e.id]
 		_born = live
-		_worm = {}
 	queue_redraw()
 	_back.queue_redraw()
 
@@ -355,32 +365,279 @@ func _rig_body(ci: CanvasItem, r: Dictionary, base: Transform2D, fv: Vector2, bt
 
 
 # ---------------------------------------------------------------- the Tunnel Borer
-# The owner's earthworm (fauna/earthworm.png, mouth to the right), WORM_LEN long: on the meadow it lies along the ground; boring it turns
-# head first down its own tunnel (its heading eases toward the way it is going, so it bends round instead of snapping). It crawls by
-# squeezing: shorter and fatter, then long and thin, as an earthworm does. The picture is turned, never mirrored upside down.
-func _draw_worm(ci: CanvasItem, e, feet: Vector2, p: Vector2, k: float, face: float, surf: float, col: Color, flash: bool, rot: float, moving: bool) -> bool:
+# The owner's earthworm (fauna/earthworm.png, mouth to the right) bent along the path the borer has travelled. The head's positions are kept
+# (_worm_track: a sample every WORM_STEP px, on screen or not) and each frame the body is laid along that trail from the head back: the
+# picture cut into WORM_SEGS slices, each a quad between two points of the trail pushed half a thickness out either side, so it follows the
+# tunnel it bored round every corner and is never drawn where it has not been. The picture's own S-curve is straightened first (_worm_profile:
+# per column, where the body's middle and edges are). A wave of thick and thin runs tail to head while it crawls (shorter and fatter, then
+# long and thin), a slow breathing while it rests. On the meadow it lies along the ground in its lane, head lifted, and goes down the hole at
+# the lip. The back of the picture stays up: when the head turns round the body rolls over, it never hangs upside down.
+func _worm_profile() -> void:
 	var tex = _tx(str(_earthworm.get("file", "")))
 	if tex == null:
+		return
+	var img: Image = tex.get_image()
+	if img == null or img.is_empty():
+		return
+	if img.is_compressed():
+		img.decompress()
+	var w = img.get_width()
+	var h = img.get_height()
+	var top := PackedFloat32Array()
+	var bot := PackedFloat32Array()
+	top.resize(w)
+	bot.resize(w)
+	var first := -1
+	var last := -1
+	for x in w:
+		var a := -1
+		var b := -1
+		for y in h:
+			if img.get_pixel(x, y).a >= 0.1:
+				if a < 0:
+					a = y
+				b = y
+		top[x] = float(a)
+		bot[x] = float(b + 1)
+		if a >= 0:
+			if first < 0:
+				first = x
+			last = x
+	if first < 0:
+		return
+	for x in w:
+		var xi = clampi(x, first, last)
+		if top[xi] < 0.0:
+			var l = xi
+			while l > first and top[l] < 0.0:
+				l -= 1
+			var r = xi
+			while r < last and top[r] < 0.0:
+				r += 1
+			top[x] = (top[l] + top[r]) * 0.5
+			bot[x] = (bot[l] + bot[r]) * 0.5
+		elif x != xi:
+			top[x] = top[xi]
+			bot[x] = bot[xi]
+	var c := PackedFloat32Array()
+	var hh := PackedFloat32Array()
+	c.resize(w)
+	hh.resize(w)
+	var sum := 0.0
+	for x in w:
+		var a := 0.0
+		var b := 0.0
+		var n := 0
+		for d in range(-WORM_PROF, WORM_PROF + 1):
+			var xi = clampi(x + d, 0, w - 1)
+			a += top[xi]
+			b += bot[xi]
+			n += 1
+		c[x] = (a + b) * 0.5 / n
+		hh[x] = (b - a) * 0.5 / n
+		if x >= 14 and x < w - 6:
+			sum += hh[x]
+	var mean = sum / float(max(1, w - 20))
+	for x in w:
+		hh[x] += 2.5            # a little of the clear border, so the edge stays soft
+	_wp = {"c": c, "h": hh, "w": float(w), "ht": float(h), "k": WORM_THICK * 0.5 / mean}
+
+
+func _wp_at(xt: float) -> Vector2:
+	var c: PackedFloat32Array = _wp["c"]
+	var h: PackedFloat32Array = _wp["h"]
+	var x = clampf(xt, 0.0, float(c.size() - 1))
+	var i = int(x)
+	var j = mini(i + 1, c.size() - 1)
+	var f = x - i
+	return Vector2(lerpf(c[i], c[j], f), lerpf(h[i], h[j], f))
+
+
+# A borer's trail begins lying along the ground behind its head (a borer is born on the meadow); one that appears underground gets what open
+# room there is behind it.
+func _worm_new(e, p: Vector2) -> Dictionary:
+	var g = colony.grid
+	var dir = -float(e.facing) if e.facing != 0 else 1.0
+	var under = p.y > (g.surf_y(int(floor(p.x / C))) + 0.6) * C
+	var pts := []
+	for i in range(1, WORM_KEEP):
+		var x = p.x + dir * i * WORM_STEP
+		var cx = int(floor(x / C))
+		var y = p.y if under else (g.surf_y(cx) - 0.5) * C
+		if under and g.is_solid(cx, int(floor(y / C))):
+			break
+		pts.append(Vector2(x, y))
+	pts.reverse()
+	pts.append(p)
+	var f = 1.0 if e.facing >= 0 else -1.0
+	return {"tr": pts, "last": p, "p": p, "spd": 0.0, "mv": 0.0, "ph": randf() * TAU, "flip": f, "ftgt": f, "lane": -1.0}
+
+
+func _worm_track(e, p: Vector2) -> void:
+	var w = _worm.get(e.id)
+	if w == null or w["last"].distance_to(p) > 48.0:
+		w = _worm_new(e, p)
+		_worm[e.id] = w
+	var tr: Array = w["tr"]
+	var last: Vector2 = w["last"]
+	while last.distance_to(p) >= WORM_STEP:
+		last = last.move_toward(p, WORM_STEP)
+		tr.append(last)
+	while tr.size() > WORM_KEEP:
+		tr.pop_front()
+	w["last"] = last
+	var moved = p.distance_to(w["p"])
+	w["p"] = p
+	if colony.paused or _dt <= 0.0:
+		return
+	w["spd"] = lerpf(w["spd"], moved / _dt, 1.0 - exp(-_dt * 6.0))
+	w["mv"] = clampf(w["spd"] / 6.0, 0.0, 1.0)
+	w["ph"] += _dt * (1.2 + 0.8 * w["mv"]) + moved * TAU / WORM_WAVE
+
+
+func _worm_gc() -> void:
+	_worm_gc_t -= _dt
+	if _worm_gc_t > 0.0 or _worm.is_empty():
+		return
+	_worm_gc_t = 0.5
+	var live := {}
+	for e in colony.sim.enemies:
+		if e.cls == "burrower":
+			live[e.id] = true
+	for d in _dying:
+		live[d["it"][0].id] = true
+	for id in _worm.keys():
+		if not live.has(id):
+			_worm.erase(id)
+
+
+func _draw_worm(ci: CanvasItem, e, p: Vector2, st: Vector3, kk: float, col: Color, flash: bool, rot: float) -> bool:
+	var tex = _tx(str(_earthworm.get("file", "")))
+	var w = _worm.get(e.id)
+	if tex == null or w == null or _wp.is_empty():
 		return false
-	var d = Vector2(e.tx - e.x, e.ty - e.y)
-	if e.state == 3 and e.dest != Vector2.ZERO:
-		d = e.dest - Vector2(e.x, e.y)
-	var goal = 0.0 if face > 0.0 else PI
-	if surf < 0.5 and d.length() > 0.1:
-		goal = d.angle()
-	var a = float(_worm.get(e.id, goal))
-	a += wrapf(goal - a, -PI, PI) * (1.0 - exp(-_dt * 3.0))
-	_worm[e.id] = a
-	var sz = tex.get_size()
-	var s = WORM_LEN * k / sz.x
-	var squeeze = sin(_t * (7.0 if moving else 1.4) + e.id) * (0.12 if moving else 0.03)
-	var up = -1.0 if cos(a) < 0.0 else 1.0                      # heading left: flipped so its back stays up
-	var centre = feet.lerp(p, 1.0 - surf) + Vector2(0, -sz.y * 0.4 * s * surf)
+	var g = colony.grid
+	# the lane it lies in: it comes forward to the lip as it gets ready to dive, so it goes in at the ground line
+	var lane_t = lerpf(st.y, 1.0, smoothstep(0.3, 2.0, e.timer)) if e.state == 0 else 1.0
+	var lane = lane_t if w["lane"] < 0.0 else lerpf(w["lane"], lane_t, 1.0 - exp(-_dt * 5.0))
+	w["lane"] = lane
+	var rz = Band.raise(lane)
+	var pl = Band.persp(lane)
+	var half = WORM_THICK * 0.5 * kk
+	# the trail as drawn, head first: on the meadow raised to its lane, in the soil where it was
+	var tr: Array = w["tr"]
+	var raw := PackedVector2Array()
+	var sc := PackedFloat32Array()
+	var wg := PackedFloat32Array()
+	var n = tr.size()
+	for j in range(-1, n):
+		var q: Vector2 = p if j < 0 else tr[n - 1 - j]
+		var gy = float(g.surf_y(int(floor(q.x / C)))) * C
+		var s = clampf((gy + 1.5 * C - q.y) / (2.0 * C), 0.0, 1.0)
+		var k = lerpf(1.0, pl, s)
+		raw.append(Vector2(q.x, q.y + s * (C * 0.5 - rz - half * k)))
+		sc.append(k)
+		wg.append(s)
+	var m = raw.size()
+	var pol := PackedVector2Array()
+	pol.resize(m)
+	for j in m:
+		var a := Vector2.ZERO
+		for d in range(-WORM_SMOOTH, WORM_SMOOTH + 1):
+			a += raw[clampi(j + d, 0, m - 1)]
+		pol[j] = a / float(2 * WORM_SMOOTH + 1)
+	var mv: float = w["mv"]
+	var amp = lerpf(0.05, 0.17, mv) * (0.35 if e.stun_t > 0.0 else 1.0)
+	var ph: float = w["ph"]
+	# the stations: WORM_SEGS slices from the head back, spaced along the trail (a fat slice is a short one)
+	var N = WORM_SEGS
+	var ps := PackedVector2Array()
+	var pk := PackedFloat32Array()
+	var pw := PackedFloat32Array()
+	var pu := PackedFloat32Array()
+	ps.append(pol[0])
+	pk.append(sc[0])
+	pw.append(wg[0])
+	pu.append(0.0)
+	var seg = 0
+	var acc := 0.0
+	var target := 0.0
+	var nominal = WORM_LEN * kk / N
+	for i in range(1, N + 1):
+		var li = nominal * (1.0 - 0.8 * amp * sin(TAU * WORM_WAVES * (i - 0.5) / N + ph))
+		target += li
+		var found := false
+		while seg < m - 1:
+			var d = pol[seg].distance_to(pol[seg + 1])
+			var c = d / maxf(0.5 * (sc[seg] + sc[seg + 1]), 0.05)
+			if acc + c >= target:
+				var f = (target - acc) / maxf(c, 0.0001)
+				ps.append(pol[seg].lerp(pol[seg + 1], f))
+				pk.append(lerpf(sc[seg], sc[seg + 1], f))
+				pw.append(lerpf(wg[seg], wg[seg + 1], f))
+				pu.append(float(i))
+				found = true
+				break
+			acc += c
+			seg += 1
+		if not found:
+			# the trail ran out (it has not come that far yet): the body ends where the tunnel does
+			var f = clampf((acc - (target - li)) / li, 0.0, 1.0)
+			if f > 0.08:
+				ps.append(pol[m - 1])
+				pk.append(sc[m - 1])
+				pw.append(wg[m - 1])
+				pu.append(float(i - 1) + f)
+			break
+	var cnt = ps.size()
+	if cnt < 2:
+		return false
+	# the head rears a little on the meadow, never in the soil (it would leave its tunnel)
+	var lift = half * 2.2 * (0.55 + 0.45 * sin(_t * 1.7 + e.id)) * (1.0 - 0.45 * mv)
+	for i in mini(cnt, WORM_LIFT_N):
+		var r = 1.0 - float(i) / WORM_LIFT_N
+		ps[i].y -= lift * r * r * pw[i]
+	# the back stays up: the picture faces the way the head goes, rolling over when it turns round
+	var hd = ps[0] - ps[mini(3, cnt - 1)]
+	var tgt: float = w["ftgt"]
+	if hd.x > 0.3 * hd.length():
+		tgt = 1.0
+	elif hd.x < -0.3 * hd.length():
+		tgt = -1.0
+	w["ftgt"] = tgt
+	w["flip"] = move_toward(w["flip"], tgt, _dt * 8.0)
+	var flip: float = w["flip"]
 	if flash:
 		col = _flash(col)
-	ci.draw_set_transform_matrix(Transform2D(rot + a, centre) * Transform2D(Vector2(s * (1.0 + squeeze), 0), Vector2(0, s * up * (1.0 - squeeze)), Vector2.ZERO))
-	ci.draw_texture(tex, -sz * 0.5, col)
+	var pts := PackedVector2Array()
+	var uvs := PackedVector2Array()
+	var cols := PackedColorArray()
+	var idx := PackedInt32Array()
+	var tw: float = _wp["w"]
+	var th: float = _wp["ht"]
+	var hk: float = _wp["k"] * kk
+	var tdir := Vector2.RIGHT
+	for i in cnt:
+		var tv = ps[maxi(i - 1, 0)] - ps[mini(i + 1, cnt - 1)]
+		if tv.length_squared() > 0.0001:
+			tdir = tv.normalized()
+		var u = 1.0 - pu[i] / N
+		var pr = _wp_at(u * tw)
+		var nrm = tdir.rotated(PI * 0.5) * (flip * pr.y * hk * pk[i] * (1.0 + amp * sin(TAU * WORM_WAVES * pu[i] / N + ph)))
+		pts.append(ps[i] - nrm)
+		pts.append(ps[i] + nrm)
+		uvs.append(Vector2(u, (pr.x - pr.y) / th))
+		uvs.append(Vector2(u, (pr.x + pr.y) / th))
+		cols.append(col)
+		cols.append(col)
+		if i < cnt - 1:
+			var b = 2 * i
+			idx.append_array(PackedInt32Array([b, b + 2, b + 1, b + 1, b + 2, b + 3]))
+	if rot != 0.0:
+		for i in pts.size():
+			pts[i] = ps[0] + (pts[i] - ps[0]).rotated(rot)
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	RenderingServer.canvas_item_add_triangle_array(ci.get_canvas_item(), idx, pts, cols, uvs, PackedInt32Array(), PackedFloat32Array(), tex.get_rid())
 	return true
 
 
@@ -453,6 +710,8 @@ func _draw() -> void:
 		if not _born.has(e.id):
 			_born[e.id] = sim.time
 		var p = sim.enemy_pos(e)
+		if e.cls == "burrower":
+			_worm_track(e, p)        # its trail is kept off screen too
 		if not vr.has_point(p):
 			continue
 		var surf = 1.0 if e.ty <= g.surf_y(e.tx) else 0.0
@@ -476,6 +735,7 @@ func _draw() -> void:
 			seen[it[0].id] = _draw_enemy(self, it[0], it[1], it[2], far, zoom)
 	_note_deaths(seen)
 	_draw_dying(far, zoom)
+	_worm_gc()
 	_step_bird()
 	if sim.bird != null:
 		_draw_bird(sim.bird, zoom)
@@ -533,8 +793,8 @@ func _draw_enemy(ci: CanvasItem, e, p: Vector2, st: Vector3, far: float, zoom: f
 			drawn = _rig(ci, rig, feet - Vector2(0, lift), k, face, tt, moving or e.def.get("fly", false), 0.2, col, flash, rot)
 			feet.y -= lift
 	elif e.cls == "burrower":
-		h = WORM_THICK * k
-		drawn = _draw_worm(ci, e, feet, p, k, face, surf, col, flash, rot, moving or e.state == 3)
+		h = WORM_THICK * 3.0 * k
+		drawn = _draw_worm(ci, e, p, st, far * lerp(1.0, BACK_SCALE, plane), col, flash, rot)
 	elif art == "anteater":
 		h = _anteater_h()
 		k = _boss_k(k, h, zoom)

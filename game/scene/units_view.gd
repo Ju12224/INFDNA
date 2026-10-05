@@ -66,9 +66,20 @@ const DROP = 10.0                          # cells: with none there, how far bel
 const GROUND_LIFE = 1.5                    # s: a cached answer about the ground is worked out again after this (the colony digs)
 const NONE = 1e9
 const SNAP_RATE = 14.0                     # 1/s: how fast the drawn feet follow the ground they are put on
-const SPREAD_GAP = 0.42                    # body lengths between ants crowding one spot
-const SPREAD_MAX = 3.5                     # cells: at most this far from where the sim keeps it
-const SPREAD_RATE = 5.0
+const SPREAD_GAP = 0.6                     # body lengths between ants of one row crowding a spot
+const SPREAD_MAX = 5.0                     # cells: at most this far from where the sim keeps it
+const SPREAD_RATE = 3.5                    # 1/s: how fast a crowd settles into its places
+const CROWD_FROM = 2.0                     # ants in a 4 x 4 cell block from which a crowd is drawn in depth rows ...
+const CROWD_SPAN = 3.0                     # ... all the way when there are this many more
+const CROWD_RATE = 3.0
+const ROW_SCALE = [1.0, 0.93, 0.86]        # a crowd stands in three rows: the back ones are further off, smaller and darker
+const ROW_SHADE = [1.0, 0.9, 0.8]
+const ROW_LIFT = [0.0, 0.035, 0.07]        # body lengths up the screen, on a floor
+const FIT_MIN = 0.7                        # an ant in a passage narrower than itself shrinks to this at most
+const FIT_RATE = 6.0
+const ROT_PX = 0.09                        # rad of turn per px walked (a quarter turn takes about 17 px, three cells) ...
+const ROT_T = 1.6                          # ... and never slower than this (rad/s), so a stopped ant still settles
+const ROT_EASE = 9.0
 const SPREAD_STEP = 1.2                    # cells: the drawn ground may step this much between neighbours in a crowd
 const BODY_MID = 0.36                      # the middle of an ant's body stands this many body lengths above its feet
 const SQUEEZE = 1.2                        # cells: in a tight passage its feet may reach this far into the wall
@@ -115,7 +126,15 @@ const S_AX = 28        # the sim's position at its last two steps (world px): th
 const S_AY = 29        # between steps (see _draw), so it moves every frame, not once every 0.1 s
 const S_SX = 30
 const S_SY = 31
-const S_N = 32
+const S_ROW = 32       # its depth row in a crowd (0 front .. 2 back), from its id
+const S_HASH = 33      # 0..1 from its id: the order it takes in a crowd's row
+const S_CROWD = 34     # 0..1: how crowded it is, smoothed (a crowd is drawn in depth rows)
+const S_FIT = 35       # 0.7..1: how much it shrinks to fit the passage it is in (smoothed)
+const S_DX = 36        # drawn feet minus the sim position's ground spot: where the crowd pushed it along the ground this frame
+const S_DY = 37
+const S_FX = 38        # where its feet were drawn last frame
+const S_FY = 39
+const S_N = 40
 
 const DIRS = 16
 
@@ -139,7 +158,7 @@ var _q_face := 1.0
 var _q_x := 0.0
 var draw_us := 0            # how long the last _draw took (tests read it)
 var debug_on := false       # tests (ants_anim_test.gd): fill debug_frames with how each ant was drawn this frame
-var debug_frames := {}      # ant id -> [baked, frame cell (-1: whole-body picture), walking, moved px, mid-step, gait, p.x, p.y, drawn spot x, y, task, digging, a.t, drawn tilt, body length px]
+var debug_frames := {}      # ant id -> [baked, frame cell (-1: whole-body picture), walking, moved px, mid-step, gait, p.x, p.y, drawn spot x, y, task, digging, a.t, drawn tilt, body length px, row, surface 0..1, tilt before the pose]
 var debug_stamp := 0        # counts the _draws that filled it
 var debug_interp := true    # tests: false draws the ants where the sim has them, as before the step interpolation
 var rows_hook := Callable()     # surface_view.gd sets this: draws its grass rows into this canvas between the surface lane buckets
@@ -282,8 +301,8 @@ func _draw() -> void:
 					_foes.append(ep)
 	var day_tint: Color = colony.day.tint
 	var state := {}
-	var back := []
-	var front := []
+	var back := [[], [], []]          # underground ants by depth row (the back rows are drawn first)
+	var front := [[], [], []]
 	var lanes := []
 	for i in LANE_BUCKETS:
 		lanes.append([])
@@ -331,26 +350,32 @@ func _draw() -> void:
 		var z: int = a.tz if t > 0.5 else a.z
 		if ground:
 			_place(a, p, st, float(st[S_WLEN]) * far * (BACK_SCALE if z == 1 else 1.0), z)
-			var key = ((int(p.x / C) >> 1) * 8192 + (int(p.y / C) >> 1)) * 2 + z
+			var key = ((int(p.x / C) >> 2) * 8192 + (int(p.y / C) >> 2)) * 2 + z
 			var c = crowd.get(key)
 			if c == null:
 				crowd[key] = [it]
 			else:
 				c.append(it)
-		if (a.z + (a.tz - a.z) * t) > 0.5:
-			back.append(it)
 		else:
-			front.append(it)
+			st[S_DX] = 0.0
+			st[S_DY] = 0.0
+			st[S_CROWD] = 0.0
+		if (a.z + (a.tz - a.z) * t) > 0.5:
+			back[int(st[S_ROW])].append(it)
+		else:
+			front[int(st[S_ROW])].append(it)
 	_state = state
 	for c in crowd.values():
-		if c.size() > 1 or abs(float(c[0][2][S_SPREAD])) > 0.3:
+		if c.size() > 1 or abs(float(c[0][2][S_SPREAD])) > 0.3 or float(c[0][2][S_CROWD]) > 0.01:
 			_spread(c, far)
 	var kf: int = kit._frame if kit != null else 0
-	for it in back:
-		_draw_ant(it[0], it[1], it[2], far, poses, sel, day_tint, kf)
+	for r in [2, 1, 0]:
+		for it in back[r]:
+			_draw_ant(it[0], it[1], it[2], far, poses, sel, day_tint, kf)
 	_draw_queen(vr, far)
-	for it in front:
-		_draw_ant(it[0], it[1], it[2], far, poses, sel, day_tint, kf)
+	for r in [2, 1, 0]:
+		for it in front[r]:
+			_draw_ant(it[0], it[1], it[2], far, poses, sel, day_tint, kf)
 	for i in lanes.size():
 		if rows_hook.is_valid():
 			rows_hook.call(self, float(i) / LANE_BUCKETS)    # the meadow's grass rows standing behind this bucket (surface_view.gd)
@@ -391,6 +416,11 @@ func _new_state(a, p: Vector2, g) -> Array:
 	st[S_TINT] = _tint(a.genome)
 	st[S_WINGS] = a.ph.get("wings", 0) > 0
 	st[S_GKEY] = -1
+	st[S_ROW] = a.id % 3
+	st[S_FX] = p.x + down.x
+	st[S_FY] = p.y + down.y
+	st[S_HASH] = fmod(a.id * 0.6180339887, 1.0)
+	st[S_FIT] = 1.0
 	return st
 
 
@@ -487,6 +517,8 @@ func _ground(p: Vector2, z: int, q: int) -> float:
 # than its back sticking through the far one); where there is no drawn ground (it stands on a crumb the soil view does not draw),
 # upright on the floor below. `length`: its drawn body length. The answers for its cell are kept in its state.
 func _place(a, p: Vector2, st: Array, length: float, z: int) -> void:
+	st[S_DX] = 0.0
+	st[S_DY] = 0.0
 	var rot: float = a.rot
 	var down = Vector2(-sin(rot), cos(rot))
 	var q: int = posmod(int(round(atan2(down.y, down.x) * (DIRS / TAU))), DIRS)
@@ -504,12 +536,15 @@ func _place(a, p: Vector2, st: Array, length: float, z: int) -> void:
 	var dq: Vector2 = _dir[q]
 	var off: Vector2
 	var d: float = st[S_GD]
+	var fit := 1.0
 	if d < NONE:
 		d -= ex * dq.x + ey * dq.y
 		var d2: float = st[S_GD2]
-		var hc = BODY_MID * length
+		var hc = BODY_MID * length * float(st[S_FIT])
 		if d2 < NONE:
 			d2 += ex * dq.x + ey * dq.y
+			# a passage thinner than the ant: it shrinks (down to FIT_MIN) and, if that is not enough, stands in the middle of it
+			fit = clamp((d + d2) / max(1.0, 2.0 * BODY_MID * length * 1.04), FIT_MIN, 1.0)
 			if d + d2 < 2.0 * hc:
 				d = min((d - d2) * 0.5 + hc, d + SQUEEZE * C)
 		off = down * d
@@ -521,22 +556,43 @@ func _place(a, p: Vector2, st: Array, length: float, z: int) -> void:
 	var k = 1.0 - exp(-_dt * SNAP_RATE)
 	st[S_OX] = lerp(float(st[S_OX]), off.x, k)
 	st[S_OY] = lerp(float(st[S_OY]), off.y, k)
-	st[S_ROT] = lerp_angle(float(st[S_ROT]), rot, k)
+	st[S_FIT] = lerp(float(st[S_FIT]), fit, 1.0 - exp(-_dt * FIT_RATE))
+	# the tilt turns toward the ground's, by how far it has walked (a corner is rounded over a few cells, never snapped), and not far
+	# faster than that whatever the sim does (it swings a quarter turn in a quarter second)
+	if rot == a.rot and (a.tx != a.x or a.ty != a.y):
+		rot = a.trot
+	var cur: float = st[S_ROT]
+	var mv = sqrt((p.x - float(st[S_PX])) * (p.x - float(st[S_PX])) + (p.y - float(st[S_PY])) * (p.y - float(st[S_PY])))
+	var lim = ROT_PX * min(mv, 4.0) + ROT_T * _dt
+	st[S_ROT] = wrapf(cur + clamp(wrapf(rot - cur, -PI, PI) * (1.0 - exp(-_dt * ROT_EASE)), -lim, lim), -PI, PI)
 
 
-# Ants close together underground spread out along the ground they stand on (one after another along their bodies' axis), as far as
-# the drawn ground goes on without a big step.
+# Ants close together underground (a 4 x 4 cell block, one tunnel plane) stand in three depth rows (their id picks the row; a lone ant
+# is in none) and, within a row, spread out along the ground they stand on, one after another along their bodies' axis, as far as the
+# drawn ground goes on without a big step. Their order is a hash of their id, so it does not change as the crowd moves.
 func _spread(items: Array, far: float) -> void:
 	var n = items.size()
 	var k = 1.0 - exp(-_dt * SPREAD_RATE)
-	for i in n:
-		var it = items[i]
+	var kc = 1.0 - exp(-_dt * CROWD_RATE)
+	var goal: float = clamp((n - CROWD_FROM) / CROWD_SPAN, 0.0, 1.0)
+	var rows := []
+	if n > 1:
+		rows = [PackedFloat32Array(), PackedFloat32Array(), PackedFloat32Array()]
+		for it in items:
+			var s0: Array = it[2]
+			rows[int(s0[S_ROW])].append(float(s0[S_HASH]))
+		for r in rows:
+			r.sort()
+	for it in items:
 		var a = it[0]
 		var st: Array = it[2]
+		st[S_CROWD] = lerp(float(st[S_CROWD]), goal, kc)
 		var want = 0.0
 		if n > 1:
-			var gap = SPREAD_GAP * float(st[S_WLEN]) * far
-			want = clamp((i - (n - 1) * 0.5) * gap, -SPREAD_MAX * C, SPREAD_MAX * C)
+			var rr: PackedFloat32Array = rows[int(st[S_ROW])]
+			if rr.size() > 1:
+				var gap = SPREAD_GAP * float(st[S_WLEN]) * far * float(st[S_FIT]) * lerp(1.0, ROW_SCALE[int(st[S_ROW])], float(st[S_CROWD]))
+				want = clamp((rr.bsearch(float(st[S_HASH])) - (rr.size() - 1) * 0.5) * gap, -SPREAD_MAX * C, SPREAD_MAX * C)
 		var cur = lerp(float(st[S_SPREAD]), want, k)
 		st[S_SPREAD] = cur
 		if abs(cur) < 0.3:
@@ -555,8 +611,8 @@ func _spread(items: Array, far: float) -> void:
 		for tries in 3:
 			var d = _ground(p + along * off, z, q)
 			if d < NONE and abs(d - base) < SPREAD_STEP * C:
-				st[S_OX] += along.x * off + down.x * (d - base)
-				st[S_OY] += along.y * off + down.y * (d - base)
+				st[S_DX] = along.x * off + down.x * (d - base)
+				st[S_DY] = along.y * off + down.y * (d - base)
 				break
 			off *= 0.5
 			if tries == 2:
@@ -575,25 +631,33 @@ func _draw_ant(a, p: Vector2, st: Array, far: float, poses: bool, sel: Dictionar
 	var surf: float = st[S_SURF]
 	var lane: float = st[S_LANE]
 	var depth: float = (lerp(1.0, Band.persp(lane), surf) if surf > 0.0 else 1.0) * (lerp(1.0, BACK_SCALE, plane) if plane > 0.0 else 1.0)
-	var length: float = float(st[S_WLEN]) * far * depth * (_pop(a.age) if a.age < 0.5 else 1.0)
+	var length: float = float(st[S_WLEN]) * far * depth * (_pop(a.age) if a.age < 0.5 else 1.0) * float(st[S_FIT])
+	var cr: float = st[S_CROWD]
+	var row: int = int(st[S_ROW])
+	if cr > 0.001:
+		length *= lerp(1.0, ROW_SCALE[row], cr)                      # in a crowd the back rows are smaller ...
 	# where it stands: underground on the drawn ground (_place, _spread), on the surface in its lane
 	var rot: float = a.rot
 	var feet: Vector2
 	if surf >= 1.0:
 		feet = p + Vector2(-sin(rot), cos(rot)) * (C * 0.5)
 	else:
-		feet = p + Vector2(st[S_OX], st[S_OY])
+		feet = p + Vector2(float(st[S_OX]) + float(st[S_DX]), float(st[S_OY]) + float(st[S_DY]))
+		if cr > 0.001 and abs(float(st[S_ROT])) < 0.8:
+			feet.y -= ROW_LIFT[row] * cr * length                    # ... and stand a little higher up the screen on a floor
 		if surf > 0.0:
 			feet = feet.lerp(p + Vector2(-sin(rot), cos(rot)) * (C * 0.5), surf)
 		rot = lerp_angle(float(st[S_ROT]), rot, surf)
 	if surf > 0.0:
 		feet.y = lerp(feet.y, Band.lane_y(feet.y, lane), surf)
 	# walking: the cycle advances by the ground really covered, so the feet stay planted
-	var mx: float = p.x - float(st[S_PX])
-	var my: float = p.y - float(st[S_PY])
+	var mx: float = feet.x - float(st[S_FX])
+	var my: float = feet.y - float(st[S_FY])
 	var moved = sqrt(mx * mx + my * my)
 	st[S_PX] = p.x
 	st[S_PY] = p.y
+	st[S_FX] = feet.x
+	st[S_FY] = feet.y
 	var walking: bool = moved > 0.001
 	var lk = st[S_LOOK]
 	if lk != null:
@@ -624,6 +688,8 @@ func _draw_ant(a, p: Vector2, st: Array, far: float, poses: bool, sel: Dictionar
 	var hurt: float = clamp(a.hurt / HURT_T, 0.0, 1.0)
 	# colour: shade by depth and haze, the strain's colour over the drab kit, hurt flash, selection
 	var shade = (lerp(1.0, BACK_SHADE, plane) if plane > 0.0 else 1.0) * (lerp(1.0, HIDDEN_SHADE, hidden) if hidden > 0.0 else 1.0)
+	if cr > 0.001:
+		shade *= lerp(1.0, ROW_SHADE[row], cr)
 	var alpha = (lerp(1.0, HIDDEN_ALPHA, hidden) if hidden > 0.0 else 1.0) * (0.55 if a.shelter_t > 0.0 else 1.0)
 	var light = Color(shade, shade, shade, alpha)
 	if surf > 0.0:
@@ -652,7 +718,7 @@ func _draw_ant(a, p: Vector2, st: Array, far: float, poses: bool, sel: Dictionar
 		var fr = int(fposmod(float(st[S_GAIT]), 1.0) * AntKit.FRAMES) % AntKit.FRAMES if (walking or air > 0.05) else AntKit.STAND
 		var dst = Rect2(-lk["feet"], cell)
 		if debug_on:
-			debug_frames[a.id] = [true, fr, walking, moved, a.tx != a.x or a.ty != a.y, st[S_GAIT], p.x, p.y, st[S_SPOT_X], st[S_SPOT_Y], a.task, a.dig_timer > 0.0, a.t, rot, length]
+			debug_frames[a.id] = [true, fr, walking, moved, a.tx != a.x or a.ty != a.y, st[S_GAIT], p.x, p.y, st[S_SPOT_X], st[S_SPOT_Y], a.task, a.dig_timer > 0.0, a.t, rot, length, int(st[S_ROW]), st[S_SURF], st[S_ROT]]
 		draw_texture_rect_region(lk["tex"], dst, Rect2(cell.x * fr, 0.0, cell.x, cell.y), _pm(light * tint))
 		if lk["wings"]:
 			var wc = _pm(light * Color.WHITE.lerp(tint, WING_TINT))
@@ -677,7 +743,7 @@ func _draw_ant(a, p: Vector2, st: Array, far: float, poses: bool, sel: Dictionar
 		if b == null:
 			return
 	if debug_on:
-		debug_frames[a.id] = [false, -1, walking, moved, a.tx != a.x or a.ty != a.y, st[S_GAIT], p.x, p.y, st[S_SPOT_X], st[S_SPOT_Y], a.task, a.dig_timer > 0.0, a.t, rot, length]
+		debug_frames[a.id] = [false, -1, walking, moved, a.tx != a.x or a.ty != a.y, st[S_GAIT], p.x, p.y, st[S_SPOT_X], st[S_SPOT_Y], a.task, a.dig_timer > 0.0, a.t, rot, length, int(st[S_ROW]), st[S_SURF], st[S_ROT]]
 	var s2 = length / b["length"]
 	draw_set_transform(at, rot, Vector2(face * s2 * pose[2], s2 * pose[3] * (1.0 + bob)))
 	draw_texture(b["tex"], -b["feet"], _pm(light * tint))

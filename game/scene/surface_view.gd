@@ -40,18 +40,18 @@ const CURTAIN_H = [36.0, 58.0, 51.0]   # height of each curtain's strip at scale
 const CURTAIN_SHADE = [0.86, 0.93, 1.0]
 const SWAY = 0.035             # wind: the tips of a curtain sway this share of its height
 const TRAMPLE = [0.0, 0.85, 0.7]       # round a nest mouth the ants have trodden the grass down: curtain heights lose this share there ...
-const TRAMPLE_COVER = 0.6              # ... and the cover row's
-const CLEAR_IN = 8.0           # cells from a mouth where the clearing is fully trodden ...
-const CLEAR_OUT = 20.0         # ... and where the grass stands full again
-const COVER_H = 26.0           # the cover row's height at scale 1 ...
-const COVER_GROW = 0.8         # ... grown by this much as the cut moves COVER_SPAN lanes into the band ...
-const COVER_SPAN = 6.0
-const COVER_ROOM = 0.45        # zoomed in, the cover row's blades reach at most this share of the way up to the focus lane
-const COVER_DARK = 0.22        # ... darkened by this much, and blurred by up to COVER_BLUR (mip bias)
-const COVER_BLUR = 0.6
+const TRAMPLE_COVER = 0.5              # ... and the cover row's
+const CLEAR_IN = 14.0          # cells from a mouth where the clearing is fully trodden (an anthill is 15 to 40 cells wide) ...
+const CLEAR_OUT = 28.0         # ... and where the grass stands full again
+const COVER_H = 26.0           # the cover row's height at scale 1 on the soil's top line (the fringe) ...
+const COVER_FRAC = 0.14        # ... and, once the camera has dollied in, the share of the screen's height it stands (a narrow strip along the bottom)
+const COVER_DARK = 0.15        # ... darkened by this much, and blurred by up to COVER_BLUR (mip bias), the further in
+const COVER_BLUR = 0.5
 const RIM = 3.0                # world px the cover row's foot reaches below the soil's top edge, hiding it
-const FILL_FROM = 1.5          # cut (lane number) where the rows below the cover row start to fill the screen down to its bottom ...
-const FILL_TO = 3.0            # ... and where they reach it
+const MOUTH_RIM = 6.0          # ... and this much more round a nest mouth, over the anthill's base
+const FILL_FROM = 1.0          # cut (lane number) where the cover row starts to move from the soil's top line to the bottom of the screen ...
+const FILL_TO = 2.0            # ... and where it is there
+const SKIRT_LANES = 3.5        # while the camera is in the band, lawn rows this near the cut keep their solid foot stretched to the bottom of the screen
 const COVER_SMOOTH = 1         # the cover row follows the soil's top closely (columns either side averaged)
 const HOLE_REACH = 14.0        # grass reaches at most this far down into a hole (the nest's mouth)
 const STEP_PX = 20.0           # screen px between ribbon points
@@ -286,23 +286,31 @@ func _step() -> float:
 	return max(6.0, STEP_PX / colony.zoom())
 
 
-# A lawn row.
+# A lawn row, fading in over the lanes behind the camera's cut. While the camera is in the band the rows nearest the cut keep their solid
+# foot stretched down to the bottom of the screen, so no sky shows under the front-most one however the ground lies.
 func _draw_row(it: Node2D, n: int) -> void:
-	if n == 1 and Band.cover_n() < FILL_TO:
+	var c = Band.cover_n()
+	if n == 1 and c < FILL_TO:
 		_cover_rows(it, true)                   # the cover row's own foot, carried on under the soil (see _draw_cover)
 		return
-	if float(n) <= Band.cover_n():
+	var lane = Band.lane_of(n)
+	var a = Band.lane_alpha(lane)
+	if a <= 0.004:
 		return                                  # the cover row stands here or in front of it
 	var tex = _strip_for(n)
 	if tex == null:
 		return
-	var lane = Band.lane_of(n)
 	var p = Band.persp(lane)
 	var h = ROW_K * p * p
 	var col = colony.day.tint
-	col.a = 1.0
+	col.a = a
 	var pts := PackedVector2Array()
 	var uvs := PackedVector2Array()
+	var xs := PackedFloat32Array()
+	var yf := PackedFloat32Array()
+	var yb := PackedFloat32Array()
+	var us := PackedFloat32Array()
+	var skirt = c > 1.001 and n < c + SKIRT_LANES
 	var w = tex.get_width() * h / tex.get_height()
 	var step = _step()
 	var view = colony.view_rect(0.0)
@@ -314,8 +322,21 @@ func _draw_row(it: Node2D, n: int) -> void:
 		pts.append(Vector2(x, line + ROW_SINK * h))
 		uvs.append(Vector2(x / w + u0, V0))
 		uvs.append(Vector2(x / w + u0, V1))
+		if skirt:
+			xs.append(x)
+			yf.append(line + ROW_SINK * h)
+			yb.append(max(view.end.y + 8.0, line + ROW_SINK * h))
+			us.append(x / w + u0)
 		x += step
 	_strip(it, tex, pts, uvs, col)
+	if skirt:
+		var v72 := PackedFloat32Array()
+		var v1 := PackedFloat32Array()
+		v72.resize(xs.size())
+		v72.fill(0.72)
+		v1.resize(xs.size())
+		v1.fill(V1)
+		_ribbon(it.get_canvas_item(), tex, xs, yf, xs, yb, us, v72, v1, col)
 
 
 # Landmarks standing in lane number n (in front of its row, behind the next one; the back curtain among them), then whatever other
@@ -366,6 +387,7 @@ func _draw_curtain(rid: RID, i: int, lit: bool) -> void:
 	var xb := PackedFloat32Array()
 	var yb := PackedFloat32Array()
 	var us := PackedFloat32Array()
+	var vt := PackedFloat32Array()
 	var vb := PackedFloat32Array()
 	var x = floor((view.position.x - step) / step) * step
 	while x <= view.end.x + step:
@@ -380,104 +402,86 @@ func _draw_curtain(rid: RID, i: int, lit: bool) -> void:
 		xb.append(bx)
 		yb.append(line + (1.0 - VLINE) * h)
 		us.append(x / w + i * 0.37)
-		vb.append(lerp(V0, V1, 1.0 - sunk / tall))
+		vt.append(lerp(V0, V1, sunk / tall))                 # trodden down: the strip's bottom part, its bushy foot, not its tips
+		vb.append(V1)
 		x += step
 	var col = colony.day.tint * CURTAIN_SHADE[i]
 	if not lit:
 		col *= Color(1.0, 1.0, 1.0).lerp(Color(0.9, 0.95, 1.0), Band.fog(lane) * 3.0)
 	col.a = a
-	_ribbon(rid, tex, xt, yt, xb, yb, us, V0, vb, col)
+	_ribbon(rid, tex, xt, yt, xb, yb, us, vt, vb, col)
 
 
-# How far the camera has moved into the band, 0..1, by where the cut is.
+# How far the camera has moved into the band, 0..1, by where the cut is: the cover row's move from the soil's top line to the screen's bottom.
 func _cover_k() -> float:
-	return clamp((Band.cover_n() - 1.0) / COVER_SPAN, 0.0, 1.0)
+	return smoothstep(FILL_FROM, FILL_TO, Band.cover_n())
 
 
 func _draw_cover(it: Node2D) -> void:
 	_cover_rows(it, false)
 
 
-# The cover row: the thick grass on the cut, its foot RIM below the soil's top edge (over a hole only down to the meadow's line, so a
-# nest mouth stays open for the ants climbing out). Once the cut is FILL_FROM lanes in, more rows of it, nearer, bigger and darker, fill
-# the screen below it to the bottom. under: the same row in the front lane under the soil, reaching down into any hole a little, so no
-# sky shows where the cut lanes were.
+# The cover row, the thick grass in front of everything. Zoomed out it is the fringe on the soil's top line, its foot RIM below the
+# edge (more round a nest mouth, over the anthill's base, and its blades trodden down there; over a hole only down to the meadow's line,
+# so a nest mouth stays open for the ants climbing out). Once the camera has dollied in it is one strip of COVER_FRAC of the screen
+# along the bottom, darker and a little blurred, its top edge following the ground a little; the lanes in front of the cut are behind
+# it, not drawn. under: the fringe again, in the front lane under the soil, reaching down into any hole a little, so no sky shows
+# there; it fades out as the cut passes lane 2.
 func _cover_rows(it: Node2D, under: bool) -> void:
 	var tex: Texture2D = _strips["thick"]
 	if tex == null:
 		return
 	var n = Band.cover_n()
 	var lane = Band.lane_of(n)
-	var p = Band.persp(lane)
 	var k = _cover_k()
-	var h = COVER_H * p * (1.0 + COVER_GROW * k)
-	var fill = smoothstep(FILL_FROM, FILL_TO, n)
-	if fill > 0.0:            # keep the lanes between the cut and the focus in sight
-		var room = COVER_ROOM * (Band.raise(Band.lane_of(Band.focus)) - Band.raise(lane)) / VLINE
-		h = lerp(h, clamp(room, COVER_H * p * 0.5, h), fill)
+	var fill = 0.0 if under else k
+	var col = colony.day.tint * (1.0 - COVER_DARK * fill)
+	col.a = 1.0 - k if under else 1.0
+	if col.a <= 0.004:
+		return
 	var view = colony.view_rect(0.0)
+	var h = lerp(COVER_H * Band.persp(lane), COVER_FRAC * view.size.y, fill)
 	var step = _step()
-	var x0 = floor((view.position.x - step) / step) * step
-	var lines := PackedFloat32Array()
-	var bottoms := PackedFloat32Array()
-	var trod := PackedFloat32Array()
-	var x = x0
+	var ground0 = ground_y(colony.cam_center().x, COVER_SMOOTH)
+	var xs := PackedFloat32Array()
+	var yt := PackedFloat32Array()
+	var yb := PackedFloat32Array()
+	var ys := PackedFloat32Array()
+	var us := PackedFloat32Array()
+	var vt := PackedFloat32Array()
+	var vb := PackedFloat32Array()
+	var v72 := PackedFloat32Array()
+	var v1 := PackedFloat32Array()
+	var ww = tex.get_width() * h / tex.get_height()
+	var x = floor((view.position.x - step) / step) * step
 	while x <= view.end.x + step:
-		trod.append(1.0 - TRAMPLE_COVER * (1.0 - fill) * _clearing(x))    # (zoomed in, the rows close to the camera are not trodden)
 		var gy = ground_y(x, COVER_SMOOTH)
-		var line = Band.lane_y(gy, lane)
-		lines.append(line)
 		var lip = _lip(x)
+		var cl = _clearing(x)
+		var line_f = Band.lane_y(gy, lane)
+		var line_d = view.end.y - (1.0 - VLINE) * h + clamp(0.3 * (gy - ground0), -0.05 * view.size.y, 0.05 * view.size.y)
+		var line = lerp(line_f, line_d, fill)
+		var b: float
 		if under:
-			bottoms.append(max(min(lip, gy + HOLE_REACH) + 2.0, line + (1.0 - VLINE) * h))
+			b = max(min(lip, gy + HOLE_REACH) + 2.0, line + (1.0 - VLINE) * h)
 		else:
-			bottoms.append(lerp(min(lip, gy) + RIM, view.end.y + 8.0, fill))
+			b = lerp(min(lip, gy) + RIM + MOUTH_RIM * cl, view.end.y + 8.0, fill)
+		var nat = line + (1.0 - VLINE) * h                     # where the strip's own foot would be
+		var top = line - VLINE * h * (1.0 - TRAMPLE_COVER * cl * (1.0 - fill))      # trodden down: only its bushy foot and lower blades show
+		var foot = min(nat, b)
+		xs.append(x)
+		yt.append(min(top, foot))
+		yb.append(foot)
+		ys.append(max(b, foot))                                # its solid foot, stretched down to the bottom where the row ends above it
+		us.append(x / ww + 0.11)
+		vt.append(V1 - (nat - min(top, foot)) / h * (V1 - V0))
+		vb.append(V1 - (nat - foot) / h * (V1 - V0))
+		v72.append(0.72)
+		v1.append(V1)
 		x += step
-	# the cover row, then rows nearer the camera than it, each bigger, its tips lower by part of the one before, while any shows above
-	# the bottom: [offset of its line below the cover row's, height, shade, u offset]
-	var rows := [[0.0, h, 1.0, 0.11]]
-	var tip = -VLINE * h
-	for i in range(1, 6):
-		if under or fill <= 0.0:
-			break
-		tip += 0.45 * rows[i - 1][1]
-		var hi = h * (1.0 + 0.25 * i)
-		var any := false
-		for j in lines.size():
-			if lines[j] + tip < bottoms[j]:
-				any = true
-				break
-		if not any:
-			break
-		rows.append([tip + VLINE * hi, hi, 1.0 - 0.09 * i, i * 0.29])
 	var rid = it.get_canvas_item()
-	for r in rows:
-		var hh: float = r[1]
-		var col = colony.day.tint * (1.0 - COVER_DARK * k) * r[2]
-		col.a = 1.0
-		var ww = tex.get_width() * hh / tex.get_height()
-		var xs := PackedFloat32Array()
-		var yt := PackedFloat32Array()
-		var yb := PackedFloat32Array()
-		var ys := PackedFloat32Array()
-		var us := PackedFloat32Array()
-		var vb := PackedFloat32Array()
-		var v1s := PackedFloat32Array()
-		for j in lines.size():
-			var xx = x0 + j * step
-			var line = lines[j] + r[0]
-			var top = line - VLINE * hh * trod[j]              # trodden down: sunk, only its upper blades show
-			var b = bottoms[j]
-			var foot = min(line + (1.0 - VLINE) * hh, b)
-			xs.append(xx)
-			yt.append(min(top, foot))
-			yb.append(foot)
-			ys.append(max(b, foot))          # its solid foot, stretched down to the bottom where the row ends above it
-			us.append(xx / ww + r[3])
-			vb.append(lerp(V0, V1, clamp((foot - top) / hh, 0.0, 1.0)))
-			v1s.append(V1)
-		_ribbon(rid, tex, xs, yb, xs, ys, us, 0.72, v1s, col)
-		_ribbon(rid, tex, xs, yt, xs, yb, us, V0, vb, col)
+	_ribbon(rid, tex, xs, yb, xs, ys, us, v72, v1, col)
+	_ribbon(rid, tex, xs, yt, xs, yb, us, vt, vb, col)
 
 
 # A lawn row: a triangle strip through pairs of points (top, bottom, top, bottom, ...) as one draw, on a canvas item that repeats.
@@ -495,10 +499,10 @@ func _strip(it: CanvasItem, tex: Texture2D, pts: PackedVector2Array, uvs: Packed
 	RenderingServer.canvas_item_add_triangle_array(it.get_canvas_item(), idx, pts, cols, uvs, PackedInt32Array(), PackedFloat32Array(), tex.get_rid())
 
 
-# A strip of grass as one draw on any canvas item (it needs no texture repeat): quads between consecutive points, top (xt, yt) at v0
+# A strip of grass as one draw on any canvas item (it needs no texture repeat): quads between consecutive points, top (xt, yt) at vt
 # and bottom (xb, yb) at vb, u along the row, split wherever u passes a whole number.
 func _ribbon(rid: RID, tex: Texture2D, xt: PackedFloat32Array, yt: PackedFloat32Array, xb: PackedFloat32Array, yb: PackedFloat32Array,
-		us: PackedFloat32Array, v0: float, vb: PackedFloat32Array, col: Color) -> void:
+		us: PackedFloat32Array, vt: PackedFloat32Array, vb: PackedFloat32Array, col: Color) -> void:
 	var m = us.size()
 	if m < 2 or tex == null:
 		return
@@ -517,7 +521,7 @@ func _ribbon(rid: RID, tex: Texture2D, xt: PackedFloat32Array, yt: PackedFloat32
 				var u = clamp(lerp(ua, ub, f) - sp[2], 0.0, 1.0)
 				pts.append(Vector2(lerp(xt[i], xt[i + 1], f), lerp(yt[i], yt[i + 1], f)))
 				pts.append(Vector2(lerp(xb[i], xb[i + 1], f), lerp(yb[i], yb[i + 1], f)))
-				uvs.append(Vector2(u, v0))
+				uvs.append(Vector2(u, lerp(vt[i], vt[i + 1], f)))
 				uvs.append(Vector2(u, lerp(vb[i], vb[i + 1], f)))
 			idx.append_array([b, b + 2, b + 3, b, b + 3, b + 1])
 	var cols := PackedColorArray()
@@ -549,6 +553,7 @@ func _draw_tree(it: Node2D, f: Dictionary) -> void:
 		size = Vector2(f["w"] * sc * 5.5, f["w"] * sc * 5.5 * tex.get_height() / tex.get_width())
 	else:
 		var hgt = f["h"] * sc * pick[2]
+		hgt *= Band.tall_scale(hgt)           # a giant is never taller than TALL_SCREEN of the screen (zoomed in, its trunk was one blurry wall)
 		size = Vector2(hgt * tex.get_width() / tex.get_height(), hgt)
 	var px = (f["x"] + 0.5) * C
 	var base = Vector2(px, Band.lane_y(ground_y(px), lane))
