@@ -267,6 +267,9 @@ func debug_setup(args: Dictionary) -> void:
 	elif at.find(",") > 0:
 		var xy = at.split(",")
 		cam.position = grid.center(int(xy[0]), int(xy[1]))
+	if args.has("meadow"):       # meadow=<cells right of the entrance>: the camera on the meadow there, dy=<px> above the ground line (40)
+		var mx = (float(grid.entrance.x) + float(args["meadow"]) + 0.5) * WorldGrid.CELL
+		cam.position = Vector2(mx, (views["surface"].ground_y(mx) if views.has("surface") else ground_y()) - float(args.get("dy", "40")))
 	if args.has("ph"):
 		force_ph = float(args["ph"])
 	if args.has("paused"):

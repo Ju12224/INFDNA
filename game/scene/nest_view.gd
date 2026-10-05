@@ -105,7 +105,7 @@ const BADGE_MAX = 84.0         # ... but never wider than this many world px (zo
 # ---- the anthill
 const MOUND_K = 0.28           # world px per picture px at the least (the small mound's hole comes out about as tall as an ant on the surface)
 const MOUND_GROW = [0, 220, 900]   # spoil grains on the surface (world_grid.mound_cells) from which the small, medium and large mound are used ...
-const MOUND_FIT = 1.25         # ... or a bigger one while the smaller would have to be drawn more than this much over MOUND_K to cover its heap
+const MOUND_FIT = 1.6          # ... or a bigger one while the smaller would have to be drawn more than this much over MOUND_K to cover its heap
 const MOUND_COVER = 1.1        # the anthill is at least this much wider than the spoil heap it sits on
 
 var colony
@@ -115,7 +115,7 @@ var _pman := {}                # props manifest items
 var _specs := {}               # name -> spec (null: no such picture): {tex, src, w, h, base, top} (w, h, base, top in world px at scale 1)
 var _brood := {}               # antkit piece name -> {tex, w, h, base (picture px), long}
 var _icons := {}               # purpose -> texture
-var _mounds := []              # [{tex, w, h, hole: Vector2 (picture px, the hole's floor under its centre)}], small to large
+var _mounds := []              # [{tex, w, h, hole: Vector2 (picture px, the middle of the entrance)}], small to large
 var _units := {}               # unit name -> {key, props, occ}: the furnishing of one room (or the hall, the shafts ...), see _props_check
 var _want := {}                # unit name -> [key it should have, its chamber or null]
 var _order := []               # unit names in the order they are furnished and drawn
@@ -168,8 +168,7 @@ func _ready() -> void:
 		var tex = Art.tex(m["file"])
 		if tex == null:
 			continue
-		_mounds.append({"tex": _mipmapped(tex), "w": float(m["w"]), "h": float(m["h"]),
-			"hole": _hole_floor(tex, Vector2(m["hole"][0], m["hole"][1]))})
+		_mounds.append({"tex": _mipmapped(tex), "w": float(m["w"]), "h": float(m["h"]), "hole": Vector2(m["hole"][0], m["hole"][1])})
 
 
 # The pictures are imported without mipmaps; drawn at a fifth of their size or less they sparkle without them.
@@ -179,21 +178,6 @@ static func _mipmapped(tex: Texture2D) -> Texture2D:
 		return tex
 	img.generate_mipmaps()
 	return ImageTexture.create_from_image(img)
-
-
-# The floor of a mound's hole under its centre: the first light pixel below the dark opening (the manifest gives only the centre).
-static func _hole_floor(tex: Texture2D, hole: Vector2) -> Vector2:
-	var img = tex.get_image()
-	if img == null or img.is_empty():
-		return hole
-	if img.is_compressed():
-		img.decompress()
-	var x = int(clamp(hole.x, 0, img.get_width() - 1))
-	for y in range(int(hole.y), img.get_height()):
-		var c = img.get_pixel(x, y)
-		if c.a > 0.5 and c.get_luminance() > 0.1:
-			return Vector2(hole.x, y - 2)
-	return hole + Vector2(0, tex.get_height() * 0.25)
 
 
 func reset() -> void:
@@ -959,9 +943,9 @@ func _draw_mounds(vr: Rect2) -> void:
 		var top = float(min(g.surf_y(ex), min(g.surf_y(ex - 1), g.surf_y(ex + 1)))) * C
 		var hw: float = _heap_ws[i] if i < _heap_ws.size() else _heap_width(g, ex)
 		var ground = _heap_ground(g, ex, hw) * C
-		# The anthill covers the whole heap above the ground: its bottom on the ground, its hole over the mouth at the apex (or a little
-		# above it, where the picture is wider than the heap is high), no bare dirt round it. The smallest picture that fits without being
-		# blown up much is used, never a smaller one than the spoil carried up calls for.
+		# The anthill covers the whole heap above the ground: its bottom on the ground, the middle of its entrance over the mouth at the apex
+		# (the ants climb out of the painted cave and walk down its front), wide enough that no bare dirt shows round it. The smallest
+		# picture that fits without being blown up much is used, never a smaller one than the spoil carried up calls for.
 		var pick = min(grow if i == 0 else 0, _mounds.size() - 1)
 		var s = 0.0
 		for k in range(pick, _mounds.size()):
@@ -970,8 +954,6 @@ func _draw_mounds(vr: Rect2) -> void:
 			if s <= MOUND_K * MOUND_FIT:
 				break
 		var m = _mounds[pick]
-		if Engine.get_process_frames() % 60 == 0:
-			print("DBGMOUND i ", i, " ex ", ex, " top ", top, " ground ", ground, " hw ", hw, " s ", s, " pick ", pick, " K ", MOUND_K)
 		var hole: Vector2 = m["hole"]
 		var r = Rect2(Vector2((en.x + 0.5) * C - hole.x * s, ground - m["h"] * s), Vector2(m["w"], m["h"]) * s)
 		if not vr.intersects(r):
@@ -980,9 +962,9 @@ func _draw_mounds(vr: Rect2) -> void:
 
 
 # The scale (world px per picture px) at which anthill picture m covers a heap `heap_h` high (world px, from the ground to the apex) and
-# `heap_w` wide: its hole's floor at the apex with its bottom on the ground, and wider than the heap.
+# `heap_w` wide: the middle of its entrance at the apex with its bottom on the ground, and wider than the heap.
 func _mound_scale(m: Dictionary, heap_h: float, heap_w: float) -> float:
-	var below: float = m["h"] - m["hole"].y            # picture px from the hole's floor down to its bottom
+	var below: float = m["h"] - m["hole"].y            # picture px from the entrance's middle down to the picture's bottom
 	return maxf(MOUND_K, maxf(heap_h / maxf(below, 1.0), MOUND_COVER * heap_w / float(m["w"])))
 
 
