@@ -29,6 +29,7 @@ const SNOW_W = 90.0           # world px width of a lying-snow piece in the fron
 const SNOW_LIMIT = 8          # pieces per lane at most: zoomed out they grow instead of multiplying
 const SNOW_SINK = 0.18        # how far down a piece's own height its foot sinks into the ground
 const DRIFT_COL = 18.0        # world px between the columns a piece is draped over the ground with
+const DRIFT_STEEP = 2.2       # most a piece thickens on a steep slope (to stay as thick across it)
 const PUDDLE_W = 120.0
 const PUDDLE_SPAN = 340.0     # world px between puddle slots (a lane's x axis)
 const LEAF_W = 34.0
@@ -597,13 +598,20 @@ func _drift(it: CanvasItem, n: int, x: float, sw: float, sh: float, col: Color, 
 	pts.resize(2 * (cols + 1))
 	uvs.resize(2 * (cols + 1))
 	cs.resize(2 * (cols + 1))
+	var dys := PackedFloat32Array()
+	dys.resize(cols + 1)
+	for j in cols + 1:
+		dys[j] = _lane_ground(x + (float(j) / cols - 0.5) * sw, n) - gc
+	var dx = sw / cols
 	for j in cols + 1:
 		var f = float(j) / cols
 		var px = x + (f - 0.5) * sw
-		var dy = _lane_ground(px, n) - gc
+		var slope = (dys[mini(j + 1, cols)] - dys[maxi(j - 1, 0)]) / (dx * (mini(j + 1, cols) - maxi(j - 1, 0)))
+		var th = sh * minf(sqrt(1.0 + slope * slope), DRIFT_STEEP)      # on a slope the piece is as thick across it as on the flat
+		var foot = gc + SNOW_SINK * sh + dys[j]
 		var u = 1.0 - f if flip else f
-		pts[2 * j] = Vector2(px, top + dy)
-		pts[2 * j + 1] = Vector2(px, top + sh + dy)
+		pts[2 * j] = Vector2(px, foot - th)
+		pts[2 * j + 1] = Vector2(px, foot)
 		uvs[2 * j] = Vector2(u, 0.0)
 		uvs[2 * j + 1] = Vector2(u, 1.0)
 		cs[2 * j] = col

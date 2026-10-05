@@ -454,19 +454,25 @@ func _wp_at(xt: float) -> Vector2:
 
 
 # A borer's trail begins lying along the ground behind its head (a borer is born on the meadow); one that appears underground gets what open
-# room there is behind it.
+# room there is behind it (at least a short neck).
 func _worm_new(e, p: Vector2) -> Dictionary:
 	var g = colony.grid
 	var dir = -float(e.facing) if e.facing != 0 else 1.0
 	var under = p.y > (g.surf_y(int(floor(p.x / C))) + 0.6) * C
 	var pts := []
-	for i in range(1, WORM_KEEP):
-		var x = p.x + dir * i * WORM_STEP
-		var cx = int(floor(x / C))
-		var y = p.y if under else (g.surf_y(cx) - 0.5) * C
-		if under and g.is_solid(cx, int(floor(y / C))):
+	for sgn in [dir, -dir]:
+		var one := []
+		for i in range(1, WORM_KEEP):
+			var x = p.x + sgn * i * WORM_STEP
+			var cx = int(floor(x / C))
+			var y = p.y if under else (g.surf_y(cx) - 0.5) * C
+			if under and i > 4 and g.is_solid(cx, int(floor(y / C))):
+				break
+			one.append(Vector2(x, y))
+		if one.size() > pts.size():
+			pts = one
+		if not under:
 			break
-		pts.append(Vector2(x, y))
 	pts.reverse()
 	pts.append(p)
 	var f = 1.0 if e.facing >= 0 else -1.0
