@@ -970,6 +970,8 @@ func _draw_mounds(vr: Rect2) -> void:
 			if s <= MOUND_K * MOUND_FIT:
 				break
 		var m = _mounds[pick]
+		if Engine.get_process_frames() % 60 == 0:
+			print("DBGMOUND i ", i, " ex ", ex, " top ", top, " ground ", ground, " hw ", hw, " s ", s, " pick ", pick, " K ", MOUND_K)
 		var hole: Vector2 = m["hole"]
 		var r = Rect2(Vector2((en.x + 0.5) * C - hole.x * s, ground - m["h"] * s), Vector2(m["w"], m["h"]) * s)
 		if not vr.intersects(r):

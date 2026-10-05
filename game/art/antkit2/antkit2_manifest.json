@@ -1,0 +1,459 @@
+{
+ "_about": "The owner's second, brown ant set (tools/art/make_ant2.py). Faces right. pose a, b, c = the three walk poses (columns of the sheet); leg rows 0-2 and slots 0-2 follow the sheet (left to right = hind, middle, front).",
+ "pieces": [
+  {
+   "name": "ant2_full_a",
+   "file": "antkit2/ant2_full_a.png",
+   "w": 348,
+   "h": 209,
+   "kind": "full",
+   "pose": "a"
+  },
+  {
+   "name": "ant2_head_a",
+   "file": "antkit2/ant2_head_a.png",
+   "w": 150,
+   "h": 129,
+   "kind": "head",
+   "pose": "a"
+  },
+  {
+   "name": "ant2_antenna0_a",
+   "file": "antkit2/ant2_antenna0_a.png",
+   "w": 87,
+   "h": 115,
+   "kind": "antenna",
+   "pose": "a"
+  },
+  {
+   "name": "ant2_antenna1_a",
+   "file": "antkit2/ant2_antenna1_a.png",
+   "w": 75,
+   "h": 98,
+   "kind": "antenna",
+   "pose": "a"
+  },
+  {
+   "name": "ant2_jaw0_a",
+   "file": "antkit2/ant2_jaw0_a.png",
+   "w": 41,
+   "h": 57,
+   "kind": "jaw",
+   "pose": "a"
+  },
+  {
+   "name": "ant2_jaw1_a",
+   "file": "antkit2/ant2_jaw1_a.png",
+   "w": 35,
+   "h": 56,
+   "kind": "jaw",
+   "pose": "a"
+  },
+  {
+   "name": "ant2_thorax_a",
+   "file": "antkit2/ant2_thorax_a.png",
+   "w": 192,
+   "h": 100,
+   "kind": "thorax",
+   "pose": "a"
+  },
+  {
+   "name": "ant2_abdomen_a",
+   "file": "antkit2/ant2_abdomen_a.png",
+   "w": 193,
+   "h": 126,
+   "kind": "abdomen",
+   "pose": "a"
+  },
+  {
+   "name": "ant2_leg00_a",
+   "file": "antkit2/ant2_leg00_a.png",
+   "w": 140,
+   "h": 126,
+   "kind": "leg",
+   "pose": "a",
+   "row": 0,
+   "slot": 0
+  },
+  {
+   "name": "ant2_leg01_a",
+   "file": "antkit2/ant2_leg01_a.png",
+   "w": 103,
+   "h": 119,
+   "kind": "leg",
+   "pose": "a",
+   "row": 0,
+   "slot": 1
+  },
+  {
+   "name": "ant2_leg02_a",
+   "file": "antkit2/ant2_leg02_a.png",
+   "w": 115,
+   "h": 114,
+   "kind": "leg",
+   "pose": "a",
+   "row": 0,
+   "slot": 2
+  },
+  {
+   "name": "ant2_leg10_a",
+   "file": "antkit2/ant2_leg10_a.png",
+   "w": 136,
+   "h": 113,
+   "kind": "leg",
+   "pose": "a",
+   "row": 1,
+   "slot": 0
+  },
+  {
+   "name": "ant2_leg11_a",
+   "file": "antkit2/ant2_leg11_a.png",
+   "w": 94,
+   "h": 116,
+   "kind": "leg",
+   "pose": "a",
+   "row": 1,
+   "slot": 1
+  },
+  {
+   "name": "ant2_leg12_a",
+   "file": "antkit2/ant2_leg12_a.png",
+   "w": 122,
+   "h": 112,
+   "kind": "leg",
+   "pose": "a",
+   "row": 1,
+   "slot": 2
+  },
+  {
+   "name": "ant2_leg20_a",
+   "file": "antkit2/ant2_leg20_a.png",
+   "w": 132,
+   "h": 137,
+   "kind": "leg",
+   "pose": "a",
+   "row": 2,
+   "slot": 0
+  },
+  {
+   "name": "ant2_leg21_a",
+   "file": "antkit2/ant2_leg21_a.png",
+   "w": 76,
+   "h": 128,
+   "kind": "leg",
+   "pose": "a",
+   "row": 2,
+   "slot": 1
+  },
+  {
+   "name": "ant2_leg22_a",
+   "file": "antkit2/ant2_leg22_a.png",
+   "w": 143,
+   "h": 122,
+   "kind": "leg",
+   "pose": "a",
+   "row": 2,
+   "slot": 2
+  },
+  {
+   "name": "ant2_full_b",
+   "file": "antkit2/ant2_full_b.png",
+   "w": 350,
+   "h": 208,
+   "kind": "full",
+   "pose": "b"
+  },
+  {
+   "name": "ant2_head_b",
+   "file": "antkit2/ant2_head_b.png",
+   "w": 149,
+   "h": 134,
+   "kind": "head",
+   "pose": "b"
+  },
+  {
+   "name": "ant2_antenna0_b",
+   "file": "antkit2/ant2_antenna0_b.png",
+   "w": 85,
+   "h": 122,
+   "kind": "antenna",
+   "pose": "b"
+  },
+  {
+   "name": "ant2_antenna1_b",
+   "file": "antkit2/ant2_antenna1_b.png",
+   "w": 74,
+   "h": 107,
+   "kind": "antenna",
+   "pose": "b"
+  },
+  {
+   "name": "ant2_jaw0_b",
+   "file": "antkit2/ant2_jaw0_b.png",
+   "w": 36,
+   "h": 57,
+   "kind": "jaw",
+   "pose": "b"
+  },
+  {
+   "name": "ant2_jaw1_b",
+   "file": "antkit2/ant2_jaw1_b.png",
+   "w": 33,
+   "h": 55,
+   "kind": "jaw",
+   "pose": "b"
+  },
+  {
+   "name": "ant2_thorax_b",
+   "file": "antkit2/ant2_thorax_b.png",
+   "w": 198,
+   "h": 100,
+   "kind": "thorax",
+   "pose": "b"
+  },
+  {
+   "name": "ant2_abdomen_b",
+   "file": "antkit2/ant2_abdomen_b.png",
+   "w": 175,
+   "h": 118,
+   "kind": "abdomen",
+   "pose": "b"
+  },
+  {
+   "name": "ant2_leg00_b",
+   "file": "antkit2/ant2_leg00_b.png",
+   "w": 147,
+   "h": 114,
+   "kind": "leg",
+   "pose": "b",
+   "row": 0,
+   "slot": 0
+  },
+  {
+   "name": "ant2_leg01_b",
+   "file": "antkit2/ant2_leg01_b.png",
+   "w": 90,
+   "h": 95,
+   "kind": "leg",
+   "pose": "b",
+   "row": 0,
+   "slot": 1
+  },
+  {
+   "name": "ant2_leg02_b",
+   "file": "antkit2/ant2_leg02_b.png",
+   "w": 140,
+   "h": 107,
+   "kind": "leg",
+   "pose": "b",
+   "row": 0,
+   "slot": 2
+  },
+  {
+   "name": "ant2_leg10_b",
+   "file": "antkit2/ant2_leg10_b.png",
+   "w": 112,
+   "h": 97,
+   "kind": "leg",
+   "pose": "b",
+   "row": 1,
+   "slot": 0
+  },
+  {
+   "name": "ant2_leg11_b",
+   "file": "antkit2/ant2_leg11_b.png",
+   "w": 106,
+   "h": 117,
+   "kind": "leg",
+   "pose": "b",
+   "row": 1,
+   "slot": 1
+  },
+  {
+   "name": "ant2_leg12_b",
+   "file": "antkit2/ant2_leg12_b.png",
+   "w": 135,
+   "h": 102,
+   "kind": "leg",
+   "pose": "b",
+   "row": 1,
+   "slot": 2
+  },
+  {
+   "name": "ant2_leg20_b",
+   "file": "antkit2/ant2_leg20_b.png",
+   "w": 142,
+   "h": 102,
+   "kind": "leg",
+   "pose": "b",
+   "row": 2,
+   "slot": 0
+  },
+  {
+   "name": "ant2_leg21_b",
+   "file": "antkit2/ant2_leg21_b.png",
+   "w": 57,
+   "h": 117,
+   "kind": "leg",
+   "pose": "b",
+   "row": 2,
+   "slot": 1
+  },
+  {
+   "name": "ant2_leg22_b",
+   "file": "antkit2/ant2_leg22_b.png",
+   "w": 148,
+   "h": 101,
+   "kind": "leg",
+   "pose": "b",
+   "row": 2,
+   "slot": 2
+  },
+  {
+   "name": "ant2_full_c",
+   "file": "antkit2/ant2_full_c.png",
+   "w": 355,
+   "h": 204,
+   "kind": "full",
+   "pose": "c"
+  },
+  {
+   "name": "ant2_head_c",
+   "file": "antkit2/ant2_head_c.png",
+   "w": 141,
+   "h": 134,
+   "kind": "head",
+   "pose": "c"
+  },
+  {
+   "name": "ant2_antenna0_c",
+   "file": "antkit2/ant2_antenna0_c.png",
+   "w": 85,
+   "h": 123,
+   "kind": "antenna",
+   "pose": "c"
+  },
+  {
+   "name": "ant2_antenna1_c",
+   "file": "antkit2/ant2_antenna1_c.png",
+   "w": 75,
+   "h": 107,
+   "kind": "antenna",
+   "pose": "c"
+  },
+  {
+   "name": "ant2_jaw0_c",
+   "file": "antkit2/ant2_jaw0_c.png",
+   "w": 81,
+   "h": 58,
+   "kind": "jaw",
+   "pose": "c"
+  },
+  {
+   "name": "ant2_thorax_c",
+   "file": "antkit2/ant2_thorax_c.png",
+   "w": 210,
+   "h": 105,
+   "kind": "thorax",
+   "pose": "c"
+  },
+  {
+   "name": "ant2_abdomen_c",
+   "file": "antkit2/ant2_abdomen_c.png",
+   "w": 176,
+   "h": 114,
+   "kind": "abdomen",
+   "pose": "c"
+  },
+  {
+   "name": "ant2_leg00_c",
+   "file": "antkit2/ant2_leg00_c.png",
+   "w": 145,
+   "h": 124,
+   "kind": "leg",
+   "pose": "c",
+   "row": 0,
+   "slot": 0
+  },
+  {
+   "name": "ant2_leg01_c",
+   "file": "antkit2/ant2_leg01_c.png",
+   "w": 70,
+   "h": 131,
+   "kind": "leg",
+   "pose": "c",
+   "row": 0,
+   "slot": 1
+  },
+  {
+   "name": "ant2_leg02_c",
+   "file": "antkit2/ant2_leg02_c.png",
+   "w": 130,
+   "h": 119,
+   "kind": "leg",
+   "pose": "c",
+   "row": 0,
+   "slot": 2
+  },
+  {
+   "name": "ant2_leg10_c",
+   "file": "antkit2/ant2_leg10_c.png",
+   "w": 136,
+   "h": 123,
+   "kind": "leg",
+   "pose": "c",
+   "row": 1,
+   "slot": 0
+  },
+  {
+   "name": "ant2_leg11_c",
+   "file": "antkit2/ant2_leg11_c.png",
+   "w": 61,
+   "h": 130,
+   "kind": "leg",
+   "pose": "c",
+   "row": 1,
+   "slot": 1
+  },
+  {
+   "name": "ant2_leg12_c",
+   "file": "antkit2/ant2_leg12_c.png",
+   "w": 115,
+   "h": 115,
+   "kind": "leg",
+   "pose": "c",
+   "row": 1,
+   "slot": 2
+  },
+  {
+   "name": "ant2_leg20_c",
+   "file": "antkit2/ant2_leg20_c.png",
+   "w": 146,
+   "h": 134,
+   "kind": "leg",
+   "pose": "c",
+   "row": 2,
+   "slot": 0
+  },
+  {
+   "name": "ant2_leg21_c",
+   "file": "antkit2/ant2_leg21_c.png",
+   "w": 54,
+   "h": 137,
+   "kind": "leg",
+   "pose": "c",
+   "row": 2,
+   "slot": 1
+  },
+  {
+   "name": "ant2_leg22_c",
+   "file": "antkit2/ant2_leg22_c.png",
+   "w": 117,
+   "h": 129,
+   "kind": "leg",
+   "pose": "c",
+   "row": 2,
+   "slot": 2
+  }
+ ]
+}
