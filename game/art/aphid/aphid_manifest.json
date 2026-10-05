@@ -1,0 +1,69 @@
+{
+ "_about": "The owner's aphid mounts (tools/art/make_aphids.py): faces right, two honey tubes on the back, the saddle where the rider sits. pose a and b are two leg poses of the same four aphids.",
+ "aphids": [
+  {
+   "name": "aphid_plain_a",
+   "file": "aphid/aphid_plain_a.png",
+   "kind": "plain",
+   "pose": "a",
+   "w": 601,
+   "h": 391
+  },
+  {
+   "name": "aphid_packed_a",
+   "file": "aphid/aphid_packed_a.png",
+   "kind": "packed",
+   "pose": "a",
+   "w": 689,
+   "h": 478
+  },
+  {
+   "name": "aphid_armored_a",
+   "file": "aphid/aphid_armored_a.png",
+   "kind": "armored",
+   "pose": "a",
+   "w": 641,
+   "h": 462
+  },
+  {
+   "name": "aphid_royal_a",
+   "file": "aphid/aphid_royal_a.png",
+   "kind": "royal",
+   "pose": "a",
+   "w": 694,
+   "h": 496
+  },
+  {
+   "name": "aphid_plain_b",
+   "file": "aphid/aphid_plain_b.png",
+   "kind": "plain",
+   "pose": "b",
+   "w": 635,
+   "h": 379
+  },
+  {
+   "name": "aphid_packed_b",
+   "file": "aphid/aphid_packed_b.png",
+   "kind": "packed",
+   "pose": "b",
+   "w": 706,
+   "h": 476
+  },
+  {
+   "name": "aphid_armored_b",
+   "file": "aphid/aphid_armored_b.png",
+   "kind": "armored",
+   "pose": "b",
+   "w": 668,
+   "h": 457
+  },
+  {
+   "name": "aphid_royal_b",
+   "file": "aphid/aphid_royal_b.png",
+   "kind": "royal",
+   "pose": "b",
+   "w": 703,
+   "h": 481
+  }
+ ]
+}

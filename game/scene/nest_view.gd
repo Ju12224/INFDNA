@@ -103,10 +103,10 @@ const BADGE_Z_ABOVE = 25       # z above this view's own (30 + 25: over the ants
 const BADGE_MAX = 84.0         # ... but never wider than this many world px (zoomed far out the rooms are close together)
 
 # ---- the anthill
-const MOUND_K = 0.28           # world px per picture px (the small mound's hole comes out about as tall as an ant on the surface)
-const MOUND_GROW = [0, 220, 900]   # spoil grains on the surface (world_grid.mound_cells) for the small, medium and large mound
-const MOUND_COVER = 0.6        # the anthill spans this share of the spoil heap round the main mouth ...
-const MOUND_MAX = 1.5          # ... growing to at most this much over its own size
+const MOUND_K = 0.28           # world px per picture px at the least (the small mound's hole comes out about as tall as an ant on the surface)
+const MOUND_GROW = [0, 220, 900]   # spoil grains on the surface (world_grid.mound_cells) from which the small, medium and large mound are used ...
+const MOUND_FIT = 1.25         # ... or a bigger one while the smaller would have to be drawn more than this much over MOUND_K to cover its heap
+const MOUND_COVER = 1.1        # the anthill is at least this much wider than the spoil heap it sits on
 
 var colony
 var _grid                      # the grid the caches were built for (a new colony brings a new one)
@@ -134,6 +134,7 @@ var _hi := 0
 var _egg_floor := {}           # Vector3(egg pos, plane) -> world y of the drawn floor under it (cleared on every props check)
 var _badges: Node2D            # the chamber badges: a child drawn above the ants (zoomed out they are what the view is for)
 var _heap_w := 0.0             # width of the spoil heap round the main mouth, world px
+var _heap_ws := []             # the same for every mouth (_heap_w is the first)
 var props_rebuilds := 0
 var props_ms := 0.0
 
@@ -223,7 +224,10 @@ func _process(delta: float) -> void:
 		_check_t = CHECK_EVERY
 		_egg_floor.clear()
 		_props_check()
-		_heap_w = _heap_width(g)
+		_heap_ws.clear()
+		for en in g.entrances:
+			_heap_ws.append(_heap_width(g, int(en.x)))
+		_heap_w = _heap_ws[0] if not _heap_ws.is_empty() else 0.0
 	if not _stale.is_empty():
 		_build_some()
 	queue_redraw()
@@ -948,24 +952,52 @@ func _draw_mounds(vr: Rect2) -> void:
 	var tint = colony.day.tint
 	tint.a = 1.0
 	for i in g.entrances.size():
-		var m = _mounds[min(grow if i == 0 else 0, _mounds.size() - 1)]
 		var en = g.entrances[i]
 		var ex = int(en.x)
-		# the top of the spoil right over the mouth (the shaft's chimney rises with the heap, so this follows it as it grows)
-		var top = min(g.surf_y(ex), min(g.surf_y(ex - 1), g.surf_y(ex + 1)))
-		var s = MOUND_K
-		if i == 0:
-			s *= clamp(MOUND_COVER * _heap_w / (m["w"] * MOUND_K), 1.0, MOUND_MAX)   # a wide heap carries a bigger anthill
+		# the heap: its apex over the mouth (the shaft's chimney rises with the heap, so this follows it as it grows), and its base, the
+		# original ground, where the lowest of it is
+		var top = float(min(g.surf_y(ex), min(g.surf_y(ex - 1), g.surf_y(ex + 1)))) * C
+		var hw: float = _heap_ws[i] if i < _heap_ws.size() else _heap_width(g, ex)
+		var ground = _heap_ground(g, ex, hw) * C
+		# The anthill covers the whole heap above the ground: its bottom on the ground, its hole over the mouth at the apex (or a little
+		# above it, where the picture is wider than the heap is high), no bare dirt round it. The smallest picture that fits without being
+		# blown up much is used, never a smaller one than the spoil carried up calls for.
+		var pick = min(grow if i == 0 else 0, _mounds.size() - 1)
+		var s = 0.0
+		for k in range(pick, _mounds.size()):
+			pick = k
+			s = _mound_scale(_mounds[k], ground - top, hw)
+			if s <= MOUND_K * MOUND_FIT:
+				break
+		var m = _mounds[pick]
 		var hole: Vector2 = m["hole"]
-		var r = Rect2(Vector2((en.x + 0.5) * C, top * C) - hole * s, Vector2(m["w"], m["h"]) * s)
+		var r = Rect2(Vector2((en.x + 0.5) * C - hole.x * s, ground - m["h"] * s), Vector2(m["w"], m["h"]) * s)
 		if not vr.intersects(r):
 			continue
 		draw_texture_rect(m["tex"], r, false, tint)
 
 
-# Width of the spoil heap round the main mouth: the columns either side of it with dirt piled on the original ground.
-static func _heap_width(g) -> float:
-	var ex = int(g.entrance.x)
+# The scale (world px per picture px) at which anthill picture m covers a heap `heap_h` high (world px, from the ground to the apex) and
+# `heap_w` wide: its hole's floor at the apex with its bottom on the ground, and wider than the heap.
+func _mound_scale(m: Dictionary, heap_h: float, heap_w: float) -> float:
+	var below: float = m["h"] - m["hole"].y            # picture px from the hole's floor down to its bottom
+	return maxf(MOUND_K, maxf(heap_h / maxf(below, 1.0), MOUND_COVER * heap_w / float(m["w"])))
+
+
+# The y (cells) of the ground the heap round column ex stands on: the lowest of the original ground across it (the anthill's bottom goes
+# there, so no gap shows under it on the low side).
+func _heap_ground(g, ex: int, heap_w: float) -> float:
+	var half = int(ceil(heap_w / C * 0.5)) + 1
+	var y = g.base_y(ex)
+	for d in range(-half, half + 1, 2):
+		y = max(y, g.base_y(ex + d))
+	return float(y)
+
+
+# Width of the spoil heap round the mouth at column ex: the columns either side of it with dirt piled on the original ground.
+static func _heap_width(g, ex: int = -99999) -> float:
+	if ex == -99999:
+		ex = int(g.entrance.x)
 	var l = ex
 	while l > ex - 150 and (g.mound_h(l - 1) > 0 or g.chimneys.has(l - 1)):
 		l -= 1

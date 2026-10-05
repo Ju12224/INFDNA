@@ -336,7 +336,7 @@ func _draw() -> void:
 	var state := {}
 	var back := [[], [], []]          # underground ants by depth row (the back rows are drawn first)
 	var front := [[], [], []]
-	var ground := []           # on the surface, all on the one ground line
+	var walkers := []          # on the surface, all on the one ground line
 	var crowd := {}            # spot -> [items]: underground ants close together
 	# The sim moves an ant in steps of 0.1 s, so its position only changes every sixth frame or so. An ant is drawn between its last two
 	# sim positions, by how far into the next step the colony's clock is: it moves (and walks) on every frame, one step behind the sim.
@@ -374,7 +374,7 @@ func _draw() -> void:
 		st[S_SURF] = sk
 		var it = [a, p, st, -1]
 		if sk >= 0.5:
-			ground.append(it)
+			walkers.append(it)
 			continue
 		var z: int = a.tz if t > 0.5 else a.z
 		if _td_tex != null:
@@ -447,7 +447,7 @@ func _draw() -> void:
 				_draw_nest_ant(it[0], it[1], it[2], far, poses, sel, it[3])
 			else:
 				_draw_ant(it[0], it[1], it[2], far, poses, sel, day_tint, kf)
-	for it in ground:
+	for it in walkers:
 		_draw_ant(it[0], it[1], it[2], far, poses, sel, day_tint, kf)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	draw_us = Time.get_ticks_usec() - t0
