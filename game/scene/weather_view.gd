@@ -32,8 +32,12 @@ const DRIFT_COL = 18.0        # world px between the columns a piece is draped o
 const PUDDLE_W = 120.0
 const PUDDLE_SPAN = 340.0     # world px between puddle slots (a lane's x axis)
 const LEAF_W = 34.0
+# which of art/leaves/leaf_N.png fall from a tree, by the colour its autumn picture has (surface_view.gd picks it by the tree's seed:
+# orange, red, gold): mostly its own colour, with a few brown ones among them
+const LEAF_POOL = [[0, 8, 0, 8, 6], [1, 4, 9, 1, 3], [2, 5, 7, 2, 6]]
 const TREE_MARGIN = 420.0     # world px past the screen whose trees still shed leaves into it
-const TAB_MARGIN = 700.0      # world px either side of the screen the ground table covers
+const GROUND_STEP = 12.0      # world px between the samples of the ground (two columns of the world's grid)
+const FAR_TO = 11.0           # (and its FAR_TO)
 const FAR_FROM = 7.0          # surface_view bends the back lanes' ground from this lane number on (its FAR_FROM)
 const TREES_FALLBACK = [[0.30, "oak1", 0.88], [0.58, "oak2", 0.88], [0.68, "mossoak", 0.55], [0.76, "acacia", 0.4], [0.82, "grove", 0.5],
 	[0.93, "spruce", 0.95], [0.97, "stump", 0.38], [1.0, "log", 0.16]]
@@ -75,12 +79,12 @@ var _fq := PackedInt32Array()        # a flake's lane number never changes: its 
 var _sp := PackedFloat32Array()      # the splashes of this frame, 6 floats each (x, y, w, h, alpha, picture)
 var _tab_frame := -1                 # the tables below are built once a frame
 var _view := Rect2()
-var _tab := PackedFloat32Array()     # the ground's y every _tab_step px from _tab_x0
-var _tab_x0 := 0.0
-var _tab_step := 16.0
+var _gcache := {}                    # ground y samples of this frame, by grid index (_gt); the same for the far ground
+var _fcache := {}
 var _lraise := PackedFloat32Array()  # by lane number 1..LANES: how high its ground line stands, its scale, its fade
 var _lpers := PackedFloat32Array()
 var _lalpha := PackedFloat32Array()
+var _lfar := PackedFloat32Array()    # by lane number: how much of its ground is the far (original) ground
 
 
 func _ready() -> void:
@@ -117,7 +121,7 @@ func _ready() -> void:
 		_fk[k] = (6.0 + 5.0 * _ht[(k * 11 + 17) & 8191]) * (0.75 + 0.6 * (1.0 - Band.persp(Band.lane_of(float(q)))))    # far flakes drift slower
 		_fp[k] = _ht[(k * 17 + 29) & 8191]
 	_sp.resize(RAIN_MAX * 6)
-	for a in [_lraise, _lpers, _lalpha]:
+	for a in [_lraise, _lpers, _lalpha, _lfar]:
 		a.resize(Band.LANES + 1)
 	_wind_at(0.0)
 
@@ -176,34 +180,58 @@ func _process(delta: float) -> void:
 	_was = on
 
 
-# Once a frame, when something first needs them: the screen, the ground's height along it, and each lane's rise, scale and fade.
+# Once a frame, when something first needs them: the screen, and each lane's rise, scale, fade and share of the far (original) ground.
 func _ensure_tables() -> void:
 	var fr = Engine.get_process_frames()
 	if fr == _tab_frame:
 		return
 	_tab_frame = fr
 	_view = colony.view_rect(0.0)
-	# the samples stand on a fixed grid in the world (its spacing only ever doubles or halves), so panning never moves them
-	var span = _view.size.x + 2.0 * TAB_MARGIN
-	_tab_step = 16.0 * pow(2.0, ceil(log(maxf(span / 90.0 / 16.0, 1.0)) / log(2.0)))
-	_tab_x0 = floor((_view.position.x - TAB_MARGIN) / _tab_step) * _tab_step
-	var n = int(ceil((_view.end.x + TAB_MARGIN - _tab_x0) / _tab_step)) + 2
-	_tab.resize(n)
-	var flat: float = colony.ground_y()
-	for i in n:
-		_tab[i] = _surf.ground_y(_tab_x0 + i * _tab_step) if _surf != null else flat
+	_gcache.clear()
+	_fcache.clear()
+	var f0 = FAR_FROM
+	var f1 = FAR_TO
+	if _surf != null and _surf.get_script() != null:
+		var cm = _surf.get_script().get_script_constant_map()
+		f0 = cm.get("FAR_FROM", f0)
+		f1 = cm.get("FAR_TO", f1)
 	for q in range(1, Band.LANES + 1):
 		var lane = Band.lane_of(float(q))
 		_lraise[q] = Band.raise(lane)
 		_lpers[q] = Band.persp(lane)
 		_lalpha[q] = Band.lane_alpha(lane)
+		_lfar[q] = smoothstep(f0, f1, float(q)) if _has_lane_ground else 0.0
 
 
-# The ground's y at world x, from the table.
+# The ground's y at world x (surface_view's ground_y). Sampled on a fixed grid of the world, GROUND_STEP px apart and the same at every
+# zoom (so zooming never moves what stands on it), and interpolated between the samples; only the ones asked for are computed.
 func _gt(x: float) -> float:
-	var f = (x - _tab_x0) / _tab_step
-	var i = clampi(int(f), 0, _tab.size() - 2)
-	return lerpf(_tab[i], _tab[i + 1], clampf(f - i, 0.0, 1.0))
+	return _sample(_gcache, x, false)
+
+
+# The same for the original ground, smoothed wide, that the back lanes ease onto (surface_view's _far).
+func _far(x: float) -> float:
+	return _sample(_fcache, x, true)
+
+
+func _sample(cache: Dictionary, x: float, far: bool) -> float:
+	var f = x / GROUND_STEP
+	var i = int(floor(f))
+	var a = cache.get(i)
+	if a == null:
+		a = _ground_at(i * GROUND_STEP, far)
+		cache[i] = a
+	var b = cache.get(i + 1)
+	if b == null:
+		b = _ground_at((i + 1) * GROUND_STEP, far)
+		cache[i + 1] = b
+	return lerpf(a, b, f - i)
+
+
+func _ground_at(x: float, far: bool) -> float:
+	if _surf == null:
+		return colony.ground_y()
+	return _surf.lane_ground(x, 99.0) if far and _has_lane_ground else _surf.ground_y(x)
 
 
 # Screen-sized things (rain, snow) shrink a little as the camera dollies in, so they stay in proportion at any zoom.
@@ -395,7 +423,7 @@ func _refresh_trees() -> void:
 		var rect = Rect2(left + cx0 * size.x, (c[1] - foot[1]) * size.y, (cx1 - cx0) * size.x, (c[3] - c[1]) * size.y)
 		var px = (f["x"] + 0.5) * C
 		_trees.append({"x": px, "lane": lane, "num": Band.num(lane), "gy": _surf.ground_y(px) if _surf != null else colony.ground_y(), "canopy": rect,
-			"sid": int(sd * 1000.0) & 0xFFFFF})
+			"sid": int(sd * 1000.0) & 0xFFFFF, "sel": int(_hs(sd + 55.0) * 2.99)})
 
 
 func _ensure_trees() -> void:
@@ -422,6 +450,7 @@ func _leaves() -> void:
 		var pers = Band.persp(lane)
 		var base_y = Band.lane_y(tr["gy"], lane)
 		var sid: int = tr["sid"]
+		var pool: Array = LEAF_POOL[tr["sel"]]
 		for k in clampi(int(cr.size.x * 0.06), 10, LEAVES_PER_TREE):
 			var s2 = sid + k * 131
 			var period = 16.0 + 8.0 * _hi(sid, k, 1)
@@ -450,7 +479,7 @@ func _leaves() -> void:
 				y = base_y + 1.0
 			if not vr.has_point(Vector2(x, y)):
 				continue
-			var tex: Texture2D = _leaf_tex[int(qv * 9.99) % nl]
+			var tex: Texture2D = _leaf_tex[pool[int(qv * 9.99) % pool.size()] % nl]
 			var w = LEAF_W * pers * (0.75 + 0.5 * _hi(s2, cyc, 8))
 			var h = w * tex.get_height() / tex.get_width()
 			var flutter = 0.35 + 0.65 * absf(cos(air * 2.6 + qv * 20.0))
@@ -498,11 +527,12 @@ func draw_lane(it: CanvasItem, n: int) -> void:
 	lane_us += Time.get_ticks_usec() - t0
 
 
-# The y of lane n's ground line at world x: the table where the lanes stand on the ground as it is, surface_view's own for the back ones.
+# The y of lane n's ground line at world x: where surface_view stands the lane's grass and trees (its lane_ground, less the lane's rise).
 func _lane_ground(px: float, n: int) -> float:
-	if n > FAR_FROM and _has_lane_ground:
-		return _surf.lane_ground(px, float(n)) - _lraise[n]
-	return _gt(px) - _lraise[n]
+	var g = _gt(px)
+	if _lfar[n] > 0.0:
+		g = lerpf(g, _far(px), _lfar[n])
+	return g - _lraise[n]
 
 
 # Snow lying in this lane: rows of the owner's snow pieces that grow as the snow comes (patchy at first) and shrink when it melts. Zoomed
